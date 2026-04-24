@@ -9,6 +9,7 @@ Create a reusable Codex skill that can:
 - translate common hunts and detections between SPL and KQL
 - explain performance tradeoffs, parsing strategy, and field assumptions
 - consume an internal URL that documents indexes, tables, and field definitions
+- stay concise and predictable for Claude Opus 4.6 and Codex GPT-5.4
 
 ## Why this plan
 
@@ -21,6 +22,16 @@ The referenced material points to the right foundations:
 That means the skill should not start from syntax alone. It should start from environment discovery, then schema mapping, then optimized query construction.
 
 ## Coding plan
+
+### Phase 0: Token optimization
+
+Keep the main `SKILL.md` short and procedural.
+
+- move detail into references
+- avoid duplicate instructions across files
+- keep the default output shape fixed
+- optimize for "query first" answers rather than tutorial prose
+- prefer explicit skill invocation when the client supports it
 
 ### Phase 1: Environment discovery contract
 
@@ -120,10 +131,14 @@ Each final query should be checked for:
 ```text
 prompts/siem_fun/
 |-- QUERY_SKILL_PLAN.md
+|-- README.md
 `-- splunk-sentinel-query-builder/
+    |-- agents/
+    |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
         |-- data-dictionary-integration.md
+        |-- model-guidance.md
         |-- query-workflow.md
         `-- splunk-to-kql-mapping.md
 ```

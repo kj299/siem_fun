@@ -10,6 +10,13 @@
 
 Turn internal schema documentation into reliable query inputs instead of guessing index or field names.
 
+## Token discipline
+
+- Extract only the section relevant to the current query.
+- Prefer short pasted excerpts over entire wiki pages.
+- Do not repeat long dictionary text in the final answer.
+- Summarize dictionary-derived facts instead of quoting documentation.
+
 ## Preferred extraction targets
 
 Capture these details from the dictionary if they exist:

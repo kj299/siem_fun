@@ -1,128 +1,115 @@
 ---
 name: splunk-sentinel-query-builder
-description: Build and optimize Splunk SPL and Microsoft Sentinel KQL queries for hunts, detections, triage, dashboards, and translations between SPL and KQL. Use when the user needs environment-aware query generation, index or table discovery prompts, performance tuning, regex or field extraction strategy, side-by-side Splunk and Sentinel query equivalents, or an internal data-dictionary URL that explains indexes, tables, sourcetypes, and fields.
+description: Build and optimize Splunk SPL and Microsoft Sentinel KQL using environment metadata, index or table discovery, and internal data-dictionary URLs. Use for hunts, detections, query tuning, SPL to KQL translation, and schema-aware SIEM queries.
 ---
 
 # Splunk Sentinel Query Builder
 
-Use this skill when the user needs SIEM queries that are specific, performant, and grounded in the target environment instead of generic syntax.
+Use this skill for environment-aware SIEM queries. Keep answers short, schema-driven, and operational.
 
-## Outcome
+## Token rules
 
-Produce one of these:
+- Do not explain basic SPL or KQL syntax unless asked.
+- Do not repeat the user's prompt in long prose.
+- Prefer exact dataset and field names over generic examples.
+- Load only the reference file needed for the task.
+- If schema is unknown, ask for the smallest missing fact or return a discovery query.
+- Do not invent specific index, sourcetype, or table names when discovery is safer.
 
-- a fast hunt query
-- a detection-ready query with tuning notes
-- a translation from SPL to KQL or KQL to SPL
-- an environment-discovery checklist when the schema is still unknown
-- a schema-aware query that cites an internal data dictionary
+## Output contract
 
-## Default workflow
+Return one of these:
 
-1. Identify the target platform: `splunk`, `sentinel`, or `both`.
-2. Restate the detection or hunt objective in one sentence.
-3. Gather environment context before writing the final query.
-4. Constrain data early by time, index or table, and high-selectivity fields.
-5. Parse and enrich only the fields needed for the answer.
-6. Aggregate late.
-7. Return the query plus assumptions, tuning knobs, and validation steps.
+- `query`: quick hunt or triage query
+- `detection`: query plus threshold and tuning notes
+- `translation`: SPL to KQL or KQL to SPL
+- `discovery`: checklist plus starter query when schema is missing
 
-If the user provides an internal URL to a data dictionary, treat it as the preferred schema source before falling back to generic assumptions.
-
-## Discovery questions to answer implicitly or explicitly
-
-Gather as many of these as you can from the repo, prompt, or user context:
-
-- internal documentation URLs that describe the environment
-- Splunk indexes
-- Splunk sourcetypes and source names
-- Sentinel tables and connectors
-- normalized schemas such as process, network, auth, email, cloud, or identity data
-- key entity fields: user, host, ip, process, parent, hash, url, device, tenant
-- desired time window
-- whether this is for hunting, analytics rules, dashboards, or triage
-
-If the environment is still unclear, return a short discovery checklist first instead of pretending the schema is known.
-
-## Internal data dictionary support
-
-If the user references an internal URL, extract and use these details when available:
-
-- platform ownership: Splunk, Sentinel, or both
-- index names and what each index contains
-- sourcetypes, sources, hosts, and parser notes
-- Sentinel tables, connectors, normalized schema mappings, and watchlists
-- field definitions, aliases, enums, event IDs, and allowed values
-- data quality notes such as delayed ingestion, null-heavy columns, or fields that exist only after parsing
-- usage caveats such as deprecated sources, high-cost joins, or preferred summary datasets
-
-Prefer dictionary-backed names over guessed names.
-
-If the internal URL is unavailable from the current environment:
-
-- say that you could not open it directly
-- ask for pasted content or an exported file only if needed
-- otherwise provide a starter query plus a schema checklist
-
-When a dictionary is available, call out which query elements came from it.
-
-## Query construction rules
-
-### Splunk
-
-- Start as narrowly as possible with `index=`, `sourcetype=`, `source=`, and time filters.
-- Prefer fielded predicates over broad raw text searches.
-- Put expensive commands such as `rex`, `eval`, and multi-stage transforms after early filtering.
-- Use `stats`, `timechart`, `top`, `rare`, and `table` intentionally.
-- Call out where a lookup, data model, or summary index would improve the query.
-- If an internal dictionary marks an index as authoritative or deprecated, follow that guidance explicitly.
-- If the dictionary documents canonical field names, use them instead of ad hoc regex extraction.
-
-### Microsoft Sentinel
-
-- Start with a concrete table and an early `where TimeGenerated` filter.
-- Add narrow filters before `extend`, `parse`, `extract`, joins, or `mv-expand`.
-- Use `project` or `project-away` to keep the result set small.
-- Prefer `summarize` and `bin()` for grouped or time-based results.
-- Mention when an analytics rule, hunting query, watchlist, or normalization layer would improve the solution.
-- If the dictionary identifies normalized tables or preferred connectors, choose those first.
-- If field aliases are documented, mention the mapping when translating or tuning queries.
-
-## Translation rules
-
-When translating, preserve analyst intent first and syntax second.
-
-- Map data scope first: Splunk indexes and sourcetypes versus Sentinel tables and connectors.
-- Map filtering second.
-- Map parsing and enrichment third.
-- Map aggregation and presentation last.
-- If no safe one-to-one equivalent exists, say so and provide the closest operational pattern.
-
-Read [references/splunk-to-kql-mapping.md](references/splunk-to-kql-mapping.md) for common command mappings.
-
-## Performance rules
-
-- Prefer the smallest reasonable time window.
-- Filter early, parse late.
-- Keep only needed columns near the end.
-- Call out any likely expensive regex, join, wildcard, or sessionization step.
-- When the user asks to optimize an existing query, explain what is being pushed earlier in the pipeline and why.
-- Use dictionary hints about low-cardinality fields, summary datasets, or expensive tables when available.
-
-## Response shape
-
-Use this structure unless the user asks for something shorter:
+Default response shape:
 
 1. Objective
 2. Query
-3. Why this is efficient
+3. Why efficient
 4. Assumptions
 5. Data dictionary notes
-6. Tuning ideas
-7. Validation steps
+6. Tuning
+7. Validate
 
-## References
+If the user wants a short answer, return only `Objective`, `Query`, and `Assumptions`.
 
-- For the end-to-end workflow and output patterns, read [references/query-workflow.md](references/query-workflow.md).
-- For SPL to KQL mappings, read [references/splunk-to-kql-mapping.md](references/splunk-to-kql-mapping.md).
-- For using internal URLs and schema dictionaries, read [references/data-dictionary-integration.md](references/data-dictionary-integration.md).
+## Truth order
+
+Use schema inputs in this order:
+
+1. Internal data dictionary URL or excerpt
+2. Explicit user-provided dataset and field names
+3. Repo references
+4. Discovery query
+
+Do not let lower-priority hints override higher-priority schema facts.
+
+## Core workflow
+
+1. Identify platform: `splunk`, `sentinel`, or `both`.
+2. Identify task: hunt, detection, triage, dashboard, or translation.
+3. Prefer the internal data dictionary if the user provides a URL or excerpt.
+4. Constrain time and dataset first.
+5. Filter early, parse late, aggregate late.
+6. Name assumptions explicitly.
+
+## Stop conditions
+
+Return `discovery` instead of a guessed production query when:
+
+- the exact dataset name is missing
+- the field mapping depends on an unknown parser or connector
+- a translation depends on unknown source-table or source-index mapping
+
+## Internal data dictionary support
+
+If the user provides an internal URL or excerpt, treat it as the schema source of truth. Extract only:
+
+- dataset names
+- canonical fields and aliases
+- parser or connector notes
+- latency or data-quality caveats
+- preferred or deprecated sources
+
+Prefer dictionary-backed names over guessed names. If the URL cannot be opened, say so briefly and either ask for an excerpt or return a discovery query.
+
+## Reference loading
+
+Load only the smallest relevant reference:
+
+- [references/query-workflow.md](references/query-workflow.md) for new hunts, detections, or triage
+- [references/splunk-to-kql-mapping.md](references/splunk-to-kql-mapping.md) for translation
+- [references/data-dictionary-integration.md](references/data-dictionary-integration.md) for internal URLs or excerpts
+- [references/model-guidance.md](references/model-guidance.md) only when tuning the skill itself
+
+## Platform rules
+
+### Splunk
+
+- Start with `index=`, `sourcetype=`, `source=`, and time bounds.
+- Prefer fielded predicates over raw text scans.
+- Delay `rex`, `eval`, and heavy transforms until after filtering.
+- Prefer documented field names over ad hoc extraction.
+
+### Sentinel
+
+- Start with a concrete table and `where TimeGenerated`.
+- Filter before `extend`, `parse`, `extract`, joins, or `mv-expand`.
+- Keep columns small with `project`.
+- Prefer normalized or documented tables when available.
+
+## Translation rules
+
+- Preserve intent before syntax.
+- Map scope first, then filters, then parsing, then aggregation.
+- If no safe one-to-one mapping exists, say so and provide the closest operational pattern.
+
+Read [references/splunk-to-kql-mapping.md](references/splunk-to-kql-mapping.md) for command mappings.
+
+## Model notes
+
+Keep top-level answers structured, assumption-driven, and query-first. Read [references/model-guidance.md](references/model-guidance.md) only when tuning the skill or prompt style for Claude Opus 4.6 or Codex GPT-5.4.

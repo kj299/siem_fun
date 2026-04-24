@@ -113,3 +113,4 @@ If these are missing, provide:
 - a short schema discovery checklist
 - a starter query for enumerating likely fields or values
 - a note about whether an internal data dictionary URL would remove the ambiguity
+- no invented production dataset names
