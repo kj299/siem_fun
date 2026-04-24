@@ -14,7 +14,7 @@ The main goal is simple: help the model generate queries that are fast, environm
 - support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
 - lower-token guidance optimized for Claude Opus 4.6 and Codex GPT-5.4
-- helper metadata for both Codex/OpenAI and Claude-style prompting
+- helper metadata for both Codex/OpenAI and Claude-style prompting, with parity of detail
 
 ## Repository layout
 
@@ -25,6 +25,7 @@ siem_fun/
 `-- splunk-sentinel-query-builder/
     |-- agents/
     |   |-- claude-opus.yaml
+    |   |-- codex-gpt-5.4.yaml
     |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
@@ -173,6 +174,7 @@ To get the best results with either model:
 
 - [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): overall design and roadmap
 - [agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
+- [agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
 - [agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
 - [splunk-sentinel-query-builder/SKILL.md](splunk-sentinel-query-builder/SKILL.md): main skill instructions
 - [references/query-workflow.md](splunk-sentinel-query-builder/references/query-workflow.md): query workflow

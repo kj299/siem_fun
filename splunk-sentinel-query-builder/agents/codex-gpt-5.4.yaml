@@ -1,0 +1,72 @@
+helper:
+  model_family: "codex"
+  target_model: "GPT-5.4"
+  purpose: "Companion helper for using the SIEM query builder skill with Codex and OpenAI-style prompting."
+
+skill_requirements:
+  description_rules:
+    - "State what the skill does."
+    - "State when to use it."
+    - "State when not to use it when boundaries matter."
+    - "Keep the description concise and trigger-oriented."
+  instruction_rules:
+    - "Put critical instructions near the top."
+    - "Use imperative steps with explicit inputs and outputs."
+    - "Keep SKILL.md focused and move detail to references."
+    - "Provide examples and troubleshooting through progressive disclosure."
+
+invocation:
+  preferred_prompt: "Use $splunk-sentinel-query-builder to return the smallest useful result for my Splunk or Sentinel task: query, detection, translation, or discovery. Use my exact schema when provided, and switch to discovery mode instead of guessing when datasets are unclear."
+  prompt_shape:
+    - "Platform: Splunk | Sentinel | Both"
+    - "Task: hunt | detection | triage | dashboard | translation | optimization"
+    - "Objective: what to find, detect, or explain"
+    - "Time range: last 1h | 24h | 7d"
+    - "Data dictionary URL or excerpt: optional but strongly recommended"
+    - "Known datasets: indexes, sourcetypes, tables, connectors"
+    - "Known fields: user, host, src, dest, process, hash, url, action"
+    - "Output style: short | full"
+
+response_contract:
+  default_sections:
+    - "Objective"
+    - "Query"
+    - "Why efficient"
+    - "Assumptions"
+    - "Data dictionary notes"
+    - "Tuning"
+    - "Validate"
+  short_sections:
+    - "Objective"
+    - "Query"
+    - "Assumptions"
+
+behavior:
+  token_rules:
+    - "Keep the answer query-first and highly structured."
+    - "Do not explain basic SPL or KQL syntax unless asked."
+    - "Do not repeat the user's prompt in long prose."
+    - "Use exact dataset and field names when known."
+    - "Load only the smallest relevant reference."
+    - "Keep examples and troubleshooting in references rather than the top-level skill file."
+  truth_order:
+    - "Internal data dictionary URL or excerpt"
+    - "Explicit user-provided dataset and field names"
+    - "Repo references"
+    - "Discovery query"
+  stop_conditions:
+    - "Return discovery mode when the exact dataset name is missing."
+    - "Return discovery mode when field mapping depends on an unknown parser or connector."
+    - "Return discovery mode when translation depends on unknown source-table or source-index mapping."
+  packaging_rules:
+    - "Keep agents/openai.yaml schema-compliant and minimal for Codex tooling."
+    - "Put richer repo-local OpenAI guidance in this companion helper rather than inventing unsupported openai.yaml keys."
+    - "Align default prompt behavior between this file and openai.yaml."
+
+references:
+  primary_skill: "../SKILL.md"
+  query_workflow: "../references/query-workflow.md"
+  dictionary_integration: "../references/data-dictionary-integration.md"
+  examples_and_troubleshooting: "../references/examples-and-troubleshooting.md"
+  translation_mapping: "../references/splunk-to-kql-mapping.md"
+  model_guidance: "../references/model-guidance.md"

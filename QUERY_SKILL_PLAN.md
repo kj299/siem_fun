@@ -143,6 +143,7 @@ prompts/siem_fun/
 `-- splunk-sentinel-query-builder/
     |-- agents/
     |   |-- claude-opus.yaml
+    |   |-- codex-gpt-5.4.yaml
     |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
