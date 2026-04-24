@@ -1,0 +1,27 @@
+# Local Claude Code workspace (user-specific settings, hooks, scratch)
+.claude/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python (skills may include helper scripts)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node (skills may include JS tooling)
+node_modules/
+
+# Logs / temp
+*.log
+*.tmp
