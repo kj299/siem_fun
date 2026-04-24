@@ -1,0 +1,72 @@
+helper:
+  model_family: "claude-opus"
+  target_model: "Claude Opus 4.6"
+  purpose: "Companion helper for using the SIEM query builder skill with Claude-style prompting and Anthropic-aligned skill structure."
+
+skill_requirements:
+  description_rules:
+    - "State what the skill does."
+    - "State when to use it."
+    - "State when not to use it when boundaries matter."
+    - "Keep the description concise and trigger-oriented."
+  instruction_rules:
+    - "Put critical instructions near the top."
+    - "Use imperative steps with explicit inputs and outputs."
+    - "Keep SKILL.md focused and move detail to references."
+    - "Provide examples and troubleshooting through progressive disclosure."
+
+invocation:
+  preferred_prompt: "Use $splunk-sentinel-query-builder to build, optimize, or translate a Splunk or Sentinel query from my real schema. If dataset names or field mappings are unclear, switch to discovery mode instead of guessing."
+  prompt_shape:
+    - "Platform: Splunk | Sentinel | Both"
+    - "Task: hunt | detection | triage | dashboard | translation | optimization"
+    - "Objective: what to find, detect, or explain"
+    - "Time range: last 1h | 24h | 7d"
+    - "Data dictionary URL or excerpt: optional but strongly recommended"
+    - "Known datasets: indexes, sourcetypes, tables, connectors"
+    - "Known fields: user, host, src, dest, process, hash, url, action"
+    - "Output style: short | full"
+
+response_contract:
+  default_sections:
+    - "Objective"
+    - "Query"
+    - "Why efficient"
+    - "Assumptions"
+    - "Data dictionary notes"
+    - "Tuning"
+    - "Validate"
+  short_sections:
+    - "Objective"
+    - "Query"
+    - "Assumptions"
+
+behavior:
+  token_rules:
+    - "Keep the answer query-first and highly structured."
+    - "Do not explain basic SPL or KQL syntax unless asked."
+    - "Do not repeat the user's prompt in long prose."
+    - "Use exact dataset and field names when known."
+    - "Load only the smallest relevant reference."
+    - "Keep examples and troubleshooting in references rather than the top-level skill file."
+  truth_order:
+    - "Internal data dictionary URL or excerpt"
+    - "Explicit user-provided dataset and field names"
+    - "Repo references"
+    - "Discovery query"
+  stop_conditions:
+    - "Return discovery mode when the exact dataset name is missing."
+    - "Return discovery mode when field mapping depends on an unknown parser or connector."
+    - "Return discovery mode when translation depends on unknown source-table or source-index mapping."
+  trigger_tuning:
+    - "If the skill undertriggers, add more trigger detail to the description."
+    - "If the skill overtriggers, add negative triggers and tighten scope."
+    - "If execution is inconsistent, improve instructions and error handling."
+
+references:
+  primary_skill: "../SKILL.md"
+  query_workflow: "../references/query-workflow.md"
+  dictionary_integration: "../references/data-dictionary-integration.md"
+  examples_and_troubleshooting: "../references/examples-and-troubleshooting.md"
+  translation_mapping: "../references/splunk-to-kql-mapping.md"
+  model_guidance: "../references/model-guidance.md"

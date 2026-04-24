@@ -1,7 +1,7 @@
 interface:
   display_name: "SIEM Query Builder"
   short_description: "Build Splunk SPL and Sentinel KQL from real schema context"
-  default_prompt: "Use $splunk-sentinel-query-builder to build, optimize, or translate a Splunk or Sentinel query from my real schema, and switch to discovery mode instead of guessing when datasets are unclear."
+  default_prompt: "Use $splunk-sentinel-query-builder to return the smallest useful result for my Splunk or Sentinel task: query, detection, translation, or discovery. Use my exact schema when provided, and switch to discovery mode instead of guessing when datasets are unclear."
 
 policy:
   allow_implicit_invocation: false

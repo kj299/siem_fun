@@ -1,11 +1,18 @@
 ---
 name: splunk-sentinel-query-builder
-description: Build and optimize Splunk SPL and Microsoft Sentinel KQL using environment metadata, index or table discovery, and internal data-dictionary URLs. Use for hunts, detections, query tuning, SPL to KQL translation, and schema-aware SIEM queries.
+description: Build and optimize Splunk SPL and Microsoft Sentinel KQL for SIEM hunts, detections, triage, tuning, and SPL/KQL translation using real environment metadata and internal data-dictionary URLs. Use when the user wants query authoring, optimization, or translation in Splunk or Sentinel. Do not use for SIEM deployment, connector setup, platform administration, or generic security education without a query-building objective.
 ---
 
 # Splunk Sentinel Query Builder
 
 Use this skill for environment-aware SIEM queries. Keep answers short, schema-driven, and operational.
+
+## Important
+
+- Never invent production dataset names when discovery is safer.
+- Prefer the internal data dictionary over guessed schema.
+- Return `discovery` instead of a production query when the schema is not reliable.
+- Keep the answer query-first and stop after the smallest useful result.
 
 ## Token rules
 
@@ -16,7 +23,20 @@ Use this skill for environment-aware SIEM queries. Keep answers short, schema-dr
 - If schema is unknown, ask for the smallest missing fact or return a discovery query.
 - Do not invent specific index, sourcetype, or table names when discovery is safer.
 
-## Output contract
+## Inputs
+
+Expect these inputs when available:
+
+- platform
+- task type
+- objective
+- time range
+- data dictionary URL or excerpt
+- known datasets
+- known fields
+- desired output style
+
+## Outputs
 
 Return one of these:
 
@@ -84,6 +104,7 @@ Load only the smallest relevant reference:
 - [references/query-workflow.md](references/query-workflow.md) for new hunts, detections, or triage
 - [references/splunk-to-kql-mapping.md](references/splunk-to-kql-mapping.md) for translation
 - [references/data-dictionary-integration.md](references/data-dictionary-integration.md) for internal URLs or excerpts
+- [references/examples-and-troubleshooting.md](references/examples-and-troubleshooting.md) for concrete prompt patterns and failure handling
 - [references/model-guidance.md](references/model-guidance.md) only when tuning the skill itself
 
 ## Platform rules

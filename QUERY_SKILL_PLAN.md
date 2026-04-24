@@ -10,6 +10,7 @@ Create a reusable Codex skill that can:
 - explain performance tradeoffs, parsing strategy, and field assumptions
 - consume an internal URL that documents indexes, tables, and field definitions
 - stay concise and predictable for Claude Opus 4.6 and Codex GPT-5.4
+- express clear trigger boundaries, examples, and troubleshooting via progressive disclosure
 
 ## Why this plan
 
@@ -32,6 +33,7 @@ Keep the main `SKILL.md` short and procedural.
 - keep the default output shape fixed
 - optimize for "query first" answers rather than tutorial prose
 - prefer explicit skill invocation when the client supports it
+- keep examples and troubleshooting in references instead of bloating the top-level skill
 
 ### Phase 1: Environment discovery contract
 
@@ -48,6 +50,12 @@ Outputs the skill should ask for or infer:
 - tables, connectors, and normalized schemas for Sentinel
 - high-value fields: user, host, src, dest, ip, process, hash, url, action, result
 - constraints: latency, cost, volume, real-time vs historical
+
+The top-level skill should also make these boundaries explicit:
+
+- what the skill does
+- when it should trigger
+- when it should not trigger
 
 ### Phase 2: Query generation workflow
 
@@ -134,10 +142,12 @@ prompts/siem_fun/
 |-- README.md
 `-- splunk-sentinel-query-builder/
     |-- agents/
+    |   |-- claude-opus.yaml
     |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
         |-- data-dictionary-integration.md
+        |-- examples-and-troubleshooting.md
         |-- model-guidance.md
         |-- query-workflow.md
         `-- splunk-to-kql-mapping.md
