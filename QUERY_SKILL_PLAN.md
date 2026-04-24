@@ -8,6 +8,7 @@ Create a reusable Codex skill that can:
 - generate and optimize Splunk SPL and Microsoft Sentinel KQL
 - translate common hunts and detections between SPL and KQL
 - explain performance tradeoffs, parsing strategy, and field assumptions
+- consume an internal URL that documents indexes, tables, and field definitions
 
 ## Why this plan
 
@@ -30,6 +31,7 @@ Outputs the skill should ask for or infer:
 - platform: `splunk`, `sentinel`, or `both`
 - use case: hunt, detection, dashboard, triage, metrics, or parsing
 - time window and expected result grain
+- internal data-dictionary URL when one exists
 - data source names
 - index names and sourcetypes for Splunk
 - tables, connectors, and normalized schemas for Sentinel
@@ -41,12 +43,13 @@ Outputs the skill should ask for or infer:
 Teach the skill to build queries in this order:
 
 1. Define the analyst question in plain English.
-2. Pick the narrowest data scope.
-3. Filter as early as possible.
-4. Parse only the fields needed.
-5. Aggregate late and only when required.
-6. Return a readable output table with clear aliases.
-7. Add notes about assumptions, false positives, and tuning knobs.
+2. Pull schema facts from the internal data dictionary when available.
+3. Pick the narrowest data scope.
+4. Filter as early as possible.
+5. Parse only the fields needed.
+6. Aggregate late and only when required.
+7. Return a readable output table with clear aliases.
+8. Add notes about assumptions, false positives, and tuning knobs.
 
 ### Phase 3: Cross-platform mapping
 
@@ -58,6 +61,19 @@ Create a reference mapping for common equivalents:
 - Sentinel `summarize`, `bin()`, `extract()`, `extend`, `lookup/join`, sessionization patterns, `where`
 
 This lets the skill translate intent instead of producing one-off syntax conversions.
+
+### Phase 3a: Internal dictionary ingestion
+
+Teach the skill to treat internal documentation URLs as first-class schema inputs.
+
+The skill should know how to consume:
+
+- internal wiki pages that document Splunk indexes
+- SharePoint or portal pages that describe Sentinel tables and connectors
+- internal runbooks listing canonical field names and aliases
+- parser notes that explain field availability, latency, or deprecation
+
+When the URL cannot be opened directly, the skill should fall back gracefully by requesting a pasted excerpt or by producing a schema discovery query.
 
 ### Phase 4: Optimization guidance
 
@@ -107,6 +123,7 @@ prompts/siem_fun/
 `-- splunk-sentinel-query-builder/
     |-- SKILL.md
     `-- references/
+        |-- data-dictionary-integration.md
         |-- query-workflow.md
         `-- splunk-to-kql-mapping.md
 ```

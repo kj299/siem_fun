@@ -5,6 +5,7 @@
 - the user asks for a new hunt or detection query
 - the environment is only partially known
 - you need to explain why a query is fast or risky
+- the user provides an internal URL with schema or index documentation
 
 ## Environment-first workflow
 
@@ -34,6 +35,13 @@ For Sentinel, look for:
 - connector or solution name
 - normalized table if available
 - `TimeGenerated` and entity fields
+
+If an internal data dictionary exists, extract:
+
+- the exact dataset names to use
+- the canonical field names
+- any deprecated or preferred data sources
+- parsing caveats and latency notes
 
 ### 3. Build the narrow filter
 
@@ -65,6 +73,7 @@ Always include:
 - thresholds
 - time-window suggestions
 - field substitutions for different schemas
+- dictionary-specific caveats such as delayed ingestion or deprecated fields
 
 ## Output templates
 
@@ -79,6 +88,7 @@ Always include:
 
 - logic summary
 - query
+- data dictionary notes
 - threshold options
 - suppression ideas
 - validation method
@@ -102,3 +112,4 @@ If these are missing, provide:
 
 - a short schema discovery checklist
 - a starter query for enumerating likely fields or values
+- a note about whether an internal data dictionary URL would remove the ambiguity
