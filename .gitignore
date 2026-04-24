@@ -1,0 +1,44 @@
+# Claude Code — ignore per-user state, keep team-shared config committable
+.claude/settings.local.json
+.claude/*.local.json
+.claude/cache/
+.claude/logs/
+.claude/tmp/
+
+# Secrets — never commit credentials to a public repo
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+secrets.yaml
+secrets.yml
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python (skills may include helper scripts)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node (skills may include JS tooling)
+node_modules/
+
+# Logs / temp
+*.log
+*.tmp
