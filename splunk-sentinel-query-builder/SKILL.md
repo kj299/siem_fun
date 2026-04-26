@@ -85,6 +85,8 @@ Return `discovery` instead of a guessed production query when:
 - the field mapping depends on an unknown parser or connector
 - a translation depends on unknown source-table or source-index mapping
 
+Use the Splunk `tstats` and Sentinel discovery starters in [references/query-workflow.md](references/query-workflow.md).
+
 ## Internal data dictionary support
 
 If the user provides an internal URL or excerpt, treat it as the schema source of truth. Extract only:

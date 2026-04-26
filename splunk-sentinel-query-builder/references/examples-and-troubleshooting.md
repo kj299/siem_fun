@@ -65,7 +65,7 @@ Cause:
 Response:
 
 - return `discovery`
-- provide the smallest discovery query that will identify the right index, sourcetype, or table
+- provide the smallest starter from [query-workflow.md](query-workflow.md) (Splunk `tstats` or Sentinel `Usage` / `getschema` patterns) that will identify the right index, sourcetype, or table
 
 ### Problem: internal URL cannot be opened
 

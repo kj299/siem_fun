@@ -117,7 +117,7 @@ If these are missing, provide:
 
 ## Splunk discovery via tstats
 
-`tstats` reads indexed metadata from `.tsidx` files instead of raw events, so it is the right tool for fast schema discovery. Prefer it over `stats` whenever the goal is to enumerate datasets, hosts, or fields rather than analyze content.
+`tstats` reads indexed metadata, so it is far cheaper than `stats` for enumerating datasets, hosts, or indexed fields.
 
 ### Index and sourcetype enumeration
 
@@ -166,3 +166,64 @@ Return one of the queries above (and stop) when:
 - the exact index or sourcetype is unknown
 - a CIM-backed detection is requested but data model coverage is unclear
 - a KQL-to-SPL translation hinges on which Splunk index receives the source data
+
+## Sentinel discovery via Usage, Heartbeat, and getschema
+
+Log Analytics has no `tstats` analogue, but small metadata tables and the `getschema` operator give the same answers cheaply.
+
+### Workspace and table coverage
+
+`Usage` is a metering table that lists every table that received data, with volume and the connector behind it:
+
+```kql
+Usage
+| where TimeGenerated > ago(7d)
+| summarize TotalGB = sum(Quantity) / 1024 by DataType, Solution
+| sort by TotalGB desc
+```
+
+### Connector and host coverage
+
+`Heartbeat` shows agent-side visibility:
+
+```kql
+Heartbeat
+| where TimeGenerated > ago(24h)
+| summarize LastSeen = max(TimeGenerated) by Computer, OSType, Category
+```
+
+`SentinelHealth` shows connector and analytics-rule status:
+
+```kql
+SentinelHealth
+| where TimeGenerated > ago(7d)
+| summarize count() by SentinelResourceName, Status
+```
+
+### Column and value discovery within a known table
+
+```kql
+TableName | getschema
+TableName | take 5
+```
+
+`getschema` returns column names and types without scanning events. `take 5` is the cheapest way to see real values.
+
+### Cross-table search when the right table is unknown
+
+```kql
+union withsource=Table_ *
+| where TimeGenerated > ago(1h)
+| where SomeField has "value"
+| summarize count() by Table_
+```
+
+Use sparingly — `union *` scans every table. Always constrain `TimeGenerated` first and prefer `Usage` for pure enumeration.
+
+### When to return these instead of a production query
+
+Return one of the queries above (and stop) when:
+
+- the exact table or normalized table is unknown
+- the connector or solution feeding the data is unclear
+- an SPL-to-KQL translation hinges on which Sentinel table receives the source data
