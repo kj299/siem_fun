@@ -16,7 +16,7 @@ skill_requirements:
     - "Provide examples and troubleshooting through progressive disclosure."
 
 invocation:
-  preferred_prompt: "Use $splunk-sentinel-query-builder to build, optimize, or translate a Splunk or Sentinel query from my real schema. If dataset names or field mappings are unclear, switch to discovery mode instead of guessing."
+  preferred_prompt: "Use $splunk-sentinel-query-builder to return the smallest useful result for my Splunk or Sentinel task: query, detection, translation, or discovery. Use my exact schema when provided, and switch to discovery mode instead of guessing when datasets are unclear."
   prompt_shape:
     - "Platform: Splunk | Sentinel | Both"
     - "Task: hunt | detection | triage | dashboard | translation | optimization"
