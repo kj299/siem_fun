@@ -111,6 +111,58 @@ Do not fake confidence when the query depends on unknown names for:
 If these are missing, provide:
 
 - a short schema discovery checklist
-- a starter query for enumerating likely fields or values
+- a starter query from the discovery sections below
 - a note about whether an internal data dictionary URL would remove the ambiguity
 - no invented production dataset names
+
+## Splunk discovery via tstats
+
+`tstats` reads indexed metadata from `.tsidx` files instead of raw events, so it is the right tool for fast schema discovery. Prefer it over `stats` whenever the goal is to enumerate datasets, hosts, or fields rather than analyze content.
+
+### Index and sourcetype enumeration
+
+List every index and its sourcetypes:
+
+```spl
+| tstats count where index=* by index, sourcetype
+```
+
+Scope to one index to find contributing hosts and sourcetypes:
+
+```spl
+| tstats count where index=YOUR_INDEX by host, sourcetype
+```
+
+### Data model coverage
+
+Use these against the Common Information Model or any accelerated data model:
+
+```spl
+| tstats count from datamodel=YOUR_DATAMODEL by index
+| tstats count from datamodel=Authentication by index, sourcetype
+| tstats count from datamodel=Endpoint where nodename=Endpoint.Processes by index
+```
+
+Add `summariesonly=t` when the data model is accelerated and only summarized results are needed:
+
+```spl
+| tstats summariesonly=t count from datamodel=Authentication by index, sourcetype
+```
+
+### Verify a field is indexed
+
+If a query depends on an unfamiliar field, confirm it is searchable via `tstats` before relying on it:
+
+```spl
+| tstats values(YOUR_FIELD) where index=YOUR_INDEX
+```
+
+An empty result means the field is not indexed and a raw-event search with extraction is required.
+
+### When to return these instead of a production query
+
+Return one of the queries above (and stop) when:
+
+- the exact index or sourcetype is unknown
+- a CIM-backed detection is requested but data model coverage is unclear
+- a KQL-to-SPL translation hinges on which Splunk index receives the source data
