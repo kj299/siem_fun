@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git status *)",
+      "PowerShell(git diff *)",
+      "PowerShell(git log *)",
+      "PowerShell(git rev-parse *)",
+      "PowerShell(gh issue *)",
+      "PowerShell(gh pr list *)",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\validate-skill-pack.ps1)"
+    ]
+  }
+}

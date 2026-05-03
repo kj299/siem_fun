@@ -85,6 +85,8 @@ function Assert-ListsEqual {
 $requiredFiles = @(
     "README.md",
     "QUERY_SKILL_PLAN.md",
+    ".claude/settings.json",
+    ".env.example",
     "splunk-sentinel-query-builder/SKILL.md",
     "splunk-sentinel-query-builder/agents/openai.yaml",
     "splunk-sentinel-query-builder/agents/claude-opus.yaml",
@@ -93,7 +95,13 @@ $requiredFiles = @(
     "splunk-sentinel-query-builder/references/examples-and-troubleshooting.md",
     "splunk-sentinel-query-builder/references/model-guidance.md",
     "splunk-sentinel-query-builder/references/query-workflow.md",
-    "splunk-sentinel-query-builder/references/splunk-to-kql-mapping.md"
+    "splunk-sentinel-query-builder/references/splunk-to-kql-mapping.md",
+    "splunk-data-dictionary-builder/SKILL.md",
+    "splunk-data-dictionary-builder/agents/openai.yaml",
+    "splunk-data-dictionary-builder/agents/claude-opus.yaml",
+    "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml",
+    "splunk-data-dictionary-builder/references/workflow.md",
+    "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py"
 )
 
 foreach ($file in $requiredFiles) {
@@ -120,10 +128,11 @@ foreach ($file in $trackedFiles) {
     }
 }
 
-Assert-Contains "splunk-sentinel-query-builder/SKILL.md" '(?s)^---\s+name:\s+splunk-sentinel-query-builder\s+description:\s+.+?\s+---' "valid skill frontmatter"
-Assert-Contains "splunk-sentinel-query-builder/SKILL.md" '## Important' "top-level Important section"
-Assert-Contains "splunk-sentinel-query-builder/SKILL.md" '## Inputs' "Inputs section"
-Assert-Contains "splunk-sentinel-query-builder/SKILL.md" '## Outputs' "Outputs section"
+foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dictionary-builder/SKILL.md")) {
+    Assert-Contains $skill '(?s)^---\s+name:\s+[-a-z0-9]+\s+description:\s+.+?\s+---' "valid skill frontmatter"
+    Assert-Contains $skill '## Important' "top-level Important section"
+    Assert-Contains $skill '## Inputs' "Inputs section"
+}
 
 $openai = Read-Text "splunk-sentinel-query-builder/agents/openai.yaml"
 foreach ($key in @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")) {
@@ -132,12 +141,23 @@ foreach ($key in @("interface:", "display_name:", "short_description:", "default
     }
 }
 
-$claude = Read-Text "splunk-sentinel-query-builder/agents/claude-opus.yaml"
-$codex = Read-Text "splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml"
+$dictionaryOpenai = Read-Text "splunk-data-dictionary-builder/agents/openai.yaml"
+foreach ($key in @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")) {
+    if ($dictionaryOpenai -notmatch [regex]::Escape($key)) {
+        Add-Issue "splunk-data-dictionary-builder/agents/openai.yaml is missing $key"
+    }
+}
 
-foreach ($section in @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions")) {
-    $parent = if ($section -in @("prompt_shape")) { "invocation" } elseif ($section -in @("default_sections", "short_sections")) { "response_contract" } else { "behavior" }
-    Assert-ListsEqual $section (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
+foreach ($helperPair in @(
+    @("splunk-sentinel-query-builder/agents/claude-opus.yaml", "splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml"),
+    @("splunk-data-dictionary-builder/agents/claude-opus.yaml", "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml")
+)) {
+    $claude = Read-Text $helperPair[0]
+    $codex = Read-Text $helperPair[1]
+    foreach ($section in @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions")) {
+        $parent = if ($section -in @("prompt_shape")) { "invocation" } elseif ($section -in @("default_sections", "short_sections")) { "response_contract" } else { "behavior" }
+        Assert-ListsEqual "$($helperPair[0]) / $section" (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
+    }
 }
 
 $markdownFiles = $trackedFiles | Where-Object { $_ -like "*.md" }

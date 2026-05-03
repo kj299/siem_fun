@@ -11,6 +11,7 @@ The main goal is simple: help the model generate queries that are fast, environm
 ## What this repo gives you
 
 - a reusable skill for Splunk and Sentinel query generation
+- a Splunk data dictionary builder skill with a local helper script
 - support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
 - lower-token guidance optimized for Claude Opus 4.6 and Codex GPT-5.4
@@ -23,12 +24,21 @@ siem_fun/
 |-- .github/
 |   `-- workflows/
 |       `-- validate.yml
+|-- .claude/
+|   `-- settings.json
+|-- .env.example
 |-- examples/
 |   `-- golden-prompts.md
 |-- README.md
 |-- QUERY_SKILL_PLAN.md
 |-- scripts/
 |   `-- validate-skill-pack.ps1
+|-- splunk-data-dictionary-builder/
+|   |-- agents/
+|   |-- references/
+|   |-- scripts/
+|   |   `-- build_splunk_dictionary.py
+|   `-- SKILL.md
 `-- splunk-sentinel-query-builder/
     |-- agents/
     |   |-- claude-opus.yaml
@@ -45,7 +55,7 @@ siem_fun/
 
 ## Best way to use it
 
-The skill works best when your prompt includes three things:
+The query builder skill works best when your prompt includes three things:
 
 1. The platform: `Splunk`, `Sentinel`, or `both`
 2. The task: hunt, detection, triage, dashboard, translation, or optimization
@@ -58,6 +68,34 @@ If your client supports named skills, the best path is to invoke it explicitly:
 ```text
 Use $splunk-sentinel-query-builder to ...
 ```
+
+Use the data dictionary builder first when you do not yet know the local Splunk schema:
+
+```text
+Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, and sample values.
+```
+
+## Local Setup
+
+The repo includes shared Claude Code defaults in [.claude/settings.json](.claude/settings.json). Per-user Claude settings stay ignored in `.claude/settings.local.json`.
+
+If you use the Splunk data dictionary helper script, copy [.env.example](.env.example) to `.env` and fill in local values. The `.env` file is ignored and should never be committed.
+
+Build a local Splunk data dictionary with:
+
+```powershell
+python .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py --base-url https://splunk.example.com:8089 --token $env:SPLUNK_TOKEN --output .\out\splunk-data-dictionary.json
+```
+
+Run validation locally with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-skill-pack.ps1
+```
+
+## Security
+
+This public repo has GitHub secret scanning, push protection, Dependabot alerts, and Dependabot security updates enabled. Local secret-like files are ignored by `.gitignore`; use `.env.example` as the documented template and keep real credentials in `.env`.
 
 ## Quick-start prompt patterns
 
@@ -169,6 +207,7 @@ To get the best results with either model:
 
 ## Common use cases
 
+- build a Splunk data dictionary from accessible indexes and sourcetypes
 - build a new hunt query from a detection idea
 - turn a hunt into a detection
 - optimize a slow Splunk or Sentinel query
@@ -180,8 +219,11 @@ To get the best results with either model:
 ## Files to read
 
 - [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): overall design and roadmap
+- [.claude/settings.json](.claude/settings.json): shared Claude Code defaults
+- [.env.example](.env.example): optional local helper environment variables
 - [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
+- [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries
 - [agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
 - [agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
 - [agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting

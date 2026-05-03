@@ -42,3 +42,4 @@ node_modules/
 # Logs / temp
 *.log
 *.tmp
+out/

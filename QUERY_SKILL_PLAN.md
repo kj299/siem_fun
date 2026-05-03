@@ -11,6 +11,7 @@ Create a reusable Codex skill that can:
 - consume an internal URL that documents indexes, tables, and field definitions
 - stay concise and predictable for Claude Opus 4.6 and Codex GPT-5.4
 - express clear trigger boundaries, examples, and troubleshooting via progressive disclosure
+- generate Splunk data dictionaries from accessible indexes, sourcetypes, and sampled fields
 
 ## Why this plan
 
@@ -138,8 +139,24 @@ Each final query should be checked for:
 
 ```text
 prompts/siem_fun/
+|-- .claude/
+|   `-- settings.json
+|-- .env.example
+|-- .github/
+|   `-- workflows/
+|       `-- validate.yml
+|-- examples/
+|   `-- golden-prompts.md
 |-- QUERY_SKILL_PLAN.md
 |-- README.md
+|-- scripts/
+|   `-- validate-skill-pack.ps1
+|-- splunk-data-dictionary-builder/
+|   |-- agents/
+|   |-- references/
+|   |-- scripts/
+|   |   `-- build_splunk_dictionary.py
+|   `-- SKILL.md
 `-- splunk-sentinel-query-builder/
     |-- agents/
     |   |-- claude-opus.yaml

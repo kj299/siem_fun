@@ -1,0 +1,21 @@
+helper:
+  model_family: "claude-opus"
+  target_model: "Claude Opus 4.6"
+  purpose: "Companion helper for building Splunk data dictionaries with Claude-style prompting."
+
+invocation:
+  preferred_prompt: "Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, and sample values. Use local credentials from environment variables or CLI arguments, and never ask me to paste secrets into chat."
+
+behavior:
+  token_rules:
+    - "Keep output structured and concise."
+    - "Report permission gaps explicitly."
+    - "Sample narrowly before expanding scope."
+  stop_conditions:
+    - "Stop and explain when authentication fails."
+    - "Stop and explain when TLS or network connectivity fails."
+    - "Return partial dictionary output when some indexes are inaccessible."
+
+references:
+  primary_skill: "../SKILL.md"
+  workflow: "../references/workflow.md"

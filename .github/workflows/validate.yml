@@ -16,3 +16,12 @@ jobs:
       - name: Run skill pack validation
         shell: pwsh
         run: ./scripts/validate-skill-pack.ps1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile Python helpers
+        shell: pwsh
+        run: python -m py_compile .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py
