@@ -1,11 +1,11 @@
-# Claude Code — ignore per-user state, keep team-shared config committable
+# Claude Code - ignore per-user state, keep team-shared config committable
 .claude/settings.local.json
 .claude/*.local.json
 .claude/cache/
 .claude/logs/
 .claude/tmp/
 
-# Secrets — never commit credentials to a public repo
+# Secrets - never commit credentials to a public repo
 .env
 .env.*
 !.env.example

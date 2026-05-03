@@ -218,7 +218,7 @@ union withsource=Table_ *
 | summarize count() by Table_
 ```
 
-Use sparingly — `union *` scans every table. Always constrain `TimeGenerated` first and prefer `Usage` for pure enumeration.
+Use sparingly - `union *` scans every table. Always constrain `TimeGenerated` first and prefer `Usage` for pure enumeration.
 
 ### When to return these instead of a production query
 

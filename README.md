@@ -20,8 +20,15 @@ The main goal is simple: help the model generate queries that are fast, environm
 
 ```text
 siem_fun/
+|-- .github/
+|   `-- workflows/
+|       `-- validate.yml
+|-- examples/
+|   `-- golden-prompts.md
 |-- README.md
 |-- QUERY_SKILL_PLAN.md
+|-- scripts/
+|   `-- validate-skill-pack.ps1
 `-- splunk-sentinel-query-builder/
     |-- agents/
     |   |-- claude-opus.yaml
@@ -173,6 +180,8 @@ To get the best results with either model:
 ## Files to read
 
 - [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): overall design and roadmap
+- [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing
+- [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
 - [agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
 - [agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
 - [agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
