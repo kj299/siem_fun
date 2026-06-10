@@ -131,7 +131,10 @@ CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
 def cim_hints_for_sourcetype(sourcetype: str) -> list[str]:
     key = sourcetype.lower()
     for prefix, models in CIM_SOURCETYPE_HINTS.items():
-        if key == prefix or key.startswith(prefix):
+        # Match the exact sourcetype or a separated variant (pan:threat:custom,
+        # bluecoat:proxysg:access:proxy) but not accidental superstrings such
+        # as zscalernss-weblogging.
+        if key == prefix or (key.startswith(prefix) and key[len(prefix)] in ":-_"):
             return models
     return []
 

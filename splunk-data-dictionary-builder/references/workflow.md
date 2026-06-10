@@ -24,7 +24,7 @@ The helper script reports CIM facts at three levels of trust:
 
 - `cim_coverage` is ground truth: for each model root dataset it queries the live instance with `| tstats count from datamodel=MODEL.ROOT_DATASET by sourcetype` and records which sourcetypes actually feed the model. This also captures mappings that sourcetype names cannot express, such as on-host Windows Defender events reaching the Malware model. Disable with `--no-cim-coverage` when the extra searches are too costly.
 - `cim_datamodels` lists installed models with `root_datasets` and acceleration status, enough to build the qualified `datamodel=MODEL.ROOT_DATASET` form directly.
-- `cim_datamodel_hints` are static fallback hints for sourcetypes from common add-ons (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto). A hint means the sourcetype is usually CIM-mapped by its standard add-on; actual coverage depends on the add-on being installed and tags being intact. When `cim_coverage` is present, prefer it over hints; unrecognized sourcetypes may still be CIM-mapped by custom local configuration.
+- `cim_datamodel_hints` are static fallback hints for sourcetypes from common vendor add-ons (the set documented in the query builder's cim-vendor-alignment.md reference). A hint means the sourcetype is usually CIM-mapped by its standard add-on; actual coverage depends on the add-on being installed and tags being intact. When `cim_coverage` is present, prefer it over hints; unrecognized sourcetypes may still be CIM-mapped by custom local configuration.
 
 ## Permissions Handling
 

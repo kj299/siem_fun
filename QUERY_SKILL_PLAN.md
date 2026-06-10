@@ -12,7 +12,7 @@ Create a reusable Codex skill that can:
 - stay concise and predictable for Claude Opus 4.6 and Codex GPT-5.4
 - express clear trigger boundaries, examples, and troubleshooting via progressive disclosure
 - generate Splunk data dictionaries from accessible indexes, sourcetypes, and sampled fields
-- align Splunk guidance with the Common Information Model so multi-vendor sources (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto) are queried through shared data models
+- align Splunk guidance with the Common Information Model so multi-vendor sources are queried through shared data models (vendors and coverage depth listed in the README and cim-vendor-alignment.md)
 
 ## Why this plan
 

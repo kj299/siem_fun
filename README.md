@@ -12,7 +12,7 @@ The main goal is simple: help the model generate queries that are fast, environm
 
 - a reusable skill for Splunk and Sentinel query generation
 - a Splunk data dictionary builder skill with a local helper script
-- Splunk Common Information Model (CIM) alignment for common vendor sources such as Zscaler, CrowdStrike, Palo Alto, Cisco, Cloudflare, Proofpoint, Akamai, Microsoft Defender, and web proxy infrastructure
+- Splunk Common Information Model (CIM) alignment for common vendor sources; see the coverage table below for the vendor list and depth
 - support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
 - lower-token guidance optimized for Claude Opus 4.6 and Codex GPT-5.4
