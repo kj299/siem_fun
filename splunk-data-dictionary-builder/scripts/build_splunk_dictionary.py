@@ -91,6 +91,12 @@ def entries(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return payload.get("entry", [])
 
 
+def spl_quote(value: str) -> str:
+    """Quote a value for safe interpolation into an SPL search string."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 # Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
 # data models they are tagged for. Used as hints only; deployments must verify
 # coverage with: | tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype
@@ -167,7 +173,7 @@ def discover_indexes(client: SplunkClient, requested: list[str] | None, warnings
 def discover_sourcetypes(client: SplunkClient, indexes: list[str], earliest: str, warnings: list[str]) -> list[dict[str, Any]]:
     if not indexes:
         return []
-    index_filter = " OR ".join(f"index={index}" for index in indexes)
+    index_filter = " OR ".join(f"index={spl_quote(index)}" for index in indexes)
     search = f"| tstats count where ({index_filter}) by index, sourcetype"
     try:
         payload = client.search_oneshot(search, earliest)
@@ -178,7 +184,7 @@ def discover_sourcetypes(client: SplunkClient, indexes: list[str], earliest: str
 
 
 def sample_fields(client: SplunkClient, index: str, sourcetype: str, earliest: str, sample_size: int, warnings: list[str]) -> dict[str, Any]:
-    search = f'search index="{index}" sourcetype="{sourcetype}" | head {sample_size} | fields *'
+    search = f"search index={spl_quote(index)} sourcetype={spl_quote(sourcetype)} | head {sample_size} | fields *"
     try:
         payload = client.search_oneshot(search, earliest)
     except RuntimeError as error:
