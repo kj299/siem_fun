@@ -168,7 +168,7 @@ Return one of the queries above (and stop) when:
 - a CIM-backed detection is requested but data model coverage is unclear
 - a KQL-to-SPL translation hinges on which Splunk index receives the source data
 
-For vendor-to-CIM mappings (Zscaler, CrowdStrike, Palo Alto, Cisco, Cloudflare, Proofpoint, Akamai, Microsoft Defender, web proxies) and CIM query patterns, read [cim-vendor-alignment.md](cim-vendor-alignment.md).
+For vendor-to-CIM sourcetype mappings and CIM query patterns, read [cim-vendor-alignment.md](cim-vendor-alignment.md).
 
 ## Sentinel discovery via Usage, Heartbeat, and getschema
 
