@@ -20,7 +20,7 @@ Start cheap and broad, then sample narrowly:
 
 ## CIM Mapping
 
-The helper script tags sourcetypes from common add-ons (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto) with `cim_datamodel_hints` and lists installed data models under `cim_datamodels`. Treat hints as starting points, not proof of coverage:
+The helper script tags sourcetypes from common add-ons (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto) with `cim_datamodel_hints` and lists installed data models under `cim_datamodels`, including each model's `root_datasets` so consumers can build the qualified `datamodel=MODEL.ROOT_DATASET` form directly. Treat hints as starting points, not proof of coverage:
 
 - a hint means the sourcetype is usually CIM-mapped by its standard add-on
 - actual coverage depends on the add-on being installed and tags being intact

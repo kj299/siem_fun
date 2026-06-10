@@ -42,7 +42,7 @@ Return or write JSON with:
 - `splunk_base_url`
 - `indexes`
 - `sourcetypes` (rows include `cim_datamodel_hints` for recognized vendor sourcetypes)
-- `cim_datamodels` (installed data models with acceleration status)
+- `cim_datamodels` (installed data models with root dataset names and acceleration status, enough to build `datamodel=MODEL.ROOT_DATASET` queries)
 - `field_samples` (per index/sourcetype: `fields` with `sample_values` and `observed_types`)
 - `warnings`
 - `permission_notes`

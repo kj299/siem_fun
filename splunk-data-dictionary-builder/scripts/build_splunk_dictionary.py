@@ -131,6 +131,20 @@ def cim_hints_for_sourcetype(sourcetype: str) -> list[str]:
     return []
 
 
+# Parents that mark a dataset as a root dataset in a data model definition.
+BASE_DATASET_PARENTS = {"BaseEvent", "BaseTransaction", "BaseSearch"}
+
+
+def parse_json_attribute(value: Any) -> dict[str, Any]:
+    """Normalize a Splunk REST content attribute that may be a JSON string or a dict."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return {}
+    return value if isinstance(value, dict) else {}
+
+
 def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[str, Any]]:
     try:
         payload = client.get("/services/datamodel/model", {"count": "0"})
@@ -142,14 +156,25 @@ def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[
         name = entry.get("name")
         if not name:
             continue
-        accelerated = False
-        acceleration = entry.get("content", {}).get("acceleration")
-        if isinstance(acceleration, str):
-            try:
-                accelerated = bool(json.loads(acceleration).get("enabled", False))
-            except (ValueError, AttributeError):
-                accelerated = False
-        models.append({"name": name, "accelerated": accelerated})
+        content = entry.get("content", {})
+        acceleration = parse_json_attribute(content.get("acceleration"))
+        # The model definition (objects, fields) is carried in the
+        # "description" content attribute as a JSON document.
+        definition = parse_json_attribute(content.get("description"))
+        root_datasets = [
+            obj["objectName"]
+            for obj in definition.get("objects", [])
+            if isinstance(obj, dict)
+            and obj.get("objectName")
+            and obj.get("parentName") in BASE_DATASET_PARENTS
+        ]
+        models.append(
+            {
+                "name": name,
+                "accelerated": bool(acceleration.get("enabled", False)),
+                "root_datasets": root_datasets,
+            }
+        )
     return sorted(models, key=lambda model: model["name"])
 
 
