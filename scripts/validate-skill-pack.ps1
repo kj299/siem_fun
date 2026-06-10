@@ -161,6 +161,20 @@ foreach ($helperPair in @(
     }
 }
 
+$dictionaryScript = Read-Text "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py"
+$cimReference = Read-Text "splunk-sentinel-query-builder/references/cim-vendor-alignment.md"
+$hintsBlock = [regex]::Match($dictionaryScript, '(?ms)^CIM_SOURCETYPE_HINTS[^=]*=\s*\{(.*?)^\}')
+if (-not $hintsBlock.Success) {
+    Add-Issue "build_splunk_dictionary.py is missing the CIM_SOURCETYPE_HINTS dictionary"
+} else {
+    foreach ($match in [regex]::Matches($hintsBlock.Groups[1].Value, '(?m)^\s+"([^"]+)":')) {
+        $sourcetype = $match.Groups[1].Value
+        if ($cimReference -notmatch [regex]::Escape($sourcetype)) {
+            Add-Issue "CIM hint sourcetype '$sourcetype' is not documented in cim-vendor-alignment.md"
+        }
+    }
+}
+
 $markdownFiles = $trackedFiles | Where-Object { $_ -like "*.md" }
 $linkRegex = '\[[^\]]+\]\(([^)]+)\)'
 foreach ($file in $markdownFiles) {
