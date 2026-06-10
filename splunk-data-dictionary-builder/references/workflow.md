@@ -12,9 +12,20 @@ Start cheap and broad, then sample narrowly:
 
 1. List accessible indexes through Splunk REST.
 2. Use `tstats` to enumerate sourcetypes per index.
-3. Sample a small number of events per index/sourcetype.
-4. Collect field names, observed types, and sample values.
-5. Record permission warnings and incomplete coverage.
+3. List installed data models and their acceleration status through Splunk REST.
+4. Sample a small number of events per index/sourcetype.
+5. Collect field names, observed types, and sample values.
+6. Tag recognized vendor sourcetypes with likely CIM data models.
+7. Record permission warnings and incomplete coverage.
+
+## CIM Mapping
+
+The helper script tags sourcetypes from common add-ons (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto) with `cim_datamodel_hints` and lists installed data models under `cim_datamodels`. Treat hints as starting points, not proof of coverage:
+
+- a hint means the sourcetype is usually CIM-mapped by its standard add-on
+- actual coverage depends on the add-on being installed and tags being intact
+- confirm with `| tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype` (for example `datamodel=Web.Web`) before relying on a data model
+- unrecognized sourcetypes may still be CIM-mapped by custom local configuration
 
 ## Permissions Handling
 
@@ -37,4 +48,4 @@ The dictionary should be useful to an LLM and a human analyst:
 
 ## Query Builder Handoff
 
-Pass the generated JSON or a relevant excerpt to `splunk-sentinel-query-builder` as the internal data dictionary. The query builder should treat exact index, sourcetype, and field names from this output as higher priority than generic assumptions.
+Pass the generated JSON or a relevant excerpt to `splunk-sentinel-query-builder` as the internal data dictionary. The query builder should treat exact index, sourcetype, and field names from this output as higher priority than generic assumptions. When `cim_datamodel_hints` and an accelerated model in `cim_datamodels` agree, the query builder should prefer a CIM `tstats` query over raw sourcetype searches.

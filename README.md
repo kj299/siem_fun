@@ -12,6 +12,7 @@ The main goal is simple: help the model generate queries that are fast, environm
 
 - a reusable skill for Splunk and Sentinel query generation
 - a Splunk data dictionary builder skill with a local helper script
+- Splunk Common Information Model (CIM) alignment for common vendor sources such as Zscaler, CrowdStrike, Palo Alto, Cisco, Cloudflare, Proofpoint, Akamai, Microsoft Defender, and web proxy infrastructure
 - support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
 - lower-token guidance optimized for Claude Opus 4.6 and Codex GPT-5.4
@@ -46,6 +47,7 @@ siem_fun/
     |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
+        |-- cim-vendor-alignment.md
         |-- data-dictionary-integration.md
         |-- examples-and-troubleshooting.md
         |-- model-guidance.md
@@ -96,6 +98,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-skill-pac
 ## Security
 
 This public repo has GitHub secret scanning, push protection, Dependabot alerts, and Dependabot security updates enabled. Local secret-like files are ignored by `.gitignore`; use `.env.example` as the documented template and keep real credentials in `.env`.
+
+## Splunk CIM and vendor integration coverage
+
+The query builder is aligned with the Splunk Common Information Model so hunts and detections can target shared data models instead of per-vendor sourcetypes. The mapping lives in [splunk-sentinel-query-builder/references/cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md), and the data dictionary builder tags recognized vendor sourcetypes with CIM hints and reports installed data models with their acceleration status.
+
+Degree of detail per integration:
+
+| Integration | Coverage level | What is documented |
+| --- | --- | --- |
+| Zscaler (ZIA and ZPA) | Mapped | NSS/LSS sourcetypes, Web / Network_Traffic / Network_Resolution / Network_Sessions models, key CIM fields, feed-configuration caveats |
+| CrowdStrike Falcon | Mapped | Event Streams sourcetype, Endpoint / Malware / Intrusion_Detection models, key fields, FDR field-divergence caveat |
+| Palo Alto Networks (PAN-OS) | Mapped | pan:traffic / pan:threat / pan:globalprotect sourcetypes and their Network_Traffic, Intrusion_Detection, Malware, Web, Authentication models |
+| Cisco (ASA, Firepower/FTD, Umbrella, ISE) | Mapped | Per-product sourcetypes and their Network_Traffic, Intrusion_Detection, Network_Resolution, Authentication, Network_Sessions models |
+| Microsoft Windows Defender / Defender for Endpoint | Mapped | Both the Defender for Endpoint alert feed and the on-host operational log path, with Alerts / Malware / Endpoint models and key fields |
+| Proofpoint (TAP and PPS) | Mapped | TAP and mail gateway sourcetypes with Email / Malware models and key fields |
+| Web proxy infrastructure (ProxySG, Squid, generic) | Mapped | The Web data model as the shared proxy contract, with the canonical field set and cross-proxy query strategy |
+| Cloudflare | Partial | HTTP, firewall, and Gateway DNS log mappings to Web / Intrusion_Detection / Network_Resolution; field availability flagged as dependent on app version and Logpush field selection |
+| Akamai App & API Protector | Mapped | akamai:siem sourcetype with Web / Intrusion_Detection models and key fields |
+| Akamai Noname (API Security) | Outline | Guidance only: no standard CIM add-on exists, so events are treated as Alerts with locally verified field aliases |
+| Other vendors | Procedure | A generic four-step process: find the add-on, check its tags, verify model coverage with tstats, fall back to the dictionary builder |
+
+What "Mapped" means here: typical add-on sourcetypes, target CIM data models, key normalized fields, tstats query patterns, and coverage-verification queries are documented at the query-guidance level. This repo does not ship add-on configurations (props/transforms), detection content, or index names - index naming is deployment-specific and should come from discovery or the data dictionary builder.
 
 ## Quick-start prompt patterns
 
@@ -208,6 +232,7 @@ To get the best results with either model:
 ## Common use cases
 
 - build a Splunk data dictionary from accessible indexes and sourcetypes
+- hunt across multi-vendor sources through one CIM data model query
 - build a new hunt query from a detection idea
 - turn a hunt into a detection
 - optimize a slow Splunk or Sentinel query
@@ -229,6 +254,7 @@ To get the best results with either model:
 - [agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
 - [splunk-sentinel-query-builder/SKILL.md](splunk-sentinel-query-builder/SKILL.md): main skill instructions
 - [references/query-workflow.md](splunk-sentinel-query-builder/references/query-workflow.md): query workflow
+- [references/cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md): CIM data models and vendor sourcetype mappings
 - [references/splunk-to-kql-mapping.md](splunk-sentinel-query-builder/references/splunk-to-kql-mapping.md): translation support
 - [references/data-dictionary-integration.md](splunk-sentinel-query-builder/references/data-dictionary-integration.md): internal URL usage
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling

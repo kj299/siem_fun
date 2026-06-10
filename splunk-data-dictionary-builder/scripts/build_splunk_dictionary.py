@@ -91,6 +91,62 @@ def entries(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return payload.get("entry", [])
 
 
+# Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
+# data models they are tagged for. Used as hints only; deployments must verify
+# coverage with: | tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype
+CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
+    "zscalernss-web": ["Web"],
+    "zscalernss-fw": ["Network_Traffic"],
+    "zscalernss-dns": ["Network_Resolution"],
+    "zscalerlss-zpa-app": ["Network_Sessions", "Web"],
+    "akamai:siem": ["Web", "Intrusion_Detection"],
+    "ms:defender:atp:alerts": ["Alerts", "Malware", "Endpoint"],
+    "crowdstrike:events:sensor": ["Endpoint", "Malware", "Intrusion_Detection"],
+    "cloudflare:json": ["Web", "Intrusion_Detection", "Network_Resolution"],
+    "proofpoint:tap:siem": ["Email", "Malware"],
+    "pps_messagelog": ["Email"],
+    "bluecoat:proxysg:access": ["Web"],
+    "squid:access": ["Web"],
+    "cisco:asa": ["Network_Traffic", "Network_Sessions", "Authentication"],
+    "cisco:estreamer:data": ["Intrusion_Detection", "Network_Traffic"],
+    "cisco:umbrella:dns": ["Network_Resolution"],
+    "cisco:ise:syslog": ["Authentication", "Network_Sessions"],
+    "pan:traffic": ["Network_Traffic"],
+    "pan:threat": ["Intrusion_Detection", "Malware", "Web"],
+    "pan:globalprotect": ["Authentication", "Network_Sessions"],
+}
+
+
+def cim_hints_for_sourcetype(sourcetype: str) -> list[str]:
+    key = sourcetype.lower()
+    for prefix, models in CIM_SOURCETYPE_HINTS.items():
+        if key == prefix or key.startswith(prefix):
+            return models
+    return []
+
+
+def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[str, Any]]:
+    try:
+        payload = client.get("/services/datamodel/model", {"count": "0"})
+    except RuntimeError as error:
+        warnings.append(str(error))
+        return []
+    models = []
+    for entry in entries(payload):
+        name = entry.get("name")
+        if not name:
+            continue
+        accelerated = False
+        acceleration = entry.get("content", {}).get("acceleration")
+        if isinstance(acceleration, str):
+            try:
+                accelerated = bool(json.loads(acceleration).get("enabled", False))
+            except (ValueError, AttributeError):
+                accelerated = False
+        models.append({"name": name, "accelerated": accelerated})
+    return sorted(models, key=lambda model: model["name"])
+
+
 def discover_indexes(client: SplunkClient, requested: list[str] | None, warnings: list[str]) -> list[str]:
     if requested:
         return requested
@@ -160,7 +216,14 @@ def main() -> int:
 
     indexes = discover_indexes(client, args.indexes, warnings)
     sourcetypes = discover_sourcetypes(client, indexes, args.earliest, warnings)
+    datamodels = discover_datamodels(client, warnings)
     samples = []
+    for row in sourcetypes:
+        sourcetype = row.get("sourcetype")
+        if sourcetype:
+            hints = cim_hints_for_sourcetype(sourcetype)
+            if hints:
+                row["cim_datamodel_hints"] = hints
     for row in sourcetypes[: args.max_sourcetypes]:
         index = row.get("index")
         sourcetype = row.get("sourcetype")
@@ -172,6 +235,7 @@ def main() -> int:
         "splunk_base_url": args.base_url,
         "indexes": indexes,
         "sourcetypes": sourcetypes,
+        "cim_datamodels": datamodels,
         "field_samples": samples,
         "warnings": warnings,
         "permission_notes": [

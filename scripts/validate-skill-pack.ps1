@@ -95,6 +95,7 @@ $requiredFiles = @(
     "splunk-sentinel-query-builder/references/examples-and-troubleshooting.md",
     "splunk-sentinel-query-builder/references/model-guidance.md",
     "splunk-sentinel-query-builder/references/query-workflow.md",
+    "splunk-sentinel-query-builder/references/cim-vendor-alignment.md",
     "splunk-sentinel-query-builder/references/splunk-to-kql-mapping.md",
     "splunk-data-dictionary-builder/SKILL.md",
     "splunk-data-dictionary-builder/agents/openai.yaml",

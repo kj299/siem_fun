@@ -28,6 +28,7 @@ For Splunk, look for:
 - `sourcetype`
 - `source`
 - common extracted fields
+- CIM data model coverage when the source is a mapped vendor product; see [cim-vendor-alignment.md](cim-vendor-alignment.md)
 
 For Sentinel, look for:
 
@@ -138,15 +139,15 @@ Scope to one index to find contributing hosts and sourcetypes:
 Use these against the Common Information Model or any accelerated data model:
 
 ```spl
-| tstats count from datamodel=YOUR_DATAMODEL by index
-| tstats count from datamodel=Authentication by index, sourcetype
-| tstats count from datamodel=Endpoint where nodename=Endpoint.Processes by index
+| tstats count from datamodel=YOUR_DATAMODEL.ROOT_DATASET by index
+| tstats count from datamodel=Authentication.Authentication by index, sourcetype
+| tstats count from datamodel=Endpoint.Processes by index
 ```
 
 Add `summariesonly=t` when the data model is accelerated and only summarized results are needed:
 
 ```spl
-| tstats summariesonly=t count from datamodel=Authentication by index, sourcetype
+| tstats summariesonly=t count from datamodel=Authentication.Authentication by index, sourcetype
 ```
 
 ### Verify a field is indexed
@@ -166,6 +167,8 @@ Return one of the queries above (and stop) when:
 - the exact index or sourcetype is unknown
 - a CIM-backed detection is requested but data model coverage is unclear
 - a KQL-to-SPL translation hinges on which Splunk index receives the source data
+
+For vendor-to-CIM mappings (Zscaler, CrowdStrike, Palo Alto, Cisco, Cloudflare, Proofpoint, Akamai, Microsoft Defender, web proxies) and CIM query patterns, read [cim-vendor-alignment.md](cim-vendor-alignment.md).
 
 ## Sentinel discovery via Usage, Heartbeat, and getschema
 

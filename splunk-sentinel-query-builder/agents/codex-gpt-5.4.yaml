@@ -48,6 +48,7 @@ behavior:
     - "Do not repeat the user's prompt in long prose."
     - "Use exact dataset and field names when known."
     - "Load only the smallest relevant reference."
+    - "Prefer CIM data model fields for CIM-mapped vendor sources and verify coverage before relying on a data model."
     - "Keep examples and troubleshooting in references rather than the top-level skill file."
   truth_order:
     - "Internal data dictionary URL or excerpt"
@@ -66,6 +67,7 @@ behavior:
 references:
   primary_skill: "../SKILL.md"
   query_workflow: "../references/query-workflow.md"
+  cim_vendor_alignment: "../references/cim-vendor-alignment.md"
   dictionary_integration: "../references/data-dictionary-integration.md"
   examples_and_troubleshooting: "../references/examples-and-troubleshooting.md"
   translation_mapping: "../references/splunk-to-kql-mapping.md"

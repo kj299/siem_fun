@@ -30,8 +30,9 @@ Expect these when available:
 1. Confirm the connection method and target scope.
 2. Run [scripts/build_splunk_dictionary.py](scripts/build_splunk_dictionary.py) when local execution is appropriate.
 3. If connection fails, explain whether the failure is auth, TLS, network, or permission related.
-4. Summarize discovered indexes, sourcetypes, fields, and sampling limits.
-5. Save or return structured JSON.
+4. Summarize discovered indexes, sourcetypes, CIM data models, fields, and sampling limits.
+5. Note which sourcetypes carry CIM data model hints so the output can drive CIM-first queries.
+6. Save or return structured JSON.
 
 ## Output Shape
 
@@ -40,9 +41,9 @@ Return or write JSON with:
 - `generated_at`
 - `splunk_base_url`
 - `indexes`
-- `sourcetypes`
-- `fields`
-- `sample_values`
+- `sourcetypes` (rows include `cim_datamodel_hints` for recognized vendor sourcetypes)
+- `cim_datamodels` (installed data models with acceleration status)
+- `field_samples` (per index/sourcetype: `fields` with `sample_values` and `observed_types`)
 - `warnings`
 - `permission_notes`
 
