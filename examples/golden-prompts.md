@@ -125,7 +125,36 @@ Expected output:
 - Maps `src_ip` to `IPAddress`
 - Calls out any assumption about `action=failure` mapping, such as `ResultType != "0"`
 
-## 6. KQL to SPL translation with ambiguous dataset mapping
+## 6. Splunk CIM multi-vendor hunt
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to hunt blocked web traffic across Zscaler, Cloudflare, and Palo Alto URL filtering.
+Platform: Splunk
+Task: hunt
+Time range: last 24h
+Known datasets: Web data model is accelerated; zscalernss-web, cloudflare:json, and pan:threat are CIM-mapped
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Uses one `tstats` query against `datamodel=Web` instead of OR-ing vendor sourcetypes
+- Groups by `sourcetype` or `vendor_product` so per-vendor gaps stay visible
+- Uses `summariesonly=true` only because the prompt confirms acceleration
+- Does not invent index names
+
+Example shape:
+
+```spl
+| tstats summariesonly=true count from datamodel=Web where Web.action="blocked" by Web.src, Web.url, sourcetype
+```
+
+## 7. KQL to SPL translation with ambiguous dataset mapping
 
 Prompt:
 

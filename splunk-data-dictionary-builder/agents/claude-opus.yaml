@@ -11,6 +11,7 @@ behavior:
     - "Keep output structured and concise."
     - "Report permission gaps explicitly."
     - "Sample narrowly before expanding scope."
+    - "Tag recognized vendor sourcetypes with likely CIM data models and report installed data model acceleration status."
   stop_conditions:
     - "Stop and explain when authentication fails."
     - "Stop and explain when TLS or network connectivity fails."
