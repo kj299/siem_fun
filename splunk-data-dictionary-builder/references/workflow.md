@@ -24,7 +24,7 @@ The helper script tags sourcetypes from common add-ons (Zscaler, Akamai, Microso
 
 - a hint means the sourcetype is usually CIM-mapped by its standard add-on
 - actual coverage depends on the add-on being installed and tags being intact
-- confirm with `| tstats count from datamodel=NAME by index, sourcetype` before relying on a data model
+- confirm with `| tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype` (for example `datamodel=Web.Web`) before relying on a data model
 - unrecognized sourcetypes may still be CIM-mapped by custom local configuration
 
 ## Permissions Handling

@@ -19,7 +19,7 @@ Never assume index names. Indexes are deployment-specific; verify with discovery
 
 ## CIM data models that matter here
 
-| Data model | Root node | Core fields |
+| Data model | Root dataset | Core fields |
 | --- | --- | --- |
 | Web | Web | action, src, dest, url, uri_path, http_method, status, http_user_agent, bytes_in, bytes_out, category, user |
 | Network_Traffic | All_Traffic | action, src, dest, dest_port, transport, app, rule, bytes_in, bytes_out, user |
@@ -34,24 +34,26 @@ Never assume index names. Indexes are deployment-specific; verify with discovery
 
 ## CIM query patterns
 
+Qualify the `from` clause as `datamodel=MODEL.ROOT_DATASET`, per the Splunk `tstats` reference. Field references keep the root dataset prefix (`Web.src`, `All_Traffic.dest`). Splunk also accepts the bare model name for single-root models, but the qualified form works everywhere.
+
 Accelerated data model search (fast path):
 
 ```spl
-| tstats summariesonly=true count from datamodel=Web where Web.action="blocked" by Web.src, Web.user, Web.url
+| tstats summariesonly=true count from datamodel=Web.Web where Web.action="blocked" by Web.src, Web.user, Web.url
 ```
 
 ```spl
-| tstats summariesonly=true count from datamodel=Network_Traffic where All_Traffic.dest_port=445 by All_Traffic.src, All_Traffic.dest
+| tstats summariesonly=true count from datamodel=Network_Traffic.All_Traffic where All_Traffic.dest_port=445 by All_Traffic.src, All_Traffic.dest
 ```
 
 ```spl
-| tstats summariesonly=true count from datamodel=Authentication where Authentication.action="failure" by Authentication.user, Authentication.src
+| tstats summariesonly=true count from datamodel=Authentication.Authentication where Authentication.action="failure" by Authentication.user, Authentication.src
 ```
 
-Drop `summariesonly=true` when the model is not accelerated or very recent events matter. Use `nodename` for Endpoint:
+Drop `summariesonly=true` when the model is not accelerated or very recent events matter. The Endpoint model has several root datasets (Processes, Filesystem, Registry, Services); select one in the `from` clause and prefix fields with it:
 
 ```spl
-| tstats summariesonly=true count from datamodel=Endpoint where nodename=Endpoint.Processes by Endpoint.Processes.process_name, Endpoint.Processes.dest
+| tstats summariesonly=true count from datamodel=Endpoint.Processes by Processes.process_name, Processes.dest
 ```
 
 ## Coverage verification
@@ -59,7 +61,7 @@ Drop `summariesonly=true` when the model is not accelerated or very recent event
 Before shipping a CIM-backed query, verify which sourcetypes feed the model:
 
 ```spl
-| tstats count from datamodel=Web by index, sourcetype
+| tstats count from datamodel=Web.Web by index, sourcetype
 ```
 
 Spot-check normalized events:

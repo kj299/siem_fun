@@ -93,7 +93,7 @@ def entries(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 # Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
 # data models they are tagged for. Used as hints only; deployments must verify
-# coverage with: | tstats count from datamodel=NAME by index, sourcetype
+# coverage with: | tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype
 CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "zscalernss-web": ["Web"],
     "zscalernss-fw": ["Network_Traffic"],

@@ -143,7 +143,7 @@ Expected output:
 - `Objective`
 - `Query`
 - `Assumptions`
-- Uses one `tstats` query against `datamodel=Web` instead of OR-ing vendor sourcetypes
+- Uses one `tstats` query against `datamodel=Web.Web` instead of OR-ing vendor sourcetypes
 - Groups by `sourcetype` or `vendor_product` so per-vendor gaps stay visible
 - Uses `summariesonly=true` only because the prompt confirms acceleration
 - Does not invent index names
@@ -151,7 +151,7 @@ Expected output:
 Example shape:
 
 ```spl
-| tstats summariesonly=true count from datamodel=Web where Web.action="blocked" by Web.src, Web.url, sourcetype
+| tstats summariesonly=true count from datamodel=Web.Web where Web.action="blocked" by Web.src, Web.url, sourcetype
 ```
 
 ## 7. KQL to SPL translation with ambiguous dataset mapping
