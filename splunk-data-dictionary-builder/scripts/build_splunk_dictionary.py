@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--earliest", default="-24h", help="Earliest time for sampling searches.")
     parser.add_argument("--sample-size", type=int, default=20, help="Events to sample per sourcetype.")
     parser.add_argument("--max-sourcetypes", type=int, default=50, help="Maximum sourcetypes to sample.")
+    parser.add_argument("--cim-coverage", action=argparse.BooleanOptionalAction, default=True, help="Query live CIM data model coverage by sourcetype.")
     parser.add_argument("--output", default=os.getenv("SPLUNK_DICTIONARY_OUTPUT", "./out/splunk-data-dictionary.json"))
     return parser.parse_args()
 
@@ -98,8 +99,12 @@ def spl_quote(value: str) -> str:
 
 
 # Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
-# data models they are tagged for. Used as hints only; deployments must verify
-# coverage with: | tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype
+# data models they are tagged for. These are offline fallback hints only;
+# cim_coverage (queried from the live instance) is the ground truth and also
+# captures mappings the prefixes cannot express, such as the on-host Windows
+# Defender path (XmlWinEventLog matched by source rather than sourcetype).
+# Every key here must be documented in cim-vendor-alignment.md; the validator
+# enforces that.
 CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "zscalernss-web": ["Web"],
     "zscalernss-fw": ["Network_Traffic"],
@@ -131,6 +136,20 @@ def cim_hints_for_sourcetype(sourcetype: str) -> list[str]:
     return []
 
 
+# Parents that mark a dataset as a root dataset in a data model definition.
+BASE_DATASET_PARENTS = {"BaseEvent", "BaseTransaction", "BaseSearch"}
+
+
+def parse_json_attribute(value: Any) -> dict[str, Any]:
+    """Normalize a Splunk REST content attribute that may be a JSON string or a dict."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return {}
+    return value if isinstance(value, dict) else {}
+
+
 def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[str, Any]]:
     try:
         payload = client.get("/services/datamodel/model", {"count": "0"})
@@ -142,15 +161,57 @@ def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[
         name = entry.get("name")
         if not name:
             continue
-        accelerated = False
-        acceleration = entry.get("content", {}).get("acceleration")
-        if isinstance(acceleration, str):
-            try:
-                accelerated = bool(json.loads(acceleration).get("enabled", False))
-            except (ValueError, AttributeError):
-                accelerated = False
-        models.append({"name": name, "accelerated": accelerated})
+        content = entry.get("content", {})
+        acceleration = parse_json_attribute(content.get("acceleration"))
+        # The model definition (objects, fields) is carried in the
+        # "description" content attribute as a JSON document.
+        definition = parse_json_attribute(content.get("description"))
+        root_datasets = [
+            obj["objectName"]
+            for obj in definition.get("objects", [])
+            if isinstance(obj, dict)
+            and obj.get("objectName")
+            and obj.get("parentName") in BASE_DATASET_PARENTS
+        ]
+        models.append(
+            {
+                "name": name,
+                "accelerated": bool(acceleration.get("enabled", False)),
+                "root_datasets": root_datasets,
+            }
+        )
     return sorted(models, key=lambda model: model["name"])
+
+
+def discover_cim_coverage(client: SplunkClient, datamodels: list[dict[str, Any]], earliest: str, warnings: list[str]) -> list[dict[str, Any]]:
+    """Query which sourcetypes actually feed each data model root dataset."""
+    coverage = []
+    for model in datamodels:
+        summaries = "summariesonly=true " if model["accelerated"] else ""
+        for root in model["root_datasets"]:
+            search = f"| tstats {summaries}count from datamodel={model['name']}.{root} by sourcetype"
+            try:
+                payload = client.search_oneshot(search, earliest)
+            except RuntimeError as error:
+                warnings.append(str(error))
+                continue
+            sourcetypes: dict[str, int] = {}
+            for row in payload.get("results", []):
+                name = row.get("sourcetype")
+                if not name:
+                    continue
+                try:
+                    sourcetypes[name] = int(row.get("count", 0))
+                except (TypeError, ValueError):
+                    sourcetypes[name] = 0
+            coverage.append(
+                {
+                    "datamodel": model["name"],
+                    "root_dataset": root,
+                    "sourcetypes": sourcetypes,
+                }
+            )
+    return coverage
 
 
 def discover_indexes(client: SplunkClient, requested: list[str] | None, warnings: list[str]) -> list[str]:
@@ -223,6 +284,7 @@ def main() -> int:
     indexes = discover_indexes(client, args.indexes, warnings)
     sourcetypes = discover_sourcetypes(client, indexes, args.earliest, warnings)
     datamodels = discover_datamodels(client, warnings)
+    cim_coverage = discover_cim_coverage(client, datamodels, args.earliest, warnings) if args.cim_coverage else []
     samples = []
     for row in sourcetypes:
         sourcetype = row.get("sourcetype")
@@ -242,6 +304,7 @@ def main() -> int:
         "indexes": indexes,
         "sourcetypes": sourcetypes,
         "cim_datamodels": datamodels,
+        "cim_coverage": cim_coverage,
         "field_samples": samples,
         "warnings": warnings,
         "permission_notes": [

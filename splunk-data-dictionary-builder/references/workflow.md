@@ -20,12 +20,11 @@ Start cheap and broad, then sample narrowly:
 
 ## CIM Mapping
 
-The helper script tags sourcetypes from common add-ons (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto) with `cim_datamodel_hints` and lists installed data models under `cim_datamodels`. Treat hints as starting points, not proof of coverage:
+The helper script reports CIM facts at three levels of trust:
 
-- a hint means the sourcetype is usually CIM-mapped by its standard add-on
-- actual coverage depends on the add-on being installed and tags being intact
-- confirm with `| tstats count from datamodel=MODEL.ROOT_DATASET by index, sourcetype` (for example `datamodel=Web.Web`) before relying on a data model
-- unrecognized sourcetypes may still be CIM-mapped by custom local configuration
+- `cim_coverage` is ground truth: for each model root dataset it queries the live instance with `| tstats count from datamodel=MODEL.ROOT_DATASET by sourcetype` and records which sourcetypes actually feed the model. This also captures mappings that sourcetype names cannot express, such as on-host Windows Defender events reaching the Malware model. Disable with `--no-cim-coverage` when the extra searches are too costly.
+- `cim_datamodels` lists installed models with `root_datasets` and acceleration status, enough to build the qualified `datamodel=MODEL.ROOT_DATASET` form directly.
+- `cim_datamodel_hints` are static fallback hints for sourcetypes from common add-ons (Zscaler, Akamai, Microsoft Defender, CrowdStrike, Cloudflare, Proofpoint, web proxies, Cisco, Palo Alto). A hint means the sourcetype is usually CIM-mapped by its standard add-on; actual coverage depends on the add-on being installed and tags being intact. When `cim_coverage` is present, prefer it over hints; unrecognized sourcetypes may still be CIM-mapped by custom local configuration.
 
 ## Permissions Handling
 
@@ -48,4 +47,4 @@ The dictionary should be useful to an LLM and a human analyst:
 
 ## Query Builder Handoff
 
-Pass the generated JSON or a relevant excerpt to `splunk-sentinel-query-builder` as the internal data dictionary. The query builder should treat exact index, sourcetype, and field names from this output as higher priority than generic assumptions. When `cim_datamodel_hints` and an accelerated model in `cim_datamodels` agree, the query builder should prefer a CIM `tstats` query over raw sourcetype searches.
+Pass the generated JSON or a relevant excerpt to `splunk-sentinel-query-builder` as the internal data dictionary. The query builder should treat exact index, sourcetype, and field names from this output as higher priority than generic assumptions. Prefer a CIM `tstats` query for a sourcetype when `cim_coverage` shows it feeding a model root dataset, using `summariesonly=true` only if that model is accelerated in `cim_datamodels`; use raw sourcetype searches for everything else. Fall back to `cim_datamodel_hints` for this decision only when coverage data is absent.
