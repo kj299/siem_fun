@@ -34,7 +34,7 @@ Never assume index names. Indexes are deployment-specific; verify with discovery
 
 ## CIM query patterns
 
-Qualify the `from` clause as `datamodel=MODEL.ROOT_DATASET`, per the Splunk `tstats` reference. Field references keep the root dataset prefix (`Web.src`, `All_Traffic.dest`). Splunk also accepts the bare model name for single-root models, but the qualified form works everywhere.
+Qualify the `from` clause as `datamodel=MODEL.ROOT_DATASET`, per the Splunk `tstats` reference. Field references keep the root dataset prefix (`Web.src`, `All_Traffic.dest`). Splunk also accepts the bare model name for single-root models (Splunk ESCU detections commonly ship that form), but the qualified form works everywhere and is required for multi-root models. Select a child dataset with `where nodename=ROOT_DATASET.CHILD_DATASET`.
 
 Accelerated data model search (fast path):
 
