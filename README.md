@@ -11,7 +11,7 @@ The main goal is simple: help the model generate queries that are fast, environm
 ## What this repo gives you
 
 - a reusable skill for Splunk and Sentinel query generation
-- a Splunk data dictionary builder skill with a local helper script
+- a Splunk data dictionary builder skill with a local helper script that discovers indexes, sourcetypes, fields, installed CIM data models, and live CIM coverage by sourcetype
 - Splunk Common Information Model (CIM) alignment for common vendor sources; see the coverage table below for the vendor list and depth
 - support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
@@ -36,7 +36,11 @@ siem_fun/
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/
+|   |   |-- claude-opus.yaml
+|   |   |-- codex-gpt-5.4.yaml
+|   |   `-- openai.yaml
 |   |-- references/
+|   |   `-- workflow.md
 |   |-- scripts/
 |   |   `-- build_splunk_dictionary.py
 |   `-- SKILL.md
@@ -74,7 +78,7 @@ Use $splunk-sentinel-query-builder to ...
 Use the data dictionary builder first when you do not yet know the local Splunk schema:
 
 ```text
-Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, and sample values.
+Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, sample values, and CIM data model coverage.
 ```
 
 ## Local Setup
@@ -89,6 +93,16 @@ Build a local Splunk data dictionary with:
 python .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py --base-url https://splunk.example.com:8089 --token $env:SPLUNK_TOKEN --output .\out\splunk-data-dictionary.json
 ```
 
+The script writes one JSON file describing the instance:
+
+- `indexes` and `sourcetypes`: what is accessible, with `cim_datamodel_hints` on recognized vendor sourcetypes
+- `cim_datamodels`: installed data models with their root datasets and acceleration status, enough to build `datamodel=MODEL.ROOT_DATASET` queries
+- `cim_coverage`: which sourcetypes actually feed each data model, queried live from the instance as ground truth that supersedes the static hints
+- `field_samples`: sampled fields, observed types, and example values per index/sourcetype
+- `warnings` and `permission_notes`: gaps that may reflect role permissions rather than true absence
+
+The coverage pass runs extra `tstats` searches; add `--no-cim-coverage` to skip it on large or slow instances. Pass the JSON, or a relevant excerpt, to the query builder as the internal data dictionary.
+
 Run validation locally with:
 
 ```powershell
@@ -101,7 +115,7 @@ This public repo has GitHub secret scanning, push protection, Dependabot alerts,
 
 ## Splunk CIM and vendor integration coverage
 
-The query builder is aligned with the Splunk Common Information Model so hunts and detections can target shared data models instead of per-vendor sourcetypes. The mapping lives in [splunk-sentinel-query-builder/references/cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md), and the data dictionary builder tags recognized vendor sourcetypes with CIM hints and reports installed data models with their acceleration status.
+The query builder is aligned with the Splunk Common Information Model so hunts and detections can target shared data models instead of per-vendor sourcetypes. The mapping lives in [splunk-sentinel-query-builder/references/cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md). The data dictionary builder complements it from the live instance: it tags recognized vendor sourcetypes with CIM hints, reports installed data models with their root datasets and acceleration status, and queries actual CIM coverage by sourcetype so query generation can rely on ground truth rather than assumed mappings.
 
 Degree of detail per integration:
 
@@ -248,7 +262,8 @@ To get the best results with either model:
 - [.env.example](.env.example): optional local helper environment variables
 - [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
-- [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries
+- [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
+- [splunk-data-dictionary-builder/references/workflow.md](splunk-data-dictionary-builder/references/workflow.md): discovery strategy, CIM coverage, and query-builder handoff
 - [agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
 - [agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
 - [agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
