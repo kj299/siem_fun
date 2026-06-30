@@ -110,6 +110,7 @@ index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
 
 ```spl
 index=firewall sourcetype=cisco:asa action=blocked earliest=-24h
+| where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | lookup greynoise_full ip AS src OUTPUT noise, classification, tags
 | where noise=false AND classification!="benign"
@@ -122,6 +123,7 @@ index=firewall sourcetype=cisco:asa action=blocked earliest=-24h
 ```spl
 index IN (firewall, proxy) earliest=-24h
 | eval ip_field=coalesce(src, src_ip, ClientIP)
+| where isnotnull(ip_field) AND match(ip_field, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by ip_field, index, sourcetype
 | lookup greynoise_full ip AS ip_field OUTPUT classification, actor, tags, last_seen
 | where classification="malicious"
@@ -130,8 +132,11 @@ index IN (firewall, proxy) earliest=-24h
 
 ### RIOT enrichment: identify traffic to major CDNs and SaaS platforms
 
+RIOT covers IPv4 addresses; filter to direct-IP destinations before the lookup join.
+
 ```spl
 index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
+| where isnotnull(dest) AND match(dest, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by dest
 | lookup greynoise_riot ip AS dest OUTPUT riot, name AS riot_service
 | where riot=true
@@ -152,6 +157,7 @@ index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
 
 ```spl
 index=firewall sourcetype=cisco:asa action=permitted earliest=-24h
+| where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | lookup greynoise_full ip AS src OUTPUT classification, noise, riot, tags, actor, last_seen
 | where classification="malicious" OR (noise=true AND riot=false)

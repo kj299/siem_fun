@@ -285,9 +285,9 @@ To get the best results with either model:
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
 - [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
 - [splunk-data-dictionary-builder/references/workflow.md](splunk-data-dictionary-builder/references/workflow.md): discovery strategy, CIM coverage, and query-builder handoff
-- [agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
-- [agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
-- [agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
+- [splunk-sentinel-query-builder/agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
+- [splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
+- [splunk-sentinel-query-builder/agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
 - [splunk-sentinel-query-builder/SKILL.md](splunk-sentinel-query-builder/SKILL.md): main skill instructions
 - [references/query-workflow.md](splunk-sentinel-query-builder/references/query-workflow.md): query workflow
 - [references/cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md): CIM data models and vendor sourcetype mappings
