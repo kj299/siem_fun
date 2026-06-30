@@ -35,7 +35,9 @@ Optional but recommended:
 ### 1. Classify each index
 
 For each provided index name:
-1. If sourcetypes are unknown, return the enumeration query from [multi-index-patterns.md](references/multi-index-patterns.md) and stop before writing a production query.
+1. If sourcetypes are unknown, return the enumeration query from [multi-index-patterns.md](references/multi-index-patterns.md) and stop before writing a production query. Discovery mode output:
+   - **Discovery query**: `| tstats count where index IN (<indexes>) by index, sourcetype | sort - count`
+   - **Next step**: one sentence instructing the user to run the query and re-invoke the skill with the confirmed sourcetypes
 2. If sourcetypes are known or can be inferred from the index name, look them up in [splunkbase-app-catalog.md](references/splunkbase-app-catalog.md) to identify CIM model mappings and key fields.
 3. When the environment is Splunk Cloud, check index naming and REST constraints in [splunk-cloud-index-management.md](references/splunk-cloud-index-management.md).
 

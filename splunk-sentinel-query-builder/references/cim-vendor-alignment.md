@@ -104,7 +104,7 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 ### CrowdStrike Falcon
 
 - Add-on: CrowdStrike Falcon Event Streams: `crowdstrike:events:sensor` -> Endpoint, Malware, Intrusion_Detection: process, parent_process_name, file_hash, dest, user, action, severity, signature.
-- Falcon Data Replicator (FDR) feeds Endpoint at higher volume; field names differ from Event Streams, so verify before reusing a query across both.
+- Falcon Data Replicator (FDR): `crowdstrike:fdr:json` -> Endpoint: event_simpleName, ContextBaseFileName, CommandLine, SHA256HashData, LocalAddressIP4, RemoteAddressIP4. Field names differ from Event Streams; verify before reusing a query across both feeds.
 
 ### Cloudflare
 

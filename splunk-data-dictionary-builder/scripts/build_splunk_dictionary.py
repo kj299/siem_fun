@@ -7,6 +7,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import ssl
 import sys
 import time
@@ -15,6 +16,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+_SAFE_IDENT_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -98,6 +101,28 @@ def spl_quote(value: str) -> str:
     return f'"{escaped}"'
 
 
+def _safe_spl_ident(value: str, context: str, warnings: list[str]) -> str | None:
+    """Return value if it is safe as an unquoted SPL data-model identifier, else warn and return None."""
+    if _SAFE_IDENT_RE.match(value):
+        return value
+    warnings.append(f"Skipping unsafe SPL identifier for {context}: {value!r}")
+    return None
+
+
+def _redact_url_credentials(url: str) -> str:
+    """Strip userinfo from a URL so credentials are never written to the output file."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.username or parsed.password:
+            netloc = parsed.hostname or ""
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+    except Exception:
+        pass
+    return url
+
+
 # Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
 # data models they are tagged for. These are offline fallback hints only;
 # cim_coverage (queried from the live instance) is the ground truth and also
@@ -113,6 +138,7 @@ CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "akamai:siem": ["Web", "Intrusion_Detection"],
     "ms:defender:atp:alerts": ["Alerts", "Malware", "Endpoint"],
     "crowdstrike:events:sensor": ["Endpoint", "Malware", "Intrusion_Detection"],
+    "crowdstrike:fdr:json": ["Endpoint"],
     "cloudflare:json": ["Web", "Intrusion_Detection", "Network_Resolution"],
     "proofpoint:tap:siem": ["Email", "Malware"],
     "pps_messagelog": ["Email"],
@@ -143,14 +169,18 @@ def cim_hints_for_sourcetype(sourcetype: str) -> list[str]:
 BASE_DATASET_PARENTS = {"BaseEvent", "BaseTransaction", "BaseSearch"}
 
 
-def parse_json_attribute(value: Any) -> dict[str, Any]:
+def parse_json_attribute(value: Any, warnings: list[str] | None = None, context: str = "") -> dict[str, Any]:
     """Normalize a Splunk REST content attribute that may be a JSON string or a dict."""
     if isinstance(value, str):
         try:
             value = json.loads(value)
         except ValueError:
             return {}
-    return value if isinstance(value, dict) else {}
+    if isinstance(value, dict):
+        return value
+    if value is not None and warnings is not None:
+        warnings.append(f"Expected a JSON object for {context!r}, got {type(value).__name__!r}; skipping")
+    return {}
 
 
 def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[str, Any]]:
@@ -165,10 +195,10 @@ def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[
         if not name:
             continue
         content = entry.get("content", {})
-        acceleration = parse_json_attribute(content.get("acceleration"))
+        acceleration = parse_json_attribute(content.get("acceleration"), warnings=warnings, context="acceleration")
         # The model definition (objects, fields) is carried in the
         # "description" content attribute as a JSON document.
-        definition = parse_json_attribute(content.get("description"))
+        definition = parse_json_attribute(content.get("description"), warnings=warnings, context="description")
         root_datasets = [
             obj["objectName"]
             for obj in definition.get("objects", [])
@@ -192,7 +222,11 @@ def discover_cim_coverage(client: SplunkClient, datamodels: list[dict[str, Any]]
     for model in datamodels:
         summaries = "summariesonly=true " if model["accelerated"] else ""
         for root in model["root_datasets"]:
-            search = f"| tstats {summaries}count from datamodel={model['name']}.{root} by sourcetype"
+            model_name = _safe_spl_ident(model["name"], "data model name", warnings)
+            root_name = _safe_spl_ident(root, "root dataset", warnings)
+            if model_name is None or root_name is None:
+                continue
+            search = f"| tstats {summaries}count from datamodel={model_name}.{root_name} by sourcetype"
             try:
                 payload = client.search_oneshot(search, earliest)
             except RuntimeError as error:
@@ -303,7 +337,7 @@ def main() -> int:
 
     output = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "splunk_base_url": args.base_url,
+        "splunk_base_url": _redact_url_credentials(args.base_url),
         "indexes": indexes,
         "sourcetypes": sourcetypes,
         "cim_datamodels": datamodels,

@@ -75,6 +75,10 @@ function Assert-ListsEqual {
         [string[]]$Right
     )
 
+    if ($Left.Count -eq 0 -and $Right.Count -eq 0) {
+        Add-Issue "Helper drift: $Name is missing or empty in both files"
+        return
+    }
     $leftText = ($Left -join "`n")
     $rightText = ($Right -join "`n")
     if ($leftText -ne $rightText) {
@@ -143,30 +147,20 @@ foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dict
     Assert-Contains $skill '## Inputs' "Inputs section"
 }
 
-$openai = Read-Text "splunk-sentinel-query-builder/agents/openai.yaml"
-foreach ($key in @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")) {
-    if ($openai -notmatch [regex]::Escape($key)) {
-        Add-Issue "agents/openai.yaml is missing $key"
+$requiredOpenaiKeys = @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")
+foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
+    $skillOpenai = Read-Text "$skill/agents/openai.yaml"
+    foreach ($key in $requiredOpenaiKeys) {
+        if ($skillOpenai -notmatch [regex]::Escape($key)) {
+            Add-Issue "$skill/agents/openai.yaml is missing $key"
+        }
     }
 }
 
-$dictionaryOpenai = Read-Text "splunk-data-dictionary-builder/agents/openai.yaml"
-foreach ($key in @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")) {
-    if ($dictionaryOpenai -notmatch [regex]::Escape($key)) {
-        Add-Issue "splunk-data-dictionary-builder/agents/openai.yaml is missing $key"
-    }
-}
-
-$enrichmentOpenai = Read-Text "splunk-enrichment-query-builder/agents/openai.yaml"
-foreach ($key in @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")) {
-    if ($enrichmentOpenai -notmatch [regex]::Escape($key)) {
-        Add-Issue "splunk-enrichment-query-builder/agents/openai.yaml is missing $key"
-    }
-}
-
+# Query-builder skills (sentinel, enrichment) use a structured response contract;
+# check that both helper files carry the same sections.
 foreach ($helperPair in @(
     @("splunk-sentinel-query-builder/agents/claude-opus.yaml", "splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml"),
-    @("splunk-data-dictionary-builder/agents/claude-opus.yaml", "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml"),
     @("splunk-enrichment-query-builder/agents/claude-opus.yaml", "splunk-enrichment-query-builder/agents/codex-gpt-5.4.yaml")
 )) {
     $claude = Read-Text $helperPair[0]
@@ -174,6 +168,24 @@ foreach ($helperPair in @(
     foreach ($section in @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions")) {
         $parent = if ($section -in @("prompt_shape")) { "invocation" } elseif ($section -in @("default_sections", "short_sections")) { "response_contract" } else { "behavior" }
         Assert-ListsEqual "$($helperPair[0]) / $section" (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
+    }
+    # claude-opus helpers must carry trigger_tuning; codex helpers must carry packaging_rules.
+    if ($claude -notmatch 'trigger_tuning:') {
+        Add-Issue "$($helperPair[0]) is missing trigger_tuning section"
+    }
+    if ($codex -notmatch 'packaging_rules:') {
+        Add-Issue "$($helperPair[1]) is missing packaging_rules section"
+    }
+}
+
+# Data-dictionary builder uses a simpler helper structure; check only the sections it defines.
+foreach ($helperPair in @(
+    @("splunk-data-dictionary-builder/agents/claude-opus.yaml", "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml")
+)) {
+    $claude = Read-Text $helperPair[0]
+    $codex = Read-Text $helperPair[1]
+    foreach ($section in @("token_rules", "stop_conditions")) {
+        Assert-ListsEqual "$($helperPair[0]) / $section" (Get-YamlList $claude "behavior" $section) (Get-YamlList $codex "behavior" $section)
     }
 }
 
