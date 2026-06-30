@@ -12,6 +12,7 @@ The main goal is simple: help the model generate queries that are fast, environm
 
 - a reusable skill for Splunk and Sentinel query generation
 - a Splunk data dictionary builder skill with a local helper script that discovers indexes, sourcetypes, fields, installed CIM data models, and live CIM coverage by sourcetype
+- a multi-index enrichment query builder skill with a Splunkbase add-on catalog covering 30+ add-ons, GreyNoise IP enrichment integration, and Splunk Cloud index management guidance
 - Splunk Common Information Model (CIM) alignment for common vendor sources; see the coverage table below for the vendor list and depth
 - support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
@@ -43,6 +44,17 @@ siem_fun/
 |   |   `-- workflow.md
 |   |-- scripts/
 |   |   `-- build_splunk_dictionary.py
+|   `-- SKILL.md
+|-- splunk-enrichment-query-builder/
+|   |-- agents/
+|   |   |-- claude-opus.yaml
+|   |   |-- codex-gpt-5.4.yaml
+|   |   `-- openai.yaml
+|   |-- references/
+|   |   |-- greynoise-integration.md
+|   |   |-- multi-index-patterns.md
+|   |   |-- splunk-cloud-index-management.md
+|   |   `-- splunkbase-app-catalog.md
 |   `-- SKILL.md
 `-- splunk-sentinel-query-builder/
     |-- agents/
@@ -79,6 +91,12 @@ Use the data dictionary builder first when you do not yet know the local Splunk 
 
 ```text
 Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, sample values, and CIM data model coverage.
+```
+
+Use the enrichment query builder when the user provides a list of indexes to cover, names a vendor product or Splunkbase add-on, or needs GreyNoise IP enrichment:
+
+```text
+Use $splunk-enrichment-query-builder to build a hunt across index=firewall, index=proxy, and index=endpoint that enriches source IPs with GreyNoise classification.
 ```
 
 ## Local Setup
@@ -254,6 +272,9 @@ To get the best results with either model:
 - translate KQL to SPL
 - use internal schema documentation to avoid bad assumptions
 - generate discovery queries when the environment is unclear
+- build a hunt across multiple user-provided indexes with Splunkbase-aware field knowledge
+- enrich query results with GreyNoise noise and threat-intelligence classification
+- look up Splunkbase add-on sourcetypes and CIM field mappings for a named vendor product
 
 ## Files to read
 
@@ -274,6 +295,11 @@ To get the best results with either model:
 - [references/data-dictionary-integration.md](splunk-sentinel-query-builder/references/data-dictionary-integration.md): internal URL usage
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning
+- [splunk-enrichment-query-builder/SKILL.md](splunk-enrichment-query-builder/SKILL.md): multi-index enrichment skill instructions
+- [splunk-enrichment-query-builder/references/splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM mappings
+- [splunk-enrichment-query-builder/references/multi-index-patterns.md](splunk-enrichment-query-builder/references/multi-index-patterns.md): SPL patterns for multi-index search and iteration
+- [splunk-enrichment-query-builder/references/greynoise-integration.md](splunk-enrichment-query-builder/references/greynoise-integration.md): GreyNoise SPL commands, lookups, and enrichment patterns
+- [splunk-enrichment-query-builder/references/splunk-cloud-index-management.md](splunk-enrichment-query-builder/references/splunk-cloud-index-management.md): Splunk Cloud index properties, stack types, and REST API
 
 ## Practical note
 

@@ -158,6 +158,17 @@ prompts/siem_fun/
 |   |-- scripts/
 |   |   `-- build_splunk_dictionary.py
 |   `-- SKILL.md
+|-- splunk-enrichment-query-builder/
+|   |-- agents/
+|   |   |-- claude-opus.yaml
+|   |   |-- codex-gpt-5.4.yaml
+|   |   `-- openai.yaml
+|   |-- references/
+|   |   |-- greynoise-integration.md
+|   |   |-- multi-index-patterns.md
+|   |   |-- splunk-cloud-index-management.md
+|   |   `-- splunkbase-app-catalog.md
+|   `-- SKILL.md
 `-- splunk-sentinel-query-builder/
     |-- agents/
     |   |-- claude-opus.yaml

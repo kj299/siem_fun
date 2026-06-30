@@ -102,7 +102,15 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/agents/claude-opus.yaml",
     "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml",
     "splunk-data-dictionary-builder/references/workflow.md",
-    "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py"
+    "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py",
+    "splunk-enrichment-query-builder/SKILL.md",
+    "splunk-enrichment-query-builder/agents/openai.yaml",
+    "splunk-enrichment-query-builder/agents/claude-opus.yaml",
+    "splunk-enrichment-query-builder/agents/codex-gpt-5.4.yaml",
+    "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md",
+    "splunk-enrichment-query-builder/references/multi-index-patterns.md",
+    "splunk-enrichment-query-builder/references/greynoise-integration.md",
+    "splunk-enrichment-query-builder/references/splunk-cloud-index-management.md"
 )
 
 foreach ($file in $requiredFiles) {
@@ -129,7 +137,7 @@ foreach ($file in $trackedFiles) {
     }
 }
 
-foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dictionary-builder/SKILL.md")) {
+foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dictionary-builder/SKILL.md", "splunk-enrichment-query-builder/SKILL.md")) {
     Assert-Contains $skill '(?s)^---\s+name:\s+[-a-z0-9]+\s+description:\s+.+?\s+---' "valid skill frontmatter"
     Assert-Contains $skill '## Important' "top-level Important section"
     Assert-Contains $skill '## Inputs' "Inputs section"
@@ -149,9 +157,17 @@ foreach ($key in @("interface:", "display_name:", "short_description:", "default
     }
 }
 
+$enrichmentOpenai = Read-Text "splunk-enrichment-query-builder/agents/openai.yaml"
+foreach ($key in @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")) {
+    if ($enrichmentOpenai -notmatch [regex]::Escape($key)) {
+        Add-Issue "splunk-enrichment-query-builder/agents/openai.yaml is missing $key"
+    }
+}
+
 foreach ($helperPair in @(
     @("splunk-sentinel-query-builder/agents/claude-opus.yaml", "splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml"),
-    @("splunk-data-dictionary-builder/agents/claude-opus.yaml", "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml")
+    @("splunk-data-dictionary-builder/agents/claude-opus.yaml", "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml"),
+    @("splunk-enrichment-query-builder/agents/claude-opus.yaml", "splunk-enrichment-query-builder/agents/codex-gpt-5.4.yaml")
 )) {
     $claude = Read-Text $helperPair[0]
     $codex = Read-Text $helperPair[1]
