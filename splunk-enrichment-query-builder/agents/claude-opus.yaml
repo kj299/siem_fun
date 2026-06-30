@@ -1,0 +1,72 @@
+helper:
+  model_family: "claude-opus"
+  target_model: "Claude Opus 4.6"
+  purpose: "Companion helper for using the Splunk enrichment query builder skill with Claude-style prompting and Anthropic-aligned skill structure."
+
+skill_requirements:
+  description_rules:
+    - "State what the skill does."
+    - "State when to use it."
+    - "State when not to use it when boundaries matter."
+    - "Keep the description concise and trigger-oriented."
+  instruction_rules:
+    - "Put critical instructions near the top."
+    - "Use imperative steps with explicit inputs and outputs."
+    - "Keep SKILL.md focused and move detail to references."
+    - "Provide examples and troubleshooting through progressive disclosure."
+
+invocation:
+  preferred_prompt: "Use $splunk-enrichment-query-builder to build the smallest useful Splunk query for the provided indexes. Use my exact sourcetypes and fields when given. Add GreyNoise enrichment when IP fields are present. Switch to discovery mode when the schema is unclear."
+  prompt_shape:
+    - "Platform: Splunk"
+    - "Task: hunt | detection | triage | enrichment | discovery"
+    - "Objective: what to find, detect, or enrich"
+    - "Time range: last 1h | 24h | 7d"
+    - "Indexes: list of index names"
+    - "Sourcetypes: known sourcetypes within those indexes (optional)"
+    - "GreyNoise: yes | no"
+    - "Output style: short | full"
+
+response_contract:
+  default_sections:
+    - "Objective"
+    - "Query"
+    - "Why efficient"
+    - "Assumptions"
+    - "Enrichment notes"
+    - "Tuning"
+    - "Validate"
+  short_sections:
+    - "Objective"
+    - "Query"
+    - "Assumptions"
+
+behavior:
+  token_rules:
+    - "Keep the answer query-first and highly structured."
+    - "Do not explain basic SPL syntax unless asked."
+    - "Do not repeat the user's prompt in long prose."
+    - "Use exact dataset and field names when known."
+    - "Load only the smallest relevant reference."
+    - "Prefer CIM data model fields for CIM-mapped vendor sources and verify coverage before relying on a data model."
+    - "Keep examples and troubleshooting in references rather than the top-level skill file."
+  truth_order:
+    - "Internal data dictionary URL or excerpt"
+    - "Explicit user-provided dataset and field names"
+    - "Repo references"
+    - "Discovery query"
+  stop_conditions:
+    - "Return discovery mode when the exact dataset name is missing."
+    - "Return discovery mode when field mapping depends on an unknown parser or connector."
+    - "Return discovery mode when translation depends on unknown source-table or source-index mapping."
+  trigger_tuning:
+    - "If the skill undertriggers, add more trigger detail to the description."
+    - "If the skill overtriggers, add negative triggers and tighten scope."
+    - "If execution is inconsistent, improve instructions and error handling."
+
+references:
+  primary_skill: "../SKILL.md"
+  splunkbase_catalog: "../references/splunkbase-app-catalog.md"
+  multi_index_patterns: "../references/multi-index-patterns.md"
+  greynoise_integration: "../references/greynoise-integration.md"
+  cloud_index_management: "../references/splunk-cloud-index-management.md"

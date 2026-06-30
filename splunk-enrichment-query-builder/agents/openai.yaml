@@ -1,0 +1,7 @@
+interface:
+  display_name: "Splunk Enrichment Query Builder"
+  short_description: "Build Splunk queries across multiple indexes with Splunkbase add-on field knowledge and GreyNoise IP enrichment"
+  default_prompt: "Use $splunk-enrichment-query-builder to build the smallest useful Splunk query for the provided indexes. Use my exact sourcetypes and fields when given. Add GreyNoise enrichment when IP fields are present. Switch to discovery mode when the schema is unclear."
+
+policy:
+  allow_implicit_invocation: false
