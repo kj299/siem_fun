@@ -179,14 +179,10 @@ foreach ($helperPair in @(
 }
 
 # Data-dictionary builder uses a simpler helper structure; check only the sections it defines.
-foreach ($helperPair in @(
-    @("splunk-data-dictionary-builder/agents/claude-opus.yaml", "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml")
-)) {
-    $claude = Read-Text $helperPair[0]
-    $codex = Read-Text $helperPair[1]
-    foreach ($section in @("token_rules", "stop_conditions")) {
-        Assert-ListsEqual "$($helperPair[0]) / $section" (Get-YamlList $claude "behavior" $section) (Get-YamlList $codex "behavior" $section)
-    }
+$claude = Read-Text "splunk-data-dictionary-builder/agents/claude-opus.yaml"
+$codex = Read-Text "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml"
+foreach ($section in @("token_rules", "stop_conditions")) {
+    Assert-ListsEqual "splunk-data-dictionary-builder helpers / $section" (Get-YamlList $claude "behavior" $section) (Get-YamlList $codex "behavior" $section)
 }
 
 $dictionaryScript = Read-Text "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py"
