@@ -267,7 +267,7 @@ foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-bu
         }
     }
     if (($prompts.Values | Select-Object -Unique).Count -gt 1) {
-        Add-Issue "Invocation prompt drift in $skill: openai default_prompt and helper preferred_prompt values differ"
+        Add-Issue "Invocation prompt drift in ${skill}: openai default_prompt and helper preferred_prompt values differ"
     }
 }
 
