@@ -37,6 +37,11 @@ function Assert-Exists {
     }
 }
 
+function Test-RepoFile {
+    param([string]$RelativePath)
+    return Test-Path -LiteralPath (Get-RepoFile $RelativePath) -PathType Leaf
+}
+
 function Assert-Contains {
     param(
         [string]$RelativePath,
@@ -56,17 +61,21 @@ function Get-YamlList {
         [string]$Key
     )
 
-    # ':[ \t]*\r?\n' (not ':\s*') so the match stops at the line break and the
-    # child lines keep their indentation; '\s*' would swallow the first child's
-    # indent and the '^\s{2}' / '^\s{4}' anchors below would never match it.
-    $sectionPattern = "(?ms)^$([regex]::Escape($Section)):[ \t]*\r?\n(.*?)(?=^\S|\z)"
+    # The header match stops at the line break (not ':\s*') so the child lines
+    # keep their indentation; '\s*' would swallow the first child's indent and
+    # the '^\s{2}' / '^\s{4}' anchors below would never match it. An optional
+    # trailing '# comment' and end-of-file (for a header on the last line) are
+    # tolerated. Only block-style lists ('key:' then 4-space '- "item"' lines)
+    # are machine-checked; inline flow lists like 'key: []' are not supported.
+    $headerTail = "[ \t]*(?:#[^\r\n]*)?(?:\r?\n|\z)"
+    $sectionPattern = "(?ms)^$([regex]::Escape($Section)):$headerTail(.*?)(?=^\S|\z)"
     $sectionMatch = [regex]::Match($Text, $sectionPattern)
     if (-not $sectionMatch.Success) {
         return @()
     }
 
     $sectionBody = $sectionMatch.Groups[1].Value
-    $keyPattern = "(?ms)^\s{2}$([regex]::Escape($Key)):[ \t]*\r?\n(.*?)(?=^\s{2}\S|\z)"
+    $keyPattern = "(?ms)^\s{2}$([regex]::Escape($Key)):$headerTail(.*?)(?=^\s{2}\S|\z)"
     $keyMatch = [regex]::Match($sectionBody, $keyPattern)
     if (-not $keyMatch.Success) {
         return @()
@@ -147,6 +156,12 @@ foreach ($file in $trackedFiles) {
     if ($text -match '(?m)^(<<<<<<<|=======|>>>>>>>)') {
         Add-Issue "$file contains a conflict marker"
     }
+    # SPL 'where' uses eval semantics: an unquoted true/false is a field
+    # reference, so the comparison silently matches nothing. Enforce the
+    # quoting rule documented in greynoise-integration.md across all docs.
+    if ($file -like "*.md" -and $text -cmatch '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b') {
+        Add-Issue "$file compares against unquoted true/false in an SPL where clause; quote the value (=`"true`")"
+    }
     foreach ($char in $text.ToCharArray()) {
         $code = [int][char]$char
         $allowed = ($code -eq 9) -or ($code -eq 10) -or ($code -eq 13) -or (($code -ge 32) -and ($code -le 126))
@@ -158,6 +173,11 @@ foreach ($file in $trackedFiles) {
 }
 
 foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dictionary-builder/SKILL.md", "splunk-enrichment-query-builder/SKILL.md")) {
+    # A missing file is already reported by Assert-Exists; content checks on it
+    # would only add misdirecting issues.
+    if (-not (Test-RepoFile $skill)) {
+        continue
+    }
     Assert-Contains $skill '(?s)^---\s+name:\s+[-a-z0-9]+\s+description:\s+.+?\s+---' "valid skill frontmatter"
     Assert-Contains $skill '## Important' "top-level Important section"
     Assert-Contains $skill '## Inputs' "Inputs section"
@@ -165,6 +185,9 @@ foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dict
 
 $requiredOpenaiKeys = @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")
 foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
+    if (-not (Test-RepoFile "$skill/agents/openai.yaml")) {
+        continue
+    }
     $skillOpenai = Read-Text "$skill/agents/openai.yaml"
     foreach ($key in $requiredOpenaiKeys) {
         if ($skillOpenai -cnotmatch [regex]::Escape($key)) {
@@ -179,6 +202,9 @@ foreach ($helperPair in @(
     @("splunk-sentinel-query-builder/agents/claude-opus.yaml", "splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml"),
     @("splunk-enrichment-query-builder/agents/claude-opus.yaml", "splunk-enrichment-query-builder/agents/codex-gpt-5.4.yaml")
 )) {
+    if (-not (Test-RepoFile $helperPair[0]) -or -not (Test-RepoFile $helperPair[1])) {
+        continue
+    }
     $claude = Read-Text $helperPair[0]
     $codex = Read-Text $helperPair[1]
     foreach ($section in @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions")) {
@@ -195,10 +221,12 @@ foreach ($helperPair in @(
 }
 
 # Data-dictionary builder uses a simpler helper structure; check only the sections it defines.
-$claude = Read-Text "splunk-data-dictionary-builder/agents/claude-opus.yaml"
-$codex = Read-Text "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml"
-foreach ($section in @("token_rules", "stop_conditions")) {
-    Assert-ListsEqual "splunk-data-dictionary-builder helpers / $section" (Get-YamlList $claude "behavior" $section) (Get-YamlList $codex "behavior" $section)
+if ((Test-RepoFile "splunk-data-dictionary-builder/agents/claude-opus.yaml") -and (Test-RepoFile "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml")) {
+    $claude = Read-Text "splunk-data-dictionary-builder/agents/claude-opus.yaml"
+    $codex = Read-Text "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml"
+    foreach ($section in @("token_rules", "stop_conditions")) {
+        Assert-ListsEqual "splunk-data-dictionary-builder helpers / $section" (Get-YamlList $claude "behavior" $section) (Get-YamlList $codex "behavior" $section)
+    }
 }
 
 $dictionaryScript = Read-Text "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py"

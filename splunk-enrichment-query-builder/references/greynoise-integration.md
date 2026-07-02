@@ -115,7 +115,7 @@ index=firewall sourcetype=cisco:asa action=blocked earliest=-24h
 | where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | lookup greynoise_full ip AS src OUTPUT noise, classification, tags
-| where (isnull(noise) OR noise="false") AND (isnull(classification) OR classification!="benign")
+| where coalesce(noise, "")!="true" AND coalesce(classification, "")!="benign"
 | sort - count
 | table src, count, classification, tags
 ```
