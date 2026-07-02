@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import Any
 
 # fullmatch with no anchors: '$' would also match before a trailing newline.
-_SAFE_IDENT_RE = re.compile(r"[A-Za-z0-9_]+")
+# Hyphens are permitted in Splunk dataset IDs and cannot break out of an
+# unquoted SPL token, so they are safe to allow.
+_SAFE_IDENT_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def env_bool(name: str, default: bool) -> bool:
