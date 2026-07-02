@@ -40,9 +40,10 @@ Expect these inputs when available:
 
 Return one of these:
 
-- `query`: quick hunt or triage query
+- `query`: quick hunt, triage, or dashboard-panel query
 - `detection`: query plus threshold and tuning notes
 - `translation`: SPL to KQL or KQL to SPL
+- `optimization`: rewritten query plus what changed and why it is faster
 - `discovery`: checklist plus starter query when schema is missing
 
 Default response shape:
@@ -71,7 +72,7 @@ Do not let lower-priority hints override higher-priority schema facts.
 ## Core workflow
 
 1. Identify platform: `splunk`, `sentinel`, or `both`.
-2. Identify task: hunt, detection, triage, dashboard, or translation.
+2. Identify task: hunt, detection, triage, dashboard, translation, or optimization.
 3. Prefer the internal data dictionary if the user provides a URL or excerpt.
 4. Constrain time and dataset first.
 5. Filter early, parse late, aggregate late.

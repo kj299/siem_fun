@@ -29,6 +29,7 @@ siem_fun/
 |-- .claude/
 |   `-- settings.json
 |-- .env.example
+|-- .gitignore
 |-- examples/
 |   `-- golden-prompts.md
 |-- README.md
