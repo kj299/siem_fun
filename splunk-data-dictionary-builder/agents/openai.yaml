@@ -1,7 +1,7 @@
 interface:
   display_name: "Splunk Data Dictionary Builder"
   short_description: "Discover Splunk schema for query-building context"
-  default_prompt: "Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, and sample values, then output a structured data dictionary without exposing credentials."
+  default_prompt: "Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, sample values, and CIM data model coverage, then output a structured data dictionary. Use local credentials from environment variables or CLI arguments, and never ask me to paste secrets into chat."
 
 policy:
   allow_implicit_invocation: false

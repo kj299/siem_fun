@@ -172,3 +172,63 @@ Expected output:
 - Does not invent a Splunk index
 - Provides a `tstats` discovery query to identify endpoint process indexes and sourcetypes
 - States that `DeviceName`, `FileName`, and `InitiatingProcessFileName` need local field mappings
+
+## 8. Multi-index enrichment hunt with GreyNoise
+
+Prompt:
+
+```text
+Use $splunk-enrichment-query-builder to hunt for connections to known-malicious IPs.
+Platform: Splunk
+Task: hunt
+Time range: last 24h
+Indexes: firewall, proxy
+Sourcetypes: cisco:asa, bluecoat:proxysg:access:kv
+GreyNoise: yes
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Uses `index IN (firewall, proxy)` rather than an `OR` chain
+- Pre-filters to IPv4 values before the `greynoise_full` lookup join
+- Quotes boolean lookup values in `where` clauses (`noise="true"`, not `noise=true`)
+- Does not invent sourcetypes beyond the two provided
+
+## 9. Enrichment discovery mode with unknown sourcetypes
+
+Prompt:
+
+```text
+Use $splunk-enrichment-query-builder to build a detection across index=net_dmz and index=net_core.
+Platform: Splunk
+Task: detection
+Time range: last 7d
+Indexes: net_dmz, net_core
+Output style: full
+```
+
+Expected output:
+
+- Returns discovery mode, not a production detection
+- Provides `| tstats count where index IN (net_dmz, net_core) by index, sourcetype | sort - count`
+- Instructs the user to run the query and re-invoke the skill with confirmed sourcetypes
+- Does not guess sourcetypes for the unfamiliar index names
+
+## 10. Data dictionary build without pasted credentials
+
+Prompt:
+
+```text
+Use $splunk-data-dictionary-builder to discover accessible Splunk indexes, sourcetypes, fields, sample values, and CIM data model coverage, then output a structured data dictionary. Use local credentials from environment variables or CLI arguments, and never ask me to paste secrets into chat.
+```
+
+Expected output:
+
+- Runs `build_splunk_dictionary.py` with credentials from environment variables or CLI arguments
+- Never asks the user to paste a token or password into chat
+- Reports permission gaps explicitly instead of treating missing data as absent
+- Output JSON includes `indexes`, `sourcetypes`, `cim_datamodels`, `cim_coverage`, `field_samples`, and `warnings`

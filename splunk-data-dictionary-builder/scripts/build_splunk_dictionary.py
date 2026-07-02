@@ -17,7 +17,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-_SAFE_IDENT_RE = re.compile(r"^[A-Za-z0-9_]+$")
+# fullmatch with no anchors: '$' would also match before a trailing newline.
+_SAFE_IDENT_RE = re.compile(r"[A-Za-z0-9_]+")
 
 
 def env_bool(name: str, default: bool) -> bool:
@@ -67,7 +68,13 @@ class SplunkClient:
             raise ValueError("Provide SPLUNK_TOKEN or SPLUNK_USERNAME/SPLUNK_PASSWORD.")
         try:
             with urllib.request.urlopen(request, context=self.context, timeout=30) as response:
-                return json.loads(response.read().decode("utf-8"))
+                body = response.read().decode("utf-8")
+            try:
+                return json.loads(body)
+            except ValueError as error:
+                raise RuntimeError(
+                    f"Splunk returned non-JSON for {path} (is this the management port, usually 8089?): {body[:200]}"
+                ) from error
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Splunk API error {error.code} for {path}: {body}") from error
@@ -87,6 +94,9 @@ class SplunkClient:
                 "output_mode": "json",
                 "search": search,
                 "earliest_time": earliest,
+                # Without count=0 the oneshot endpoint caps output at 100 rows
+                # and silently truncates larger result sets.
+                "count": "0",
             },
         )
 
@@ -103,7 +113,7 @@ def spl_quote(value: str) -> str:
 
 def _safe_spl_ident(value: str, context: str, warnings: list[str]) -> str | None:
     """Return value if it is safe as an unquoted SPL data-model identifier, else warn and return None."""
-    if _SAFE_IDENT_RE.match(value):
+    if _SAFE_IDENT_RE.fullmatch(value):
         return value
     warnings.append(f"Skipping unsafe SPL identifier for {context}: {value!r}")
     return None
@@ -113,14 +123,30 @@ def _redact_url_credentials(url: str) -> str:
     """Strip userinfo from a URL so credentials are never written to the output file."""
     try:
         parsed = urllib.parse.urlparse(url)
-        if parsed.username or parsed.password:
-            netloc = parsed.hostname or ""
-            if parsed.port:
-                netloc = f"{netloc}:{parsed.port}"
-            return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+        if not (parsed.username or parsed.password):
+            return url
+        netloc = parsed.hostname or ""
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
     except Exception:
-        pass
-    return url
+        # Redaction must fail closed: an unparseable URL may still carry
+        # credentials, so never fall back to the original string.
+        return "<redacted-unparseable-url>"
+
+
+def _content_flag(value: Any) -> bool:
+    """Normalize a REST content boolean that may arrive as bool, int, or the strings '0'/'1'/'true'/'false'."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return bool(value)
+
+
+def _collect_search_messages(payload: dict[str, Any], context: str, warnings: list[str]) -> None:
+    """Surface ERROR/FATAL messages that Splunk returns inside an HTTP 200 search response."""
+    for message in payload.get("messages", []):
+        if isinstance(message, dict) and message.get("type") in {"ERROR", "FATAL"}:
+            warnings.append(f"Splunk search message for {context}: {message.get('text', 'unknown error')}")
 
 
 # Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
@@ -209,7 +235,7 @@ def discover_datamodels(client: SplunkClient, warnings: list[str]) -> list[dict[
         models.append(
             {
                 "name": name,
-                "accelerated": bool(acceleration.get("enabled", False)),
+                "accelerated": _content_flag(acceleration.get("enabled", False)),
                 "root_datasets": root_datasets,
             }
         )
@@ -232,6 +258,7 @@ def discover_cim_coverage(client: SplunkClient, datamodels: list[dict[str, Any]]
             except RuntimeError as error:
                 warnings.append(str(error))
                 continue
+            _collect_search_messages(payload, f"cim_coverage {model_name}.{root_name}", warnings)
             sourcetypes: dict[str, int] = {}
             for row in payload.get("results", []):
                 name = row.get("sourcetype")
@@ -263,7 +290,7 @@ def discover_indexes(client: SplunkClient, requested: list[str] | None, warnings
     for entry in entries(payload):
         name = entry.get("name")
         content = entry.get("content", {})
-        if name and not content.get("disabled", False):
+        if name and not _content_flag(content.get("disabled", False)):
             names.append(name)
     return sorted(set(names))
 
@@ -278,6 +305,7 @@ def discover_sourcetypes(client: SplunkClient, indexes: list[str], earliest: str
     except RuntimeError as error:
         warnings.append(str(error))
         return []
+    _collect_search_messages(payload, "sourcetype discovery", warnings)
     return payload.get("results", [])
 
 
@@ -289,6 +317,7 @@ def sample_fields(client: SplunkClient, index: str, sourcetype: str, earliest: s
         warnings.append(str(error))
         return {"index": index, "sourcetype": sourcetype, "fields": {}, "sample_count": 0}
 
+    _collect_search_messages(payload, f"field sampling {index}/{sourcetype}", warnings)
     fields: dict[str, dict[str, Any]] = {}
     results = payload.get("results", [])
     for event in results:
@@ -313,6 +342,15 @@ def main() -> int:
     args = parse_args()
     if not args.base_url:
         print("Missing --base-url or SPLUNK_BASE_URL.", file=sys.stderr)
+        return 2
+    if not args.token and not (args.username and args.password):
+        print("Missing credentials: provide SPLUNK_TOKEN or SPLUNK_USERNAME/SPLUNK_PASSWORD.", file=sys.stderr)
+        return 2
+    if args.sample_size < 1:
+        print("--sample-size must be at least 1.", file=sys.stderr)
+        return 2
+    if args.max_sourcetypes < 0:
+        print("--max-sourcetypes must not be negative.", file=sys.stderr)
         return 2
 
     warnings: list[str] = []

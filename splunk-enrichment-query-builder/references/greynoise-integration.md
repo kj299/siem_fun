@@ -20,7 +20,7 @@
 
 Install the **GreyNoise App and Add-On for Splunk** from Splunkbase. The app:
 - Registers custom SPL commands (`gnlookup`, `gnenrich`, `gnmeta`)
-- Ships two synced CSV lookup files (`greynoise_full.csv`, `greynoise_riot.csv`)
+- Ships two synced CSV lookup files with matching lookup definitions (`greynoise_full`, `greynoise_riot`); the queries below reference the definition names. If only the raw CSV files exist, use `greynoise_full.csv` / `greynoise_riot.csv` instead.
 - Includes pre-built intelligence dashboards
 - Requires a valid GreyNoise API key configured under the app setup page
 
@@ -44,7 +44,7 @@ Enrich a field containing IP addresses across all rows of the current pipeline. 
 index=firewall sourcetype=cisco:asa earliest=-24h
 | stats count by src
 | gnenrich field=src
-| where noise=true OR classification="malicious"
+| where noise="true" OR classification="malicious"
 | sort - count
 ```
 
@@ -68,7 +68,7 @@ Use the scheduled lookup files when the GreyNoise App is installed but the custo
 index=firewall sourcetype=cisco:asa earliest=-24h
 | stats count by src
 | lookup greynoise_full ip AS src OUTPUT classification, noise, riot, tags, name, last_seen
-| where noise=true OR classification="malicious"
+| where noise="true" OR classification="malicious"
 | sort - count
 ```
 
@@ -80,7 +80,7 @@ Use RIOT as a pre-filter to remove large-platform traffic before investigating:
 index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
 | stats count by dest
 | lookup greynoise_riot ip AS dest OUTPUT riot, name AS riot_service
-| where isnull(riot) OR riot=false
+| where isnull(riot) OR riot="false"
 | sort - count
 ```
 
@@ -104,6 +104,8 @@ index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
 | `actor` | string | Named threat actor if known |
 | `cve` | string | Associated CVE identifiers |
 
+Lookup CSV values arrive as the strings `"true"`/`"false"`, so `| where` (eval semantics) must compare against quoted strings; an unquoted `noise=true` in `where` reads `true` as a field name and matches nothing. Unquoted values are fine in the `search` command.
+
 ## Common enrichment patterns
 
 ### Noise filter: remove background scanners from a firewall investigation
@@ -113,7 +115,7 @@ index=firewall sourcetype=cisco:asa action=blocked earliest=-24h
 | where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | lookup greynoise_full ip AS src OUTPUT noise, classification, tags
-| where noise=false AND classification!="benign"
+| where (isnull(noise) OR noise="false") AND (isnull(classification) OR classification!="benign")
 | sort - count
 | table src, count, classification, tags
 ```
@@ -139,7 +141,7 @@ index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
 | where isnotnull(dest) AND match(dest, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by dest
 | lookup greynoise_riot ip AS dest OUTPUT riot, name AS riot_service
-| where riot=true
+| where riot="true"
 | stats sum(count) AS total_hits by riot_service
 | sort - total_hits
 ```
@@ -160,7 +162,7 @@ index=firewall sourcetype=cisco:asa action=permitted earliest=-24h
 | where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | lookup greynoise_full ip AS src OUTPUT classification, noise, riot, tags, actor, last_seen
-| where classification="malicious" OR (noise=true AND riot=false)
+| where classification="malicious" OR (noise="true" AND riot="false")
 | table src, count, classification, noise, tags, actor, last_seen
 ```
 
@@ -174,7 +176,7 @@ index IN (firewall, proxy, endpoint) earliest=-24h
 | where isnotnull(ip_field) AND match(ip_field, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by ip_field, index, sourcetype
 | lookup greynoise_full ip AS ip_field OUTPUT classification, noise, riot, tags, actor
-| where classification="malicious" OR noise=true
+| where classification="malicious" OR noise="true"
 | sort - count
 | table ip_field, count, classification, noise, tags, actor, index
 ```

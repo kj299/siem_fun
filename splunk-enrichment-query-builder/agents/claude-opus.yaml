@@ -25,6 +25,8 @@ invocation:
     - "Indexes: list of index names"
     - "Sourcetypes: known sourcetypes within those indexes (optional)"
     - "GreyNoise: yes | no"
+    - "Environment: splunk-cloud | self-managed (optional)"
+    - "Data dictionary: URL or pasted excerpt (optional)"
     - "Output style: short | full"
 
 response_contract:

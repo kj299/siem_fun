@@ -51,8 +51,8 @@ When indexes feed different add-ons with different field names, filter per-index
 ```spl
 ((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=bluecoat:proxysg:access:kv) OR (index=dns sourcetype=cisco:umbrella:dns))
 earliest=-24h
-| eval common_src=coalesce(src, src_ip, ClientIP)
-| eval common_dest=coalesce(dest, dest_ip, url)
+| eval common_src=coalesce(src, src_ip)
+| eval common_dest=coalesce(dest, dest_ip, url, query)
 | stats count by common_src, common_dest, sourcetype
 ```
 

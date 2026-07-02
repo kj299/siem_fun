@@ -79,7 +79,7 @@ List only enabled event indexes sorted by event volume:
 
 ```spl
 | rest /services/data/indexes splunk_server=local
-| where datatype="event" AND disabled=0
+| where datatype="event" AND disabled="0"
 | table title, totalEventCount, frozenTimePeriodInSecs, maxTotalDataSizeMB
 | sort - totalEventCount
 ```
@@ -116,17 +116,17 @@ If a query must target `_internal` (for audit or performance investigation), use
 
 ## Federated search
 
-Federated search allows a Splunk Cloud deployment to query an external Splunk Enterprise environment or a second Splunk Cloud stack as a remote peer:
+Federated search allows a Splunk Cloud deployment to query an external Splunk Enterprise environment or a second Splunk Cloud stack as a remote peer. In standard mode, address the remote index by prefixing its name with `federated:`:
 
 ```spl
-| federated index=remote_firewall sourcetype=cisco:asa earliest=-24h
+index=federated:remote_firewall sourcetype=cisco:asa earliest=-24h
 | stats count by src, dest
 ```
 
 Prerequisites:
-- A federated provider configured under Settings > Federated Search.
+- A federated provider configured under Settings > Federated Search, with a federated index defined that maps to the remote index.
 - Network connectivity and mutual trust between the environments.
-- The `federated` keyword replaces the standard `index=` prefix in the search.
+- The `federated:` prefix is applied to the index name itself (`index=federated:<name>`); the search otherwise uses standard syntax.
 
 ## Creating an index (Victoria, self-service)
 

@@ -17,7 +17,17 @@ function Get-RepoFile {
 
 function Read-Text {
     param([string]$RelativePath)
-    return Get-Content -Raw -Path (Get-RepoFile $RelativePath)
+    $path = Get-RepoFile $RelativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        # Assert-Exists reports missing required files; returning empty text
+        # lets the run finish and print every collected issue.
+        return ""
+    }
+    $text = Get-Content -Raw -Path $path
+    if ($null -eq $text) {
+        return ""
+    }
+    return $text
 }
 
 function Assert-Exists {
@@ -34,7 +44,7 @@ function Assert-Contains {
         [string]$Description
     )
     $text = Read-Text $RelativePath
-    if ($text -notmatch $Pattern) {
+    if ($text -cnotmatch $Pattern) {
         Add-Issue "$RelativePath is missing $Description"
     }
 }
@@ -46,14 +56,17 @@ function Get-YamlList {
         [string]$Key
     )
 
-    $sectionPattern = "(?ms)^$([regex]::Escape($Section)):\s*(.*?)(?=^\S|\z)"
+    # ':[ \t]*\r?\n' (not ':\s*') so the match stops at the line break and the
+    # child lines keep their indentation; '\s*' would swallow the first child's
+    # indent and the '^\s{2}' / '^\s{4}' anchors below would never match it.
+    $sectionPattern = "(?ms)^$([regex]::Escape($Section)):[ \t]*\r?\n(.*?)(?=^\S|\z)"
     $sectionMatch = [regex]::Match($Text, $sectionPattern)
     if (-not $sectionMatch.Success) {
         return @()
     }
 
     $sectionBody = $sectionMatch.Groups[1].Value
-    $keyPattern = "(?ms)^\s{2}$([regex]::Escape($Key)):\s*(.*?)(?=^\s{2}\S|\z)"
+    $keyPattern = "(?ms)^\s{2}$([regex]::Escape($Key)):[ \t]*\r?\n(.*?)(?=^\s{2}\S|\z)"
     $keyMatch = [regex]::Match($sectionBody, $keyPattern)
     if (-not $keyMatch.Success) {
         return @()
@@ -81,7 +94,7 @@ function Assert-ListsEqual {
     }
     $leftText = ($Left -join "`n")
     $rightText = ($Right -join "`n")
-    if ($leftText -ne $rightText) {
+    if ($leftText -cne $rightText) {
         Add-Issue "Helper drift detected in $Name"
     }
 }
@@ -128,6 +141,9 @@ foreach ($file in $trackedFiles) {
         continue
     }
     $text = Get-Content -Raw -Path $path
+    if ($null -eq $text) {
+        continue
+    }
     if ($text -match '(?m)^(<<<<<<<|=======|>>>>>>>)') {
         Add-Issue "$file contains a conflict marker"
     }
@@ -151,7 +167,7 @@ $requiredOpenaiKeys = @("interface:", "display_name:", "short_description:", "de
 foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
     $skillOpenai = Read-Text "$skill/agents/openai.yaml"
     foreach ($key in $requiredOpenaiKeys) {
-        if ($skillOpenai -notmatch [regex]::Escape($key)) {
+        if ($skillOpenai -cnotmatch [regex]::Escape($key)) {
             Add-Issue "$skill/agents/openai.yaml is missing $key"
         }
     }
@@ -170,10 +186,10 @@ foreach ($helperPair in @(
         Assert-ListsEqual "$($helperPair[0]) / $section" (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
     }
     # claude-opus helpers must carry trigger_tuning; codex helpers must carry packaging_rules.
-    if ($claude -notmatch 'trigger_tuning:') {
+    if ($claude -cnotmatch 'trigger_tuning:') {
         Add-Issue "$($helperPair[0]) is missing trigger_tuning section"
     }
-    if ($codex -notmatch 'packaging_rules:') {
+    if ($codex -cnotmatch 'packaging_rules:') {
         Add-Issue "$($helperPair[1]) is missing packaging_rules section"
     }
 }
@@ -193,7 +209,7 @@ if (-not $hintsBlock.Success) {
 } else {
     foreach ($match in [regex]::Matches($hintsBlock.Groups[1].Value, '(?m)^\s+"([^"]+)":')) {
         $sourcetype = $match.Groups[1].Value
-        if ($cimReference -notmatch [regex]::Escape($sourcetype)) {
+        if ($cimReference -cnotmatch [regex]::Escape($sourcetype)) {
             Add-Issue "CIM hint sourcetype '$sourcetype' is not documented in cim-vendor-alignment.md"
         }
     }

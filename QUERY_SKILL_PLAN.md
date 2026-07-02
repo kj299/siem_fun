@@ -139,13 +139,14 @@ Each final query should be checked for:
 ## Recommended file layout
 
 ```text
-prompts/siem_fun/
+siem_fun/
 |-- .claude/
 |   `-- settings.json
 |-- .env.example
 |-- .github/
 |   `-- workflows/
 |       `-- validate.yml
+|-- .gitignore
 |-- examples/
 |   `-- golden-prompts.md
 |-- QUERY_SKILL_PLAN.md
@@ -154,7 +155,11 @@ prompts/siem_fun/
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/
+|   |   |-- claude-opus.yaml
+|   |   |-- codex-gpt-5.4.yaml
+|   |   `-- openai.yaml
 |   |-- references/
+|   |   `-- workflow.md
 |   |-- scripts/
 |   |   `-- build_splunk_dictionary.py
 |   `-- SKILL.md
