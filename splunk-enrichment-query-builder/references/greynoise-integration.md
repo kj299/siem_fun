@@ -199,4 +199,5 @@ Custom dashboard base queries:
 - RIOT covers major cloud and CDN ranges but not every benign IP. Absence from RIOT does not imply the IP is malicious.
 - `noise=true` means the IP sends unsolicited traffic to the public internet, not necessarily that it targeted your environment.
 - `gnenrich` consumes API quota. Use the scheduled lookup files for high-volume or recurring searches.
+- The quoted-string comparisons in this file are verified against the CSV lookups; `gnenrich` output typing and casing may differ by app version, so spot-check with `| stats values(noise)` before reusing a `where` filter on command output.
 - Lookup file freshness depends on the sync schedule configured in the app. Use `gnenrich` when real-time accuracy matters.

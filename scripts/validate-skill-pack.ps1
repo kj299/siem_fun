@@ -15,18 +15,24 @@ function Get-RepoFile {
     return Join-Path $Root $RelativePath
 }
 
+$script:textCache = @{}
+
 function Read-Text {
     param([string]$RelativePath)
+    if ($script:textCache.ContainsKey($RelativePath)) {
+        return $script:textCache[$RelativePath]
+    }
     $path = Get-RepoFile $RelativePath
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    $text = ""
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
         # Assert-Exists reports missing required files; returning empty text
         # lets the run finish and print every collected issue.
-        return ""
+        $raw = Get-Content -Raw -Path $path
+        if ($null -ne $raw) {
+            $text = $raw
+        }
     }
-    $text = Get-Content -Raw -Path $path
-    if ($null -eq $text) {
-        return ""
-    }
+    $script:textCache[$RelativePath] = $text
     return $text
 }
 
@@ -143,7 +149,9 @@ foreach ($file in $requiredFiles) {
     Assert-Exists $file
 }
 
-$trackedFiles = git -C $Root ls-files
+# quotepath=false emits non-ASCII filenames raw instead of C-quoted octal,
+# which would fail Test-Path and silently skip those files from validation.
+$trackedFiles = git -C $Root -c core.quotepath=false ls-files
 foreach ($file in $trackedFiles) {
     $path = Get-RepoFile $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -153,7 +161,10 @@ foreach ($file in $trackedFiles) {
     if ($null -eq $text) {
         continue
     }
-    if ($text -match '(?m)^(<<<<<<<|=======|>>>>>>>)') {
+    # Git conflict markers are exactly seven chars followed by a space+label
+    # (<<<<<<< / >>>>>>>) or alone on the line (=======); the right-side anchor
+    # avoids flagging setext heading underlines of eight or more equals signs.
+    if ($text -match '(?m)^(<{7}( |$)|={7}$|>{7}( |$))') {
         Add-Issue "$file contains a conflict marker"
     }
     # SPL 'where' uses eval semantics: an unquoted true/false is a field
@@ -196,36 +207,67 @@ foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-bu
     }
 }
 
-# Query-builder skills (sentinel, enrichment) use a structured response contract;
-# check that both helper files carry the same sections.
-foreach ($helperPair in @(
-    @("splunk-sentinel-query-builder/agents/claude-opus.yaml", "splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml"),
-    @("splunk-enrichment-query-builder/agents/claude-opus.yaml", "splunk-enrichment-query-builder/agents/codex-gpt-5.4.yaml")
-)) {
-    if (-not (Test-RepoFile $helperPair[0]) -or -not (Test-RepoFile $helperPair[1])) {
+# Helper pair parity: both companion files in a skill must carry the same
+# section lists. Query-builder skills use the full structured contract and
+# require the model-specific tuning sections; the data-dictionary builder
+# uses a simpler helper shape.
+$sectionParents = @{
+    prompt_shape     = "invocation"
+    default_sections = "response_contract"
+    short_sections   = "response_contract"
+    token_rules      = "behavior"
+    truth_order      = "behavior"
+    stop_conditions  = "behavior"
+}
+$helperChecks = @(
+    @{ Skill = "splunk-sentinel-query-builder";   Sections = @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
+    @{ Skill = "splunk-enrichment-query-builder"; Sections = @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
+    @{ Skill = "splunk-data-dictionary-builder";  Sections = @("token_rules", "stop_conditions"); RequireTuningSections = $false }
+)
+foreach ($check in $helperChecks) {
+    $claudePath = "$($check.Skill)/agents/claude-opus.yaml"
+    $codexPath = "$($check.Skill)/agents/codex-gpt-5.4.yaml"
+    if (-not (Test-RepoFile $claudePath) -or -not (Test-RepoFile $codexPath)) {
         continue
     }
-    $claude = Read-Text $helperPair[0]
-    $codex = Read-Text $helperPair[1]
-    foreach ($section in @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions")) {
-        $parent = if ($section -in @("prompt_shape")) { "invocation" } elseif ($section -in @("default_sections", "short_sections")) { "response_contract" } else { "behavior" }
-        Assert-ListsEqual "$($helperPair[0]) / $section" (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
+    $claude = Read-Text $claudePath
+    $codex = Read-Text $codexPath
+    foreach ($section in $check.Sections) {
+        $parent = $sectionParents[$section]
+        Assert-ListsEqual "$claudePath / $section" (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
     }
-    # claude-opus helpers must carry trigger_tuning; codex helpers must carry packaging_rules.
-    if ($claude -cnotmatch 'trigger_tuning:') {
-        Add-Issue "$($helperPair[0]) is missing trigger_tuning section"
-    }
-    if ($codex -cnotmatch 'packaging_rules:') {
-        Add-Issue "$($helperPair[1]) is missing packaging_rules section"
+    if ($check.RequireTuningSections) {
+        # claude-opus helpers must carry trigger_tuning; codex helpers must carry packaging_rules.
+        if ($claude -cnotmatch 'trigger_tuning:') {
+            Add-Issue "$claudePath is missing trigger_tuning section"
+        }
+        if ($codex -cnotmatch 'packaging_rules:') {
+            Add-Issue "$codexPath is missing packaging_rules section"
+        }
     }
 }
 
-# Data-dictionary builder uses a simpler helper structure; check only the sections it defines.
-if ((Test-RepoFile "splunk-data-dictionary-builder/agents/claude-opus.yaml") -and (Test-RepoFile "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml")) {
-    $claude = Read-Text "splunk-data-dictionary-builder/agents/claude-opus.yaml"
-    $codex = Read-Text "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml"
-    foreach ($section in @("token_rules", "stop_conditions")) {
-        Assert-ListsEqual "splunk-data-dictionary-builder helpers / $section" (Get-YamlList $claude "behavior" $section) (Get-YamlList $codex "behavior" $section)
+# The canonical invocation prompt is duplicated across openai.yaml and both
+# companion helpers; it has drifted before, so enforce three-way equality.
+foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
+    $prompts = @{}
+    foreach ($entry in @(
+        @{ Path = "$skill/agents/openai.yaml"; Key = "default_prompt" },
+        @{ Path = "$skill/agents/claude-opus.yaml"; Key = "preferred_prompt" },
+        @{ Path = "$skill/agents/codex-gpt-5.4.yaml"; Key = "preferred_prompt" }
+    )) {
+        if (-not (Test-RepoFile $entry.Path)) {
+            continue
+        }
+        $match = [regex]::Match((Read-Text $entry.Path), "(?m)^\s*$($entry.Key):\s*""(.*)""\s*$")
+        if ($match.Success) {
+            $prompts[$entry.Path] = $match.Groups[1].Value
+        } else {
+            Add-Issue "$($entry.Path) is missing a quoted $($entry.Key)"
+        }
+    }
+    if (($prompts.Values | Select-Object -Unique).Count -gt 1) {
+        Add-Issue "Invocation prompt drift in ${skill}: openai default_prompt and helper preferred_prompt values differ"
     }
 }
 
@@ -247,9 +289,16 @@ $markdownFiles = $trackedFiles | Where-Object { $_ -like "*.md" }
 $linkRegex = '\[[^\]]+\]\(([^)]+)\)'
 foreach ($file in $markdownFiles) {
     $text = Read-Text $file
+    # Fenced code blocks quote example markdown; links inside them are
+    # illustrations, not navigation, so strip the blocks before scanning.
+    $scanText = [regex]::Replace($text, '(?ms)^\s*```.*?^\s*```[ \t]*$', '')
     $baseDir = Split-Path -Parent (Get-RepoFile $file)
-    foreach ($match in [regex]::Matches($text, $linkRegex)) {
-        $target = $match.Groups[1].Value
+    foreach ($match in [regex]::Matches($scanText, $linkRegex)) {
+        $target = $match.Groups[1].Value.Trim()
+        # Normalize the CommonMark forms: <bracketed destination> and an
+        # optional quoted title after the destination.
+        $target = $target -replace '^\<(.*)\>$', '$1'
+        $target = ($target -replace '\s+"[^"]*"\s*$', '').Trim()
         if ($target -match '^(https?://|mailto:|#)') {
             continue
         }
@@ -257,6 +306,7 @@ foreach ($file in $markdownFiles) {
         if ([string]::IsNullOrWhiteSpace($targetPath)) {
             continue
         }
+        $targetPath = [uri]::UnescapeDataString($targetPath)
         $resolved = Join-Path $baseDir $targetPath
         if (-not (Test-Path -LiteralPath $resolved)) {
             Add-Issue "$file has broken local link: $target"
