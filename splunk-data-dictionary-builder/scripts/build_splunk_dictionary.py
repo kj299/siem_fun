@@ -19,8 +19,9 @@ from typing import Any
 
 # fullmatch with no anchors: '$' would also match before a trailing newline.
 # Hyphens are permitted in Splunk dataset IDs and cannot break out of an
-# unquoted SPL token, so they are safe to allow.
-_SAFE_IDENT_RE = re.compile(r"[A-Za-z0-9_-]+")
+# unquoted SPL token, so they are safe to allow -- but not in the leading
+# position, where a bare '-' would read as a malformed option/negative value.
+_SAFE_IDENT_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*")
 
 _CREDENTIALS_MESSAGE = "Provide SPLUNK_TOKEN or SPLUNK_USERNAME/SPLUNK_PASSWORD."
 
@@ -172,6 +173,17 @@ def _collect_search_messages(payload: dict[str, Any], context: str, warnings: li
             warnings.append(f"Splunk search message for {context}: {message.get('text', 'unknown error')}")
 
 
+def _run_search(client: SplunkClient, search: str, earliest: str, context: str, warnings: list[str]) -> dict[str, Any] | None:
+    """Run a oneshot search, recording failures and in-band error messages; None on failure."""
+    try:
+        payload = client.search_oneshot(search, earliest)
+    except RuntimeError as error:
+        warnings.append(str(error))
+        return None
+    _collect_search_messages(payload, context, warnings)
+    return payload
+
+
 # Sourcetype prefixes produced by common Splunkbase add-ons, mapped to the CIM
 # data models they are tagged for. These are offline fallback hints only;
 # cim_coverage (queried from the live instance) is the ground truth and also
@@ -276,12 +288,9 @@ def discover_cim_coverage(client: SplunkClient, datamodels: list[dict[str, Any]]
             if model_name is None or root_name is None:
                 continue
             search = f"| tstats {summaries}count from datamodel={model_name}.{root_name} by sourcetype"
-            try:
-                payload = client.search_oneshot(search, earliest)
-            except RuntimeError as error:
-                warnings.append(str(error))
+            payload = _run_search(client, search, earliest, f"cim_coverage {model_name}.{root_name}", warnings)
+            if payload is None:
                 continue
-            _collect_search_messages(payload, f"cim_coverage {model_name}.{root_name}", warnings)
             sourcetypes: dict[str, int] = {}
             for row in payload.get("results", []):
                 name = row.get("sourcetype")
@@ -326,24 +335,18 @@ def discover_sourcetypes(client: SplunkClient, indexes: list[str], earliest: str
     # [:max_sourcetypes] sampling slice takes the highest-volume sourcetypes
     # rather than tstats group-by order.
     search = f"| tstats count where ({index_filter}) by index, sourcetype | sort 0 - count"
-    try:
-        payload = client.search_oneshot(search, earliest)
-    except RuntimeError as error:
-        warnings.append(str(error))
+    payload = _run_search(client, search, earliest, "sourcetype discovery", warnings)
+    if payload is None:
         return []
-    _collect_search_messages(payload, "sourcetype discovery", warnings)
     return payload.get("results", [])
 
 
 def sample_fields(client: SplunkClient, index: str, sourcetype: str, earliest: str, sample_size: int, warnings: list[str]) -> dict[str, Any]:
     search = f"search index={spl_quote(index)} sourcetype={spl_quote(sourcetype)} | head {sample_size} | fields *"
-    try:
-        payload = client.search_oneshot(search, earliest)
-    except RuntimeError as error:
-        warnings.append(str(error))
+    payload = _run_search(client, search, earliest, f"field sampling {index}/{sourcetype}", warnings)
+    if payload is None:
         return {"index": index, "sourcetype": sourcetype, "fields": {}, "sample_count": 0}
 
-    _collect_search_messages(payload, f"field sampling {index}/{sourcetype}", warnings)
     fields: dict[str, dict[str, Any]] = {}
     results = payload.get("results", [])
     for event in results:
