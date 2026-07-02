@@ -12,19 +12,22 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
+        id: checkout
         uses: actions/checkout@v4
 
       - name: Run skill pack validation
         shell: pwsh
         run: ./scripts/validate-skill-pack.ps1
 
+      # Run even when validation fails so a validator issue cannot mask a
+      # Python syntax error, but only when checkout actually succeeded.
       - name: Set up Python
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Compile Python helpers
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         shell: pwsh
         run: python -m py_compile .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py

@@ -22,12 +22,27 @@ from typing import Any
 # unquoted SPL token, so they are safe to allow.
 _SAFE_IDENT_RE = re.compile(r"[A-Za-z0-9_-]+")
 
+_CREDENTIALS_MESSAGE = "Provide SPLUNK_TOKEN or SPLUNK_USERNAME/SPLUNK_PASSWORD."
+
+_TRUTHY_STRINGS = {"1", "true", "yes", "on"}
+_FALSY_STRINGS = {"0", "false", "no", "off", ""}
+
+
+def parse_bool(value: str, default: bool) -> bool:
+    """Parse a boolean-ish string with one canonical truthy/falsy set; unknown values return default."""
+    normalized = value.strip().lower()
+    if normalized in _TRUTHY_STRINGS:
+        return True
+    if normalized in _FALSY_STRINGS:
+        return False
+    return default
+
 
 def env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
-    return value.strip().lower() not in {"0", "false", "no"}
+    return parse_bool(value, default)
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,15 +82,18 @@ class SplunkClient:
             raw = f"{self.username}:{self.password}".encode("utf-8")
             request.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('ascii')}")
         else:
-            raise ValueError("Provide SPLUNK_TOKEN or SPLUNK_USERNAME/SPLUNK_PASSWORD.")
+            # main() validates credentials up front; this guards direct library use.
+            raise ValueError(_CREDENTIALS_MESSAGE)
         try:
             with urllib.request.urlopen(request, context=self.context, timeout=30) as response:
-                body = response.read().decode("utf-8")
+                raw = response.read()
             try:
+                body = raw.decode("utf-8")
                 return json.loads(body)
-            except ValueError as error:
+            except (UnicodeDecodeError, ValueError) as error:
+                preview = raw.decode("utf-8", errors="replace")[:200]
                 raise RuntimeError(
-                    f"Splunk returned non-JSON for {path} (is this the management port, usually 8089?): {body[:200]}"
+                    f"Splunk returned non-JSON for {path} (is this the management port, usually 8089?): {preview}"
                 ) from error
         except urllib.error.HTTPError as error:
             body = error.read().decode("utf-8", errors="replace")
@@ -127,9 +145,12 @@ def _redact_url_credentials(url: str) -> str:
         parsed = urllib.parse.urlparse(url)
         if not (parsed.username or parsed.password):
             return url
-        netloc = parsed.hostname or ""
-        if parsed.port:
-            netloc = f"{netloc}:{parsed.port}"
+        host = parsed.hostname or ""
+        if ":" in host:
+            # urlparse strips the brackets from IPv6 literals; restore them so
+            # the rebuilt netloc stays a valid URL.
+            host = f"[{host}]"
+        netloc = f"{host}:{parsed.port}" if parsed.port else host
         return urllib.parse.urlunparse(parsed._replace(netloc=netloc))
     except Exception:
         # Redaction must fail closed: an unparseable URL may still carry
@@ -140,7 +161,7 @@ def _redact_url_credentials(url: str) -> str:
 def _content_flag(value: Any) -> bool:
     """Normalize a REST content boolean that may arrive as bool, int, or the strings '0'/'1'/'true'/'false'."""
     if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes"}
+        return parse_bool(value, False)
     return bool(value)
 
 
@@ -301,7 +322,10 @@ def discover_sourcetypes(client: SplunkClient, indexes: list[str], earliest: str
     if not indexes:
         return []
     index_filter = " OR ".join(f"index={spl_quote(index)}" for index in indexes)
-    search = f"| tstats count where ({index_filter}) by index, sourcetype"
+    # Sort by volume so the full inventory is ordered and the
+    # [:max_sourcetypes] sampling slice takes the highest-volume sourcetypes
+    # rather than tstats group-by order.
+    search = f"| tstats count where ({index_filter}) by index, sourcetype | sort 0 - count"
     try:
         payload = client.search_oneshot(search, earliest)
     except RuntimeError as error:
@@ -346,7 +370,7 @@ def main() -> int:
         print("Missing --base-url or SPLUNK_BASE_URL.", file=sys.stderr)
         return 2
     if not args.token and not (args.username and args.password):
-        print("Missing credentials: provide SPLUNK_TOKEN or SPLUNK_USERNAME/SPLUNK_PASSWORD.", file=sys.stderr)
+        print(_CREDENTIALS_MESSAGE, file=sys.stderr)
         return 2
     if args.sample_size < 1:
         print("--sample-size must be at least 1.", file=sys.stderr)
