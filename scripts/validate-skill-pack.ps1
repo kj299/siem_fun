@@ -301,16 +301,18 @@ foreach ($skill in $skills) {
 # require the model-specific tuning sections; the data-dictionary builder
 # uses a simpler helper shape.
 $sectionParents = @{
-    prompt_shape     = "invocation"
-    default_sections = "response_contract"
-    short_sections   = "response_contract"
-    token_rules      = "behavior"
-    truth_order      = "behavior"
-    stop_conditions  = "behavior"
+    prompt_shape          = "invocation"
+    default_sections      = "response_contract"
+    short_sections        = "response_contract"
+    optimization_sections = "response_contract"
+    discovery_sections    = "response_contract"
+    token_rules           = "behavior"
+    truth_order           = "behavior"
+    stop_conditions       = "behavior"
 }
 $helperChecks = @(
-    @{ Skill = "splunk-sentinel-query-builder";   Sections = @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
-    @{ Skill = "splunk-enrichment-query-builder"; Sections = @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
+    @{ Skill = "splunk-sentinel-query-builder";   Sections = @("prompt_shape", "default_sections", "short_sections", "optimization_sections", "discovery_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
+    @{ Skill = "splunk-enrichment-query-builder"; Sections = @("prompt_shape", "default_sections", "short_sections", "discovery_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
     @{ Skill = "splunk-data-dictionary-builder";  Sections = @("token_rules", "stop_conditions"); RequireTuningSections = $false }
 )
 # The table above is the one per-skill registry that cannot be derived from
