@@ -32,6 +32,7 @@ siem_fun/
 |-- .gitignore
 |-- examples/
 |   `-- golden-prompts.md
+|-- CLAUDE.md
 |-- README.md
 |-- QUERY_SKILL_PLAN.md
 |-- scripts/
@@ -306,6 +307,7 @@ To get the best results with either model:
 
 ## Files to read
 
+- [CLAUDE.md](CLAUDE.md): conventions, enforced invariants, and language traps for anyone (human or agent) changing this repo
 - [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): overall design and roadmap
 - [.claude/settings.json](.claude/settings.json): shared Claude Code defaults
 - [.env.example](.env.example): optional local helper environment variables

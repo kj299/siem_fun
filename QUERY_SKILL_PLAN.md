@@ -149,6 +149,7 @@ siem_fun/
 |-- .gitignore
 |-- examples/
 |   `-- golden-prompts.md
+|-- CLAUDE.md
 |-- QUERY_SKILL_PLAN.md
 |-- README.md
 |-- scripts/

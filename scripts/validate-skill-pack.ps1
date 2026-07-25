@@ -181,6 +181,7 @@ if ($FunctionsOnly) {
 
 $requiredFiles = @(
     "README.md",
+    "CLAUDE.md",
     "QUERY_SKILL_PLAN.md",
     ".claude/settings.json",
     ".env.example",
