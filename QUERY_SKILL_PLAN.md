@@ -152,6 +152,8 @@ siem_fun/
 |-- QUERY_SKILL_PLAN.md
 |-- README.md
 |-- scripts/
+|   |-- tests/
+|   |   `-- validate-skill-pack.tests.ps1
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/

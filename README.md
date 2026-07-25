@@ -35,6 +35,8 @@ siem_fun/
 |-- README.md
 |-- QUERY_SKILL_PLAN.md
 |-- scripts/
+|   |-- tests/
+|   |   `-- validate-skill-pack.tests.ps1
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/
@@ -135,6 +137,12 @@ Then run validation locally with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-skill-pack.ps1
+```
+
+Run the validator's own unit tests (no test framework required):
+
+```powershell
+pwsh -NoProfile -File .\scripts\tests\validate-skill-pack.tests.ps1
 ```
 
 Run the dictionary builder unit tests (stdlib only, nothing to install):
@@ -303,6 +311,7 @@ To get the best results with either model:
 - [.env.example](.env.example): optional local helper environment variables
 - [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
+- [scripts/tests/validate-skill-pack.tests.ps1](scripts/tests/validate-skill-pack.tests.ps1): unit tests for the validator's helper functions, including regression coverage for past defects
 - [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
 - [splunk-data-dictionary-builder/references/workflow.md](splunk-data-dictionary-builder/references/workflow.md): discovery strategy, CIM coverage, and query-builder handoff
 - [splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py](splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py): unit tests for the dictionary builder helpers, including regression coverage for past defects
