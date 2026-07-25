@@ -176,7 +176,7 @@ Degree of detail per integration:
 | Proofpoint (TAP and PPS) | Mapped | TAP and mail gateway sourcetypes with Email / Malware models and key fields |
 | Web proxy infrastructure (ProxySG, Squid, generic) | Mapped | The Web data model as the shared proxy contract, with the canonical field set and cross-proxy query strategy |
 | Cloudflare | Partial | HTTP, firewall, and Gateway DNS log mappings to Web / Intrusion_Detection / Network_Resolution; field availability flagged as dependent on app version and Logpush field selection |
-| Akamai App & API Protector | Mapped | akamai:siem sourcetype with Web / Intrusion_Detection models and key fields |
+| Akamai App & API Protector | Mapped | akamaisiem sourcetype with Web / Intrusion_Detection models and key fields |
 | Akamai Noname (API Security) | Outline | Guidance only: no standard CIM add-on exists, so events are treated as Alerts with locally verified field aliases |
 | Other vendors | Procedure | A generic four-step process: find the add-on, check its tags, verify model coverage with tstats, fall back to the dictionary builder |
 

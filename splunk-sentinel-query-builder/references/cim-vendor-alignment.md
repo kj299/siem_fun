@@ -93,7 +93,7 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 
 ### Akamai
 
-- App & API Protector / Kona via the Akamai SIEM Integration add-on: `akamai:siem` -> Web and Intrusion_Detection: action, src, dest, url, signature, severity.
+- App & API Protector / Kona via the Akamai SIEM Integration add-on: `akamaisiem` (no colons; the add-on's props.conf uses this exact string) -> Web and Intrusion_Detection: action, src, dest, url, signature, severity.
 - Akamai Noname (API Security): no standard CIM-mapped Splunkbase add-on; events usually arrive as custom JSON over HEC. Treat as Alerts (severity, signature, description) plus Web-style fields through local aliases. Confirm local field names with the data dictionary builder before writing detections; this mapping is outline-level only.
 
 ### Microsoft Windows Defender / Defender for Endpoint
@@ -103,8 +103,8 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 
 ### CrowdStrike Falcon
 
-- Add-on: CrowdStrike Falcon Event Streams: `crowdstrike:events:sensor` -> Endpoint, Malware, Intrusion_Detection: process, parent_process_name, file_hash, dest, user, action, severity, signature.
-- Falcon Data Replicator (FDR): `crowdstrike:fdr:json` -> Endpoint: event_simpleName, ContextBaseFileName, CommandLine, SHA256HashData, LocalAddressIP4, RemoteAddressIP4. Field names differ from Event Streams; verify before reusing a query across both feeds.
+- Falcon Data Replicator via the Splunk Add-on for CrowdStrike FDR: `crowdstrike:events:sensor` -> Endpoint (CIM normalization covers a subset of sensor events): event_simpleName, ImageFileName, CommandLine, SHA256HashData, LocalAddressIP4, RemoteAddressIP4.
+- Event Streams alerts via the CrowdStrike Falcon Event Streams TA: `CrowdStrike:Event:Streams:JSON` -> Alerts. Field names differ from FDR sensor telemetry; verify before reusing a query across both feeds.
 
 ### Cloudflare
 
@@ -116,7 +116,7 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 
 ### Proofpoint
 
-- TAP via the Proofpoint TAP modular input: `proofpoint:tap:siem` (message and click events) -> Email and Malware: src_user, recipient, subject, url, file_name, file_hash, action.
+- TAP via the Proofpoint TAP modular input: `proofpoint_tap_siem` (underscores; message and click events) -> Email and Malware: src_user, recipient, subject, url, file_name, file_hash, action.
 - Proofpoint email gateway (PPS): `pps_messagelog` -> Email: src_user, recipient, subject, action, message_id.
 
 ### Web proxy infrastructure (generic)

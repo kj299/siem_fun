@@ -1,5 +1,10 @@
 # GreyNoise Splunk Integration
 
+Verified against the SA-GreyNoise app source (commands.conf, transforms.conf, README
+on GitHub) and GreyNoise documentation. Where the app's exact join fields or value
+casing are not documented, the patterns below inspect before relying on them, per
+this repo's rule to discover rather than guess.
+
 ## Use this file when
 
 - a query surfaces IP fields (src, dest, src_ip, dest_ip, ClientIP, or equivalent) and enrichment with internet-noise context reduces false positives
@@ -11,193 +16,135 @@
 
 | Term | Meaning |
 | --- | --- |
-| Noise | An IP observed actively scanning or crawling the public internet. A `noise=true` IP is likely an opportunistic scanner, not a targeted threat. |
-| RIOT (Rule It Out) | IPs belonging to known-benign services: Google, Cloudflare, AWS, Akamai, and similar web-scale platforms. Filter these first to reduce alert volume. |
-| Classification | `malicious`: associated with known attack tooling or campaigns. `benign`: a recognized scanner or service with no attack history. `unknown`: not observed in GreyNoise data. |
+| Noise | An IP observed mass-scanning or crawling the public internet (Shodan-style scanners, vulnerability scanners, opportunistic exploiters). A noisy IP is likely opportunistic, not a targeted threat. |
+| Business Services Intelligence (formerly RIOT, "Rule It Out") | IPs belonging to known internet services such as Google DNS, AWS CloudFront, and Fastly. Filter these first to reduce alert volume. Older app versions and field names still say RIOT. |
+| Classification | One of four values: `malicious`, `suspicious`, `benign`, `unknown`. |
 | Tags | Behavioral labels such as `SSH Scanner`, `Tor Exit Node`, `Mirai`, `Log4Shell Exploit`, `VNC Scanner`, `Web Crawler`. |
 
 ## Installation
 
-Install the **GreyNoise App and Add-On for Splunk** from Splunkbase. The app:
-- Registers custom SPL commands (`gnlookup`, `gnenrich`, `gnmeta`)
-- Ships two synced CSV lookup files with matching lookup definitions (`greynoise_full`, `greynoise_riot`); the queries below reference the definition names. If only the raw CSV files exist, use `greynoise_full.csv` / `greynoise_riot.csv` instead.
-- Includes pre-built intelligence dashboards
-- Requires a valid GreyNoise API key configured under the app setup page
+Install the **GreyNoise App for Splunk** (SA-GreyNoise, Splunkbase app 4113). The app:
+- Registers the custom SPL commands listed below
+- Ships KV store and CSV lookups populated by scheduled saved searches (v3.0.0 moved from CSV to KV store lookups)
+- Includes three dashboards: **Overview**, **Queried IP Addresses**, and **Live Investigation**
+- Requires a valid GreyNoise API key configured under Apps > GreyNoise App for Splunk > Configuration
 
 ## Custom SPL commands
 
-### `gnlookup` - single IP lookup
+Per the app's `commands.conf`, the registered commands are: `gnip`, `gnquick`,
+`gnquery`, `gnstats`, `gnmulti`, `gncontext`, `gnfilter`, `gnenrich`,
+`gnoverview`, `gniptimeline`, `gncve`, and `maintaincache`.
 
-Useful for investigating one IP ad hoc:
+The two most used in query building:
 
-```spl
-| gnlookup ip="203.0.113.42"
-```
+### `gnenrich` - enrich search results with GreyNoise context
 
-Returns one row with all GreyNoise context fields.
-
-### `gnenrich` - bulk IP enrichment across a dataset
-
-Enrich a field containing IP addresses across all rows of the current pipeline. Batches API calls automatically:
+Enriches the events returned by a search with context for the IPs in a named
+field. The argument is `ip_field`:
 
 ```spl
 index=firewall sourcetype=cisco:asa earliest=-24h
 | stats count by src
-| gnenrich field=src
-| where noise="true" OR classification="malicious"
-| sort - count
+| gnenrich ip_field="src"
 ```
 
-`gnenrich` requires a configured API key and consumes GreyNoise API quota. Pre-filter to a smaller IP list before enrichment on large result sets.
-
-### `gnmeta` - account metadata
-
-Returns API quota information and account context; useful for troubleshooting:
+### `gncontext` / `gnip` - full context for a single IP
 
 ```spl
-| gnmeta
+| gncontext ip="203.0.113.42"
 ```
 
-## Lookup-based enrichment (no custom commands required)
+`gnquick` returns the lighter noise/BSI status check, `gnquery` runs GNQL
+queries, and `gnfilter` filters events by noise status. Command-based
+enrichment calls the GreyNoise API, so batch or pre-filter large result sets.
+See the app README for the full syntax of each command.
 
-Use the scheduled lookup files when the GreyNoise App is installed but the custom commands are unavailable, or for scheduled saved searches where API quota must be conserved.
+## Lookup-based enrichment (no API calls at search time)
 
-### `greynoise_full.csv` - active noise and malicious IPs
+The app ships lookups populated on a schedule:
 
-```spl
-index=firewall sourcetype=cisco:asa earliest=-24h
-| stats count by src
-| lookup greynoise_full ip AS src OUTPUT classification, noise, riot, tags, name, last_seen
-| where noise="true" OR classification="malicious"
-| sort - count
-```
-
-### `greynoise_riot.csv` - known-benign service IPs
-
-Use RIOT as a pre-filter to remove large-platform traffic before investigating:
-
-```spl
-index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
-| stats count by dest
-| lookup greynoise_riot ip AS dest OUTPUT riot, name AS riot_service
-| where isnull(riot) OR riot="false"
-| sort - count
-```
-
-## GreyNoise field reference
-
-| Field | Type | Description |
+| Lookup | Type | Notes |
 | --- | --- | --- |
-| `ip` | string | The IP address looked up |
-| `noise` | boolean | True if the IP is actively scanning the public internet |
-| `riot` | boolean | True if the IP belongs to a known-benign service |
-| `classification` | string | `malicious`, `benign`, or `unknown` |
-| `name` | string | Organization or actor name |
-| `tags` | string | Comma-separated behavioral tags |
-| `first_seen` | date | First date the IP was observed by GreyNoise |
-| `last_seen` | date | Most recent observation date |
-| `country` | string | Country of origin (full name) |
-| `country_code` | string | ISO 3166-1 alpha-2 country code |
-| `city` | string | City of origin |
-| `organization` | string | ASN organization name |
-| `asn` | string | Autonomous system number (e.g., AS15169) |
-| `actor` | string | Named threat actor if known |
-| `cve` | string | Associated CVE identifiers |
+| `greynoise_indicators` | KV store | Feed indicators; fields include `actor`, `first_seen`, `last_seen`, `classification`, `tags`, `cve`, `source_country`, `asn`. Populated by the `greynoise_feed` saved search; indicators with `last_seen` older than 7 days are purged. |
+| `gn_scan_deployment_ip_lookup` | KV store | Results for IPs queried from your deployment; fields include `noise`, `RIOT`, `classification`, `business_service_intelligence`, `internet_scanner_intelligence`. |
+| `greynoise_ip_intel_malicious` / `_suspicious` / `_unknown` / `_benign` | CSV | Per-classification IP intel files. |
 
-Lookup CSV values arrive as the strings `"true"`/`"false"`, so `| where` (eval semantics) must compare against quoted strings; an unquoted `noise=true` in `where` reads `true` as a field name and matches nothing. Unquoted values are fine in the `search` command.
+Inspect a lookup's actual fields and value formats before joining against it;
+they vary by app version:
 
-## Common enrichment patterns
+```spl
+| inputlookup greynoise_indicators | head 5
+```
 
-### Noise filter: remove background scanners from a firewall investigation
+Join pattern once fields are confirmed:
 
 ```spl
 index=firewall sourcetype=cisco:asa action=blocked earliest=-24h
 | where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
-| lookup greynoise_full ip AS src OUTPUT noise, classification, tags
-| where coalesce(noise, "")!="true" AND coalesce(classification, "")!="benign"
+| lookup greynoise_indicators ip AS src OUTPUT classification, tags, actor, last_seen
+| where classification="malicious" OR classification="suspicious"
 | sort - count
-| table src, count, classification, tags
 ```
 
-### Malicious IP detection: connections to or from known-malicious IPs
+Confirm the lookup's IP field name from the `inputlookup` inspection first; if
+the join returns no matches, the key field name differs in your app version.
 
-```spl
-index IN (firewall, proxy) earliest=-24h
-| eval ip_field=coalesce(src, src_ip, ClientIP)
-| where isnotnull(ip_field) AND match(ip_field, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-| stats count by ip_field, index, sourcetype
-| lookup greynoise_full ip AS ip_field OUTPUT classification, actor, tags, last_seen
-| where classification="malicious"
-| table ip_field, count, index, sourcetype, actor, tags, last_seen
-```
+## Field reference
 
-### RIOT enrichment: identify traffic to major CDNs and SaaS platforms
+Fields come from different GreyNoise API responses; no single flat schema
+carries all of them:
 
-RIOT covers IPv4 addresses; filter to direct-IP destinations before the lookup join.
+| Origin | Fields |
+| --- | --- |
+| Quick check (`gnquick`) | `ip`, `noise` (boolean), `riot` (boolean) |
+| Context (`gncontext` / `gnip`) | `ip`, `first_seen`, `last_seen`, `seen`, `tags`, `actor`, `spoofable`, `classification`, `cve`, `bot`, `vpn`, plus `metadata.asn`, `metadata.city`, `metadata.country`, `metadata.country_code`, `metadata.organization` |
+| `greynoise_indicators` lookup | `actor`, `first_seen`, `last_seen`, `classification`, `tags`, `cve`, `source_country`, `asn` |
 
-```spl
-index=proxy sourcetype=bluecoat:proxysg:access:kv earliest=-24h
-| where isnotnull(dest) AND match(dest, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-| stats count by dest
-| lookup greynoise_riot ip AS dest OUTPUT riot, name AS riot_service
-| where riot="true"
-| stats sum(count) AS total_hits by riot_service
-| sort - total_hits
-```
+When filtering on boolean-like fields (`noise`, `RIOT`) after a lookup join,
+quote the comparison value: `| where` uses eval semantics, so an unquoted
+`noise=true` reads `true` as a field name and matches nothing. Verify the
+actual stored values first (`| inputlookup gn_scan_deployment_ip_lookup
+| stats values(noise)`), since casing and type vary by app version. Unquoted
+values are fine in the `search` command.
 
-### Emerging threats: IPs first seen by GreyNoise within the last 24 hours
+## Common enrichment patterns
 
-```spl
-| inputlookup greynoise_full
-| where strptime(first_seen, "%Y-%m-%d") > relative_time(now(), "-24h@h")
-| where classification="malicious"
-| table ip, tags, actor, country, first_seen
-```
-
-### Cross-reference with internal firewall permit logs
+### Bulk-enrich firewall traffic and keep the risky results
 
 ```spl
 index=firewall sourcetype=cisco:asa action=permitted earliest=-24h
-| where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
-| lookup greynoise_full ip AS src OUTPUT classification, noise, riot, tags, actor, last_seen
-| where classification="malicious" OR (noise="true" AND riot="false")
-| table src, count, classification, noise, tags, actor, last_seen
+| gnenrich ip_field="src"
+| search classification="malicious" OR classification="suspicious"
+| sort - count
 ```
 
-### Multi-index IP enrichment
-
-When the user provides multiple indexes that each surface IP fields:
+### Feed-based malicious IP match across indexes (no API calls)
 
 ```spl
-index IN (firewall, proxy, endpoint) earliest=-24h
-| eval ip_field=coalesce(src, src_ip, dest, dest_ip)
+index IN (firewall, proxy) earliest=-24h
+| eval ip_field=coalesce(src, src_ip)
 | where isnotnull(ip_field) AND match(ip_field, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by ip_field, index, sourcetype
-| lookup greynoise_full ip AS ip_field OUTPUT classification, noise, riot, tags, actor
-| where classification="malicious" OR noise="true"
-| sort - count
-| table ip_field, count, classification, noise, tags, actor, index
+| lookup greynoise_indicators ip AS ip_field OUTPUT classification, tags, actor, last_seen
+| where classification="malicious"
+| table ip_field, count, index, sourcetype, tags, actor, last_seen
 ```
 
-## Dashboard guidance
+Run the `inputlookup` inspection first to confirm the lookup's IP key field
+name in your installed version.
 
-The GreyNoise App ships pre-built dashboards:
+### Single-IP triage during an investigation
 
-- **GreyNoise Intelligence**: top noise sources, classification breakdown, country and tag distribution
-- **GreyNoise Threat Feed**: newly classified malicious IPs with actor and tag context
-
-Custom dashboard base queries:
-- Top noise countries: group `greynoise_full` by `country`, count rows, sort descending
-- Classification trend: join `greynoise_full` to firewall logs, `timechart` by `classification`
-- Emerging actors: filter `first_seen > -24h`, group by `actor`
+```spl
+| gncontext ip="203.0.113.42"
+```
 
 ## Caveats
 
-- GreyNoise covers IPv4 addresses only. IPv6 addresses return no match.
-- RIOT covers major cloud and CDN ranges but not every benign IP. Absence from RIOT does not imply the IP is malicious.
-- `noise=true` means the IP sends unsolicited traffic to the public internet, not necessarily that it targeted your environment.
-- `gnenrich` consumes API quota. Use the scheduled lookup files for high-volume or recurring searches.
-- The quoted-string comparisons in this file are verified against the CSV lookups; `gnenrich` output typing and casing may differ by app version, so spot-check with `| stats values(noise)` before reusing a `where` filter on command output.
-- Lookup file freshness depends on the sync schedule configured in the app. Use `gnenrich` when real-time accuracy matters.
+- Classification has four values (`malicious`, `suspicious`, `benign`, `unknown`); a filter that only handles three silently misses `suspicious`.
+- Lookup freshness depends on the `greynoise_feed` schedule, and indicators with `last_seen` older than 7 days are purged from `greynoise_indicators`; use the commands when real-time accuracy matters.
+- Command-based enrichment calls the GreyNoise API at search time; pre-filter to a small IP list for large result sets.
+- GreyNoise coverage is primarily IPv4; verify IPv6 behavior for your subscription before relying on it.
+- Command names and lookup schemas have changed between app versions; when in doubt, `| rest /services/data/commands splunk_server=local | search title=gn*` lists what your installed version registers.
