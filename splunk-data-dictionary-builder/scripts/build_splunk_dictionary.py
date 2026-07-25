@@ -199,6 +199,9 @@ CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "akamaisiem": ["Web", "Intrusion_Detection"],
     "ms:defender:atp:alerts": ["Alerts", "Malware", "Endpoint"],
     "crowdstrike:events:sensor": ["Endpoint"],
+    # Matching lowercases the sourcetype, so this key is the lowercase form of
+    # the Event Streams TA's CrowdStrike:Event:Streams:JSON.
+    "crowdstrike:event:streams:json": ["Alerts"],
     "cloudflare:json": ["Web", "Intrusion_Detection", "Network_Resolution"],
     "proofpoint_tap_siem": ["Email", "Malware"],
     "pps_messagelog": ["Email"],

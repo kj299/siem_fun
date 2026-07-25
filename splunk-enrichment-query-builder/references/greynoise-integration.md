@@ -44,6 +44,7 @@ field. The argument is `ip_field`:
 
 ```spl
 index=firewall sourcetype=cisco:asa earliest=-24h
+| where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | gnenrich ip_field="src"
 ```
@@ -114,11 +115,15 @@ values are fine in the `search` command.
 
 ```spl
 index=firewall sourcetype=cisco:asa action=permitted earliest=-24h
+| where isnotnull(src) AND match(src, "^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 | stats count by src
 | gnenrich ip_field="src"
 | search classification="malicious" OR classification="suspicious"
 | sort - count
 ```
+
+The IPv4 pre-filter keeps hostnames and IPv6 values out of the API-backed
+command, which both saves quota and avoids unsupported lookups.
 
 ### Feed-based malicious IP match across indexes (no API calls)
 

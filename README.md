@@ -169,7 +169,7 @@ Degree of detail per integration:
 | Integration | Coverage level | What is documented |
 | --- | --- | --- |
 | Zscaler (ZIA and ZPA) | Mapped | NSS/LSS sourcetypes, Web / Network_Traffic / Network_Resolution / Network_Sessions models, key CIM fields, feed-configuration caveats |
-| CrowdStrike Falcon | Mapped | Event Streams sourcetype, Endpoint / Malware / Intrusion_Detection models, key fields, FDR field-divergence caveat |
+| CrowdStrike Falcon | Mapped | FDR sensor sourcetype with the Endpoint model (CIM covers a subset of events) and the Event Streams alerts sourcetype with the Alerts model, plus the field-divergence caveat between the two feeds |
 | Palo Alto Networks (PAN-OS) | Mapped | pan:traffic / pan:threat / pan:globalprotect sourcetypes and their Network_Traffic, Intrusion_Detection, Malware, Web, Authentication models |
 | Cisco (ASA, Firepower/FTD, Umbrella, ISE) | Mapped | Per-product sourcetypes and their Network_Traffic, Intrusion_Detection, Network_Resolution, Authentication, Network_Sessions models |
 | Microsoft Windows Defender / Defender for Endpoint | Mapped | Both the Defender for Endpoint alert feed and the on-host operational log path, with Alerts / Malware / Endpoint models and key fields |

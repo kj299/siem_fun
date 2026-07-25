@@ -104,7 +104,7 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 ### CrowdStrike Falcon
 
 - Falcon Data Replicator via the Splunk Add-on for CrowdStrike FDR: `crowdstrike:events:sensor` -> Endpoint (CIM normalization covers a subset of sensor events): event_simpleName, ImageFileName, CommandLine, SHA256HashData, LocalAddressIP4, RemoteAddressIP4.
-- Event Streams alerts via the CrowdStrike Falcon Event Streams TA: `CrowdStrike:Event:Streams:JSON` -> Alerts. Field names differ from FDR sensor telemetry; verify before reusing a query across both feeds.
+- Event Streams alerts via the CrowdStrike Falcon Event Streams TA: `CrowdStrike:Event:Streams:JSON` (lowercase hint key: `crowdstrike:event:streams:json`) -> Alerts. Field names differ from FDR sensor telemetry; verify before reusing a query across both feeds.
 
 ### Cloudflare
 
