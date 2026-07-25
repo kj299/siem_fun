@@ -20,7 +20,7 @@ jobs:
         shell: pwsh
         run: ./scripts/validate-skill-pack.ps1
 
-  py-compile:
+  python:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,3 +33,9 @@ jobs:
 
       - name: Compile Python helpers
         run: python -m py_compile splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py
+
+      # Runs even when the compile step fails so both results are visible.
+      # Uses stdlib unittest, so there is nothing to install.
+      - name: Run unit tests
+        if: ${{ !cancelled() }}
+        run: python -m unittest discover -s splunk-data-dictionary-builder/tests -v

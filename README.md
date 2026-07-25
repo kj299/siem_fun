@@ -45,6 +45,8 @@ siem_fun/
 |   |   `-- workflow.md
 |   |-- scripts/
 |   |   `-- build_splunk_dictionary.py
+|   |-- tests/
+|   |   `-- test_build_splunk_dictionary.py
 |   `-- SKILL.md
 |-- splunk-enrichment-query-builder/
 |   |-- agents/
@@ -127,6 +129,16 @@ Run validation locally with:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-skill-pack.ps1
 ```
+
+Run the dictionary builder unit tests (stdlib only, nothing to install):
+
+```bash
+python -m unittest discover -s splunk-data-dictionary-builder/tests
+```
+
+Tests tagged `REGRESSION` pin behavior that a shipped defect got wrong. Keep them
+passing rather than adjusting the expectation, and add a case whenever a bug is
+fixed in the builder.
 
 ## Security
 
@@ -286,6 +298,7 @@ To get the best results with either model:
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
 - [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
 - [splunk-data-dictionary-builder/references/workflow.md](splunk-data-dictionary-builder/references/workflow.md): discovery strategy, CIM coverage, and query-builder handoff
+- [splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py](splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py): unit tests for the dictionary builder helpers, including regression coverage for past defects
 - [splunk-sentinel-query-builder/agents/openai.yaml](splunk-sentinel-query-builder/agents/openai.yaml): UI metadata and default skill prompt
 - [splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml](splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml): detailed Codex/OpenAI companion helper
 - [splunk-sentinel-query-builder/agents/claude-opus.yaml](splunk-sentinel-query-builder/agents/claude-opus.yaml): companion helper for Claude-style prompting
