@@ -11,7 +11,7 @@ Use this skill to build multi-index Splunk queries grounded in Splunkbase add-on
 
 - Never invent index names, sourcetypes, or GreyNoise field names. If the schema is uncertain, return a discovery query from [multi-index-patterns.md](references/multi-index-patterns.md) and stop.
 - Prefer `index IN (...)` over `OR`-chained index filters (Splunk 8.2+).
-- GreyNoise enrichment requires the GreyNoise App for Splunk. Fall back to the `greynoise_full` lookup join when the custom commands are unavailable.
+- GreyNoise enrichment requires the GreyNoise App for Splunk (SA-GreyNoise). Fall back to a join against the app's `greynoise_indicators` KV store lookup when the custom commands are unavailable, inspecting its fields with `inputlookup` first.
 - Splunk Cloud imposes index naming and management constraints that differ from self-managed deployments; see [splunk-cloud-index-management.md](references/splunk-cloud-index-management.md).
 - Never ask the user to paste API tokens, passwords, or Splunk credentials into chat.
 
@@ -51,9 +51,9 @@ Use patterns from [multi-index-patterns.md](references/multi-index-patterns.md):
 ### 3. Enrich with GreyNoise (when IP fields are present)
 
 When the query output contains IP fields (src, dest, src_ip, dest_ip, ClientIP, or equivalent), add GreyNoise enrichment per [greynoise-integration.md](references/greynoise-integration.md):
-- Use `gnenrich` when the GreyNoise App is installed.
-- Fall back to a `lookup greynoise_full` join when the custom command is unavailable.
-- Include a RIOT filter to remove known-benign infrastructure.
+- Use `gnenrich ip_field="<field>"` when the GreyNoise App is installed.
+- Fall back to a `lookup greynoise_indicators` join when the custom command is unavailable, confirming the lookup's key field with `inputlookup` first.
+- Filter known-benign infrastructure using Business Services Intelligence (formerly RIOT) status.
 
 ### 4. Shape the output
 

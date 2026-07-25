@@ -11,7 +11,7 @@ Use $splunk-sentinel-query-builder to build a Splunk hunt for suspicious PowerSh
 Platform: Splunk
 Task: hunt
 Time range: last 24h
-Known datasets: index=windows, sourcetype=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational
+Known datasets: index=windows, sourcetype=XmlWinEventLog, source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational
 Known fields: Image, CommandLine, ParentImage, User, host
 Output style: short
 ```
@@ -196,7 +196,7 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Uses `index IN (firewall, proxy)` rather than an `OR` chain
-- Pre-filters to IPv4 values before the `greynoise_full` lookup join
+- Pre-filters to IPv4 values before enrichment (`gnenrich ip_field=...` or a `greynoise_indicators` lookup join)
 - Quotes boolean lookup values in `where` clauses (`noise="true"`, not `noise=true`)
 - Does not invent sourcetypes beyond the two provided
 

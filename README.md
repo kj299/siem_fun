@@ -169,14 +169,14 @@ Degree of detail per integration:
 | Integration | Coverage level | What is documented |
 | --- | --- | --- |
 | Zscaler (ZIA and ZPA) | Mapped | NSS/LSS sourcetypes, Web / Network_Traffic / Network_Resolution / Network_Sessions models, key CIM fields, feed-configuration caveats |
-| CrowdStrike Falcon | Mapped | Event Streams sourcetype, Endpoint / Malware / Intrusion_Detection models, key fields, FDR field-divergence caveat |
+| CrowdStrike Falcon | Mapped | FDR sensor sourcetype with the Endpoint model (CIM covers a subset of events) and the Event Streams alerts sourcetype with the Alerts model, plus the field-divergence caveat between the two feeds |
 | Palo Alto Networks (PAN-OS) | Mapped | pan:traffic / pan:threat / pan:globalprotect sourcetypes and their Network_Traffic, Intrusion_Detection, Malware, Web, Authentication models |
 | Cisco (ASA, Firepower/FTD, Umbrella, ISE) | Mapped | Per-product sourcetypes and their Network_Traffic, Intrusion_Detection, Network_Resolution, Authentication, Network_Sessions models |
 | Microsoft Windows Defender / Defender for Endpoint | Mapped | Both the Defender for Endpoint alert feed and the on-host operational log path, with Alerts / Malware / Endpoint models and key fields |
 | Proofpoint (TAP and PPS) | Mapped | TAP and mail gateway sourcetypes with Email / Malware models and key fields |
 | Web proxy infrastructure (ProxySG, Squid, generic) | Mapped | The Web data model as the shared proxy contract, with the canonical field set and cross-proxy query strategy |
 | Cloudflare | Partial | HTTP, firewall, and Gateway DNS log mappings to Web / Intrusion_Detection / Network_Resolution; field availability flagged as dependent on app version and Logpush field selection |
-| Akamai App & API Protector | Mapped | akamai:siem sourcetype with Web / Intrusion_Detection models and key fields |
+| Akamai App & API Protector | Mapped | akamaisiem sourcetype with Web / Intrusion_Detection models and key fields |
 | Akamai Noname (API Security) | Outline | Guidance only: no standard CIM add-on exists, so events are treated as Alerts with locally verified field aliases |
 | Other vendors | Procedure | A generic four-step process: find the add-on, check its tags, verify model coverage with tstats, fall back to the dictionary builder |
 

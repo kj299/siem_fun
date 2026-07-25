@@ -196,12 +196,14 @@ CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "zscalernss-fw": ["Network_Traffic"],
     "zscalernss-dns": ["Network_Resolution"],
     "zscalerlss-zpa-app": ["Network_Sessions", "Web"],
-    "akamai:siem": ["Web", "Intrusion_Detection"],
+    "akamaisiem": ["Web", "Intrusion_Detection"],
     "ms:defender:atp:alerts": ["Alerts", "Malware", "Endpoint"],
-    "crowdstrike:events:sensor": ["Endpoint", "Malware", "Intrusion_Detection"],
-    "crowdstrike:fdr:json": ["Endpoint"],
+    "crowdstrike:events:sensor": ["Endpoint"],
+    # Matching lowercases the sourcetype, so this key is the lowercase form of
+    # the Event Streams TA's CrowdStrike:Event:Streams:JSON.
+    "crowdstrike:event:streams:json": ["Alerts"],
     "cloudflare:json": ["Web", "Intrusion_Detection", "Network_Resolution"],
-    "proofpoint:tap:siem": ["Email", "Malware"],
+    "proofpoint_tap_siem": ["Email", "Malware"],
     "pps_messagelog": ["Email"],
     "bluecoat:proxysg:access": ["Web"],
     "squid:access": ["Web"],
