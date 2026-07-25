@@ -5,6 +5,17 @@ param(
 $ErrorActionPreference = "Stop"
 $issues = New-Object System.Collections.Generic.List[string]
 
+# Helper YAML is parsed with a real parser rather than regexes, so legal
+# reformatting (inline comments, flow lists, differing indent width) cannot
+# produce phantom drift failures. Required rather than optional: silently
+# skipping the parity checks would let real drift pass unnoticed.
+if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
+    Write-Host "The powershell-yaml module is required. Install it with:" -ForegroundColor Red
+    Write-Host "  Install-Module powershell-yaml -Scope CurrentUser -Force" -ForegroundColor Red
+    exit 1
+}
+Import-Module powershell-yaml -ErrorAction Stop
+
 function Add-Issue {
     param([string]$Message)
     $issues.Add($Message) | Out-Null
@@ -16,6 +27,7 @@ function Get-RepoFile {
 }
 
 $script:textCache = @{}
+$script:yamlCache = @{}
 
 function Read-Text {
     param([string]$RelativePath)
@@ -60,55 +72,94 @@ function Assert-Contains {
     }
 }
 
+function Get-YamlDocument {
+    param([string]$RelativePath)
+
+    if ($script:yamlCache.ContainsKey($RelativePath)) {
+        return $script:yamlCache[$RelativePath]
+    }
+    $document = $null
+    $text = Read-Text $RelativePath
+    if (-not [string]::IsNullOrWhiteSpace($text)) {
+        try {
+            $document = ConvertFrom-Yaml $text
+        } catch {
+            Add-Issue "$RelativePath is not valid YAML: $($_.Exception.Message)"
+            $document = $null
+        }
+    }
+    $script:yamlCache[$RelativePath] = $document
+    return $document
+}
+
+function Get-MapValue {
+    param(
+        $Map,
+        [string]$Key
+    )
+
+    # ConvertFrom-Yaml returns a mapping type that varies by module version
+    # (Hashtable or OrderedDictionary); both expose ContainsKey and an indexer,
+    # so go through IDictionary rather than assuming a concrete type.
+    if ($null -eq $Map -or $Map -isnot [System.Collections.IDictionary]) {
+        return $null
+    }
+    if (-not $Map.Contains($Key)) {
+        return $null
+    }
+    return $Map[$Key]
+}
+
 function Get-YamlList {
     param(
-        [string]$Text,
+        $Document,
         [string]$Section,
         [string]$Key
     )
 
-    # The header match stops at the line break (not ':\s*') so the child lines
-    # keep their indentation; '\s*' would swallow the first child's indent and
-    # the '^\s{2}' / '^\s{4}' anchors below would never match it. An optional
-    # trailing '# comment' and end-of-file (for a header on the last line) are
-    # tolerated. Only block-style lists ('key:' then 4-space '- "item"' lines)
-    # are machine-checked; inline flow lists like 'key: []' are not supported.
-    $headerTail = "[ \t]*(?:#[^\r\n]*)?(?:\r?\n|\z)"
-    $sectionPattern = "(?ms)^$([regex]::Escape($Section)):$headerTail(.*?)(?=^\S|\z)"
-    $sectionMatch = [regex]::Match($Text, $sectionPattern)
-    if (-not $sectionMatch.Success) {
-        return @()
+    # Returns $null when the section or key is absent, so callers can tell
+    # "not declared" apart from "declared empty". A real YAML parse replaces
+    # the previous hand-rolled regex, which broke on legal reformatting
+    # (inline comments, flow lists, differing indent width).
+    $sectionValue = Get-MapValue $Document $Section
+    if ($null -eq $sectionValue) {
+        return $null
     }
-
-    $sectionBody = $sectionMatch.Groups[1].Value
-    $keyPattern = "(?ms)^\s{2}$([regex]::Escape($Key)):$headerTail(.*?)(?=^\s{2}\S|\z)"
-    $keyMatch = [regex]::Match($sectionBody, $keyPattern)
-    if (-not $keyMatch.Success) {
-        return @()
+    $keyValue = Get-MapValue $sectionValue $Key
+    if ($null -eq $keyValue) {
+        return $null
+    }
+    if ($keyValue -is [string] -or $keyValue -isnot [System.Collections.IEnumerable]) {
+        return @([string]$keyValue)
     }
 
     $items = @()
-    foreach ($line in ($keyMatch.Groups[1].Value -split "`r?`n")) {
-        if ($line -match '^\s{4}-\s+"?(.*?)"?\s*$') {
-            $items += $Matches[1]
-        }
+    foreach ($item in $keyValue) {
+        $items += [string]$item
     }
-    return $items
+    return , $items
 }
 
 function Assert-ListsEqual {
     param(
         [string]$Name,
-        [string[]]$Left,
-        [string[]]$Right
+        $Left,
+        $Right
     )
 
-    if ($Left.Count -eq 0 -and $Right.Count -eq 0) {
-        Add-Issue "Helper drift: $Name is missing or empty in both files"
+    # $null means the section or key is absent; an empty array means it is
+    # declared with no items. Both sides absent is a real problem (the check
+    # would otherwise pass vacuously), so report it rather than comparing.
+    if ($null -eq $Left -and $null -eq $Right) {
+        Add-Issue "Helper drift: $Name is declared in neither file"
         return
     }
-    $leftText = ($Left -join "`n")
-    $rightText = ($Right -join "`n")
+    if ($null -eq $Left -or $null -eq $Right) {
+        Add-Issue "Helper drift: $Name is declared in only one of the two files"
+        return
+    }
+    $leftText = (@($Left) -join "`n")
+    $rightText = (@($Right) -join "`n")
     if ($leftText -cne $rightText) {
         Add-Issue "Helper drift detected in $Name"
     }
@@ -195,16 +246,27 @@ foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dict
     Assert-Contains $skill '## Inputs' "Inputs section"
 }
 
-$requiredOpenaiKeys = @("interface:", "display_name:", "short_description:", "default_prompt:", "policy:", "allow_implicit_invocation: false")
 foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
-    if (-not (Test-RepoFile "$skill/agents/openai.yaml")) {
+    $openaiPath = "$skill/agents/openai.yaml"
+    if (-not (Test-RepoFile $openaiPath)) {
         continue
     }
-    $skillOpenai = Read-Text "$skill/agents/openai.yaml"
-    foreach ($key in $requiredOpenaiKeys) {
-        if ($skillOpenai -cnotmatch [regex]::Escape($key)) {
-            Add-Issue "$skill/agents/openai.yaml is missing $key"
+    $openaiDoc = Get-YamlDocument $openaiPath
+    $interface = Get-MapValue $openaiDoc "interface"
+    if ($null -eq $interface) {
+        Add-Issue "$openaiPath is missing the interface section"
+    } else {
+        foreach ($key in @("display_name", "short_description", "default_prompt")) {
+            if ([string]::IsNullOrWhiteSpace([string](Get-MapValue $interface $key))) {
+                Add-Issue "$openaiPath is missing interface.$key"
+            }
         }
+    }
+    $policy = Get-MapValue $openaiDoc "policy"
+    if ($null -eq $policy) {
+        Add-Issue "$openaiPath is missing the policy section"
+    } elseif ("$(Get-MapValue $policy 'allow_implicit_invocation')".ToLowerInvariant() -ne "false") {
+        Add-Issue "$openaiPath must set policy.allow_implicit_invocation to false"
     }
 }
 
@@ -231,19 +293,19 @@ foreach ($check in $helperChecks) {
     if (-not (Test-RepoFile $claudePath) -or -not (Test-RepoFile $codexPath)) {
         continue
     }
-    $claude = Read-Text $claudePath
-    $codex = Read-Text $codexPath
+    $claudeDoc = Get-YamlDocument $claudePath
+    $codexDoc = Get-YamlDocument $codexPath
     foreach ($section in $check.Sections) {
         $parent = $sectionParents[$section]
-        Assert-ListsEqual "$claudePath / $section" (Get-YamlList $claude $parent $section) (Get-YamlList $codex $parent $section)
+        Assert-ListsEqual "$claudePath / $section" (Get-YamlList $claudeDoc $parent $section) (Get-YamlList $codexDoc $parent $section)
     }
     if ($check.RequireTuningSections) {
         # claude-opus helpers must carry trigger_tuning; codex helpers must carry packaging_rules.
-        if ($claude -cnotmatch 'trigger_tuning:') {
-            Add-Issue "$claudePath is missing trigger_tuning section"
+        if ($null -eq (Get-MapValue (Get-MapValue $claudeDoc "behavior") "trigger_tuning")) {
+            Add-Issue "$claudePath is missing behavior.trigger_tuning"
         }
-        if ($codex -cnotmatch 'packaging_rules:') {
-            Add-Issue "$codexPath is missing packaging_rules section"
+        if ($null -eq (Get-MapValue (Get-MapValue $codexDoc "behavior") "packaging_rules")) {
+            Add-Issue "$codexPath is missing behavior.packaging_rules"
         }
     }
 }
@@ -253,18 +315,18 @@ foreach ($check in $helperChecks) {
 foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
     $prompts = @{}
     foreach ($entry in @(
-        @{ Path = "$skill/agents/openai.yaml"; Key = "default_prompt" },
-        @{ Path = "$skill/agents/claude-opus.yaml"; Key = "preferred_prompt" },
-        @{ Path = "$skill/agents/codex-gpt-5.4.yaml"; Key = "preferred_prompt" }
+        @{ Path = "$skill/agents/openai.yaml"; Section = "interface"; Key = "default_prompt" },
+        @{ Path = "$skill/agents/claude-opus.yaml"; Section = "invocation"; Key = "preferred_prompt" },
+        @{ Path = "$skill/agents/codex-gpt-5.4.yaml"; Section = "invocation"; Key = "preferred_prompt" }
     )) {
         if (-not (Test-RepoFile $entry.Path)) {
             continue
         }
-        $match = [regex]::Match((Read-Text $entry.Path), "(?m)^\s*$($entry.Key):\s*""(.*)""\s*$")
-        if ($match.Success) {
-            $prompts[$entry.Path] = $match.Groups[1].Value
+        $value = Get-MapValue (Get-MapValue (Get-YamlDocument $entry.Path) $entry.Section) $entry.Key
+        if ([string]::IsNullOrWhiteSpace([string]$value)) {
+            Add-Issue "$($entry.Path) is missing $($entry.Section).$($entry.Key)"
         } else {
-            Add-Issue "$($entry.Path) is missing a quoted $($entry.Key)"
+            $prompts[$entry.Path] = [string]$value
         }
     }
     if (($prompts.Values | Select-Object -Unique).Count -gt 1) {

@@ -16,6 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The validator parses helper YAML with a real parser instead of regexes.
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: Install-Module powershell-yaml -Scope CurrentUser -Force -AllowClobber
+
       - name: Run skill pack validation
         shell: pwsh
         run: ./scripts/validate-skill-pack.ps1

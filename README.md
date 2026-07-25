@@ -124,7 +124,14 @@ The script writes one JSON file describing the instance:
 
 The coverage pass runs extra `tstats` searches; add `--no-cim-coverage` to skip it on large or slow instances. Pass the JSON, or a relevant excerpt, to the query builder as the internal data dictionary.
 
-Run validation locally with:
+Validation parses the helper YAML with the `powershell-yaml` module, so install it
+once first:
+
+```powershell
+Install-Module powershell-yaml -Scope CurrentUser -Force
+```
+
+Then run validation locally with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-skill-pack.ps1
