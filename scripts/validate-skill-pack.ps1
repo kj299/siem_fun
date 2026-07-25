@@ -135,6 +135,7 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/agents/codex-gpt-5.4.yaml",
     "splunk-data-dictionary-builder/references/workflow.md",
     "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py",
+    "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
     "splunk-enrichment-query-builder/SKILL.md",
     "splunk-enrichment-query-builder/agents/openai.yaml",
     "splunk-enrichment-query-builder/agents/claude-opus.yaml",

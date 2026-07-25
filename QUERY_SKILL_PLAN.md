@@ -162,6 +162,8 @@ siem_fun/
 |   |   `-- workflow.md
 |   |-- scripts/
 |   |   `-- build_splunk_dictionary.py
+|   |-- tests/
+|   |   `-- test_build_splunk_dictionary.py
 |   `-- SKILL.md
 |-- splunk-enrichment-query-builder/
 |   |-- agents/
