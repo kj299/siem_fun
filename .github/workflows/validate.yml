@@ -21,7 +21,13 @@ jobs:
         shell: pwsh
         run: Install-Module powershell-yaml -Scope CurrentUser -Force -AllowClobber
 
+      - name: Run validator unit tests
+        shell: pwsh
+        run: ./scripts/tests/validate-skill-pack.tests.ps1
+
+      # Runs even when the unit tests fail so both results are visible.
       - name: Run skill pack validation
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: ./scripts/validate-skill-pack.ps1
 

@@ -1,5 +1,9 @@
 param(
-    [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    [string]$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+
+    # Define the helper functions and return without running any checks, so the
+    # test suite can dot-source this script and exercise them in isolation.
+    [switch]$FunctionsOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -121,13 +125,19 @@ function Get-YamlList {
     # "not declared" apart from "declared empty". A real YAML parse replaces
     # the previous hand-rolled regex, which broke on legal reformatting
     # (inline comments, flow lists, differing indent width).
+    #
+    # Presence is decided with Contains rather than by testing the returned
+    # value against $null: PowerShell unrolls an empty array on return, so a
+    # declared-but-empty list would arrive as $null and be misreported as
+    # missing from both files.
     $sectionValue = Get-MapValue $Document $Section
-    if ($null -eq $sectionValue) {
+    if ($sectionValue -isnot [System.Collections.IDictionary] -or -not $sectionValue.Contains($Key)) {
         return $null
     }
-    $keyValue = Get-MapValue $sectionValue $Key
+    $keyValue = $sectionValue[$Key]
     if ($null -eq $keyValue) {
-        return $null
+        # 'key:' with no value parses to null; it is declared, just empty.
+        return , @()
     }
     if ($keyValue -is [string] -or $keyValue -isnot [System.Collections.IEnumerable]) {
         return @([string]$keyValue)
@@ -165,6 +175,10 @@ function Assert-ListsEqual {
     }
 }
 
+if ($FunctionsOnly) {
+    return
+}
+
 $requiredFiles = @(
     "README.md",
     "QUERY_SKILL_PLAN.md",
@@ -187,6 +201,7 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/references/workflow.md",
     "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py",
     "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
+    "scripts/tests/validate-skill-pack.tests.ps1",
     "splunk-enrichment-query-builder/SKILL.md",
     "splunk-enrichment-query-builder/agents/openai.yaml",
     "splunk-enrichment-query-builder/agents/claude-opus.yaml",
