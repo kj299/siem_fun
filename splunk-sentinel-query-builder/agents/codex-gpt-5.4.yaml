@@ -40,6 +40,16 @@ response_contract:
     - "Objective"
     - "Query"
     - "Assumptions"
+  optimization_sections:
+    - "Objective"
+    - "Query"
+    - "What changed"
+    - "Why efficient"
+    - "Assumptions"
+  discovery_sections:
+    - "Objective"
+    - "Discovery query"
+    - "Next step"
 
 behavior:
   token_rules:

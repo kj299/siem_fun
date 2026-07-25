@@ -42,6 +42,10 @@ response_contract:
     - "Objective"
     - "Query"
     - "Assumptions"
+  discovery_sections:
+    - "Objective"
+    - "Discovery query"
+    - "Next step"
 
 behavior:
   token_rules:

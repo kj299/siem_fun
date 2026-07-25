@@ -71,6 +71,15 @@ Short output (`output_style: short`):
 2. Query
 3. Assumptions
 
+Discovery mode (step 1) overrides both, whatever `output_style` was requested:
+1. Objective (one line naming what is unknown)
+2. Discovery query
+3. Next step
+4. Assumptions (only if something was inferred; omit otherwise)
+
+Never emit a `Tuning`, `Validate`, or `Why efficient` section whose content is
+"not applicable". A section with nothing to say means the wrong shape was chosen.
+
 ## References
 
 - [splunkbase-app-catalog.md](references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM data model mappings
