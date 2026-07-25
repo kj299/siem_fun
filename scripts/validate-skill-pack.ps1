@@ -251,18 +251,28 @@ foreach ($file in $trackedFiles) {
     }
 }
 
-foreach ($skill in @("splunk-sentinel-query-builder/SKILL.md", "splunk-data-dictionary-builder/SKILL.md", "splunk-enrichment-query-builder/SKILL.md")) {
+# Single source of truth for which skills exist. Every per-skill check below
+# iterates this list, so adding a skill here cannot leave it silently skipping
+# some checks while passing others.
+$skills = @(
+    "splunk-sentinel-query-builder",
+    "splunk-data-dictionary-builder",
+    "splunk-enrichment-query-builder"
+)
+
+foreach ($skill in $skills) {
+    $skillFile = "$skill/SKILL.md"
     # A missing file is already reported by Assert-Exists; content checks on it
     # would only add misdirecting issues.
-    if (-not (Test-RepoFile $skill)) {
+    if (-not (Test-RepoFile $skillFile)) {
         continue
     }
-    Assert-Contains $skill '(?s)^---\s+name:\s+[-a-z0-9]+\s+description:\s+.+?\s+---' "valid skill frontmatter"
-    Assert-Contains $skill '## Important' "top-level Important section"
-    Assert-Contains $skill '## Inputs' "Inputs section"
+    Assert-Contains $skillFile '(?s)^---\s+name:\s+[-a-z0-9]+\s+description:\s+.+?\s+---' "valid skill frontmatter"
+    Assert-Contains $skillFile '## Important' "top-level Important section"
+    Assert-Contains $skillFile '## Inputs' "Inputs section"
 }
 
-foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
+foreach ($skill in $skills) {
     $openaiPath = "$skill/agents/openai.yaml"
     if (-not (Test-RepoFile $openaiPath)) {
         continue
@@ -303,6 +313,21 @@ $helperChecks = @(
     @{ Skill = "splunk-enrichment-query-builder"; Sections = @("prompt_shape", "default_sections", "short_sections", "token_rules", "truth_order", "stop_conditions"); RequireTuningSections = $true },
     @{ Skill = "splunk-data-dictionary-builder";  Sections = @("token_rules", "stop_conditions"); RequireTuningSections = $false }
 )
+# The table above is the one per-skill registry that cannot be derived from
+# $skills, since each skill declares its own section set. Guard both directions
+# so a skill cannot be added to one and forgotten in the other.
+$configuredSkills = @($helperChecks | ForEach-Object { $_.Skill })
+foreach ($skill in $skills) {
+    if ($configuredSkills -notcontains $skill) {
+        Add-Issue "$skill has no helperChecks entry, so its helper parity would go unchecked"
+    }
+}
+foreach ($configured in $configuredSkills) {
+    if ($skills -notcontains $configured) {
+        Add-Issue "helperChecks references '$configured', which is not in the skills list"
+    }
+}
+
 foreach ($check in $helperChecks) {
     $claudePath = "$($check.Skill)/agents/claude-opus.yaml"
     $codexPath = "$($check.Skill)/agents/codex-gpt-5.4.yaml"
@@ -328,7 +353,7 @@ foreach ($check in $helperChecks) {
 
 # The canonical invocation prompt is duplicated across openai.yaml and both
 # companion helpers; it has drifted before, so enforce three-way equality.
-foreach ($skill in @("splunk-sentinel-query-builder", "splunk-data-dictionary-builder", "splunk-enrichment-query-builder")) {
+foreach ($skill in $skills) {
     $prompts = @{}
     foreach ($entry in @(
         @{ Path = "$skill/agents/openai.yaml"; Section = "interface"; Key = "default_prompt" },

@@ -114,7 +114,11 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 2. `agents/openai.yaml`, `agents/claude-opus.yaml`, `agents/codex-gpt-5.4.yaml`
    following the parity rules above.
 3. `references/` for detail; keep `SKILL.md` short and link out.
-4. Register it in the validator: `$requiredFiles` and the `$helperChecks` table.
+4. Register it in the validator: add the directory to `$skills` (every per-skill
+   check iterates that list), its files to `$requiredFiles`, and an entry to
+   `$helperChecks` declaring which sections its helper pair must share. The
+   validator cross-checks `$skills` against `$helperChecks`, so missing one is
+   reported rather than silently skipping checks.
 5. Update the layout trees and file lists in [README.md](README.md) and
    [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md).
 6. Add fixtures to [examples/golden-prompts.md](examples/golden-prompts.md).
