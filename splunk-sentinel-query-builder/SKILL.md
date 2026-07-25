@@ -10,6 +10,11 @@ Use this skill for environment-aware SIEM queries. Keep answers short, schema-dr
 ## Important
 
 - Never invent production dataset names when discovery is safer.
+- The dataset rule is about indexes, sourcetypes, and tables, not fields. A
+  well-known field of a named dataset may be used even when it is absent from the
+  supplied field list, provided it is named in `Assumptions` so the user can drop
+  it. `EventCode=1` on a Sysmon sourcetype is the usual case: it belongs in the
+  base search because that is what keeps the query cheap.
 - Prefer the internal data dictionary over guessed schema.
 - Return `discovery` instead of a production query when the schema is not reliable.
 - Keep the answer query-first and stop after the smallest useful result.
@@ -46,7 +51,7 @@ Return one of these:
 - `optimization`: rewritten query plus what changed and why it is faster
 - `discovery`: checklist plus starter query when schema is missing
 
-Default response shape:
+Default response shape, used by `query`, `detection`, and `translation`:
 
 1. Objective
 2. Query
@@ -57,6 +62,25 @@ Default response shape:
 7. Validate
 
 If the user wants a short answer, return only `Objective`, `Query`, and `Assumptions`.
+
+`optimization` replaces `Tuning` with `What changed`, listing only the edits that
+alter cost, each with the reason it is cheaper:
+
+1. Objective
+2. Query (the rewritten query)
+3. What changed
+4. Why efficient
+5. Assumptions
+
+`discovery` is short by design. Do not pad it out to the default shape:
+
+1. Objective (one line naming what is unknown)
+2. Discovery query
+3. Next step (one sentence: run it, then re-invoke with the confirmed names)
+4. Assumptions (only if something was inferred; omit otherwise)
+
+Never emit a `Tuning`, `Validate`, or `Why efficient` section whose content is
+"not applicable". A section with nothing to say means the wrong shape was chosen.
 
 ## Truth order
 

@@ -24,6 +24,8 @@ Expected output:
 - Uses `index=windows` and the supplied `sourcetype`
 - Filters before any expensive extraction
 - Does not introduce placeholder indexes
+- May use `EventCode=1` even though it is outside the supplied field list, provided
+  it is named in `Assumptions`
 
 ## 2. Splunk discovery mode with tstats
 
@@ -40,10 +42,9 @@ Output style: full
 
 Expected output:
 
-- `Objective`
-- `Query`
-- `Assumptions`
 - Returns `discovery`, not a production detection
+- Uses the discovery shape: `Objective`, `Discovery query`, `Next step`
+- Emits no `Tuning` or `Validate` section padded with "not applicable"
 - Uses a starter such as:
 
 ```spl
@@ -67,6 +68,7 @@ SigninLogs
 
 Expected output:
 
+- Uses the optimization shape: `Objective`, `Query`, `What changed`, `Why efficient`, `Assumptions`
 - Keeps `SigninLogs`
 - Pushes `where TimeGenerated > ago(7d)` before `extend`
 - Filters before shaping columns
