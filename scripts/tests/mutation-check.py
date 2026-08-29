@@ -69,9 +69,27 @@ shutil.copytree(REPO, WORK)
 sh("git add -A && git -c user.email=t@t -c user.name=t commit -qm p3base")
 
 print("\n[A] BASELINE AT HEAD")
-print(f"  validator      : {validator()}")
-print(f"  powershell     : {ps_suite()}")
-print(f"  python         : {py_suite()}")
+# Assert the baseline, do not merely print it. A mutation is judged CAUGHT when
+# the suite turns red, so a suite that is ALREADY red makes every mutation
+# against it look caught and can still exit 0. Abort instead: with a red
+# baseline every result below is meaningless, not merely suspect.
+_v, _ps, _py = validator(), ps_suite(), py_suite()
+print(f"  validator      : {_v}")
+print(f"  powershell     : {_ps}")
+print(f"  python         : {_py}")
+_baseline = []
+if _v != "PASSED":
+    _baseline.append(f"validator not green at baseline ({_v})")
+if not (_ps.endswith(", 0 failed") and _ps[0].isdigit()):
+    _baseline.append(f"powershell suite not green at baseline ({_ps})")
+if _py != "OK":
+    _baseline.append(f"python suite not green at baseline ({_py})")
+if _baseline:
+    print("\n" + "=" * 72)
+    print("ABORTING: baseline is not green, so no mutation result would mean anything.")
+    for b in _baseline:
+        print(f"  - {b}")
+    sys.exit(1)
 
 print("\n[B] MUTATION-VERIFY EVERY REGRESSION TEST ADDED THIS SESSION")
 PY_MUTS = [
