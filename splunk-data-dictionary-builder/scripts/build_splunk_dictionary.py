@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import http.client
 import json
 import os
 import re
@@ -41,7 +42,11 @@ def parse_bool(value: str, default: bool) -> bool:
 
 def env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
-    if value is None:
+    # An unset OR empty/whitespace-only value is not a meaningful setting. Empty
+    # must fall back to the default rather than parsing as false: SPLUNK_VERIFY_SSL
+    # defaults to True, and an accidentally-empty export ("export SPLUNK_VERIFY_SSL=")
+    # would otherwise silently disable TLS certificate verification.
+    if value is None or not value.strip():
         return default
     return parse_bool(value, default)
 
@@ -101,6 +106,15 @@ class SplunkClient:
             raise RuntimeError(f"Splunk API error {error.code} for {path}: {body}") from error
         except urllib.error.URLError as error:
             raise RuntimeError(f"Splunk connection error for {path}: {error.reason}") from error
+        except (OSError, http.client.HTTPException) as error:
+            # urllib only wraps connect-phase failures in URLError. Reading the
+            # response body (and awaiting headers) can still raise a bare
+            # TimeoutError/OSError or an IncompleteRead, which callers that catch
+            # RuntimeError would miss -- killing the run and discarding everything
+            # already collected. A oneshot search that outlives the socket timeout
+            # is the common path here. HTTPError and URLError must stay above this
+            # clause: both subclass OSError.
+            raise RuntimeError(f"Splunk read error for {path}: {error!r}") from error
 
     def get(self, endpoint: str, params: dict[str, str] | None = None) -> dict[str, Any]:
         query = {"output_mode": "json"}
@@ -209,7 +223,7 @@ CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "squid:access": ["Web"],
     "cisco:asa": ["Network_Traffic", "Network_Sessions", "Authentication"],
     "cisco:estreamer:data": ["Intrusion_Detection", "Network_Traffic"],
-    "cisco:umbrella:dns": ["Network_Resolution"],
+    "cisco:umbrella:dns": ["Network_Resolution", "Web"],
     "cisco:ise:syslog": ["Authentication", "Network_Sessions"],
     "pan:traffic": ["Network_Traffic"],
     "pan:threat": ["Intrusion_Detection", "Malware", "Web"],
@@ -237,7 +251,12 @@ def parse_json_attribute(value: Any, warnings: list[str] | None = None, context:
     if isinstance(value, str):
         try:
             value = json.loads(value)
-        except ValueError:
+        except ValueError as error:
+            # Report rather than swallow: an unparsable definition makes a data
+            # model look like it has no root datasets, which reads identically to
+            # a model that genuinely has none.
+            if warnings is not None:
+                warnings.append(f"Could not parse JSON for {context!r}: {error}; skipping")
             return {}
     if isinstance(value, dict):
         return value

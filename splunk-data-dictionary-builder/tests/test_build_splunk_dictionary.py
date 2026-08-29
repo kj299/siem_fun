@@ -15,6 +15,7 @@ with no dependency to install.
 
 from __future__ import annotations
 
+import http.client
 import json
 import sys
 import unittest
@@ -42,6 +43,23 @@ class _FakeResponse:
 
     def read(self) -> bytes:
         return self._payload
+
+
+class _RaisingResponse:
+    """Context-manager stand-in whose read() fails, simulating a transport error
+    after the response object exists (read timeout, reset, truncated body)."""
+
+    def __init__(self, exc: BaseException) -> None:
+        self._exc = exc
+
+    def __enter__(self) -> "_RaisingResponse":
+        return self
+
+    def __exit__(self, *exc_info: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        raise self._exc
 
 
 class _RecordingClient:
@@ -183,6 +201,26 @@ class TestBooleanParsing(unittest.TestCase):
                         bsd._content_flag(value),
                     )
 
+    def test_env_bool_treats_empty_value_as_unset(self) -> None:
+        """REGRESSION: an empty env var parsed as false and disabled TLS verification.
+
+        '' is in _FALSY_STRINGS, so `export SPLUNK_VERIFY_SSL=` made env_bool
+        return False for a flag whose documented default is True -- a security
+        control failing open. Empty now falls back to the default.
+        """
+        for empty in ("", "   ", "\t"):
+            with self.subTest(value=repr(empty)):
+                with mock.patch.dict("os.environ", {"SPLUNK_VERIFY_SSL": empty}):
+                    self.assertTrue(bsd.env_bool("SPLUNK_VERIFY_SSL", True))
+                    self.assertFalse(bsd.env_bool("SPLUNK_VERIFY_SSL", False))
+
+    def test_env_bool_still_honours_explicit_false(self) -> None:
+        """The empty-value fix must not stop an explicit opt-out from working."""
+        for falsy in ("0", "false", "no", "off"):
+            with self.subTest(value=falsy):
+                with mock.patch.dict("os.environ", {"SPLUNK_VERIFY_SSL": falsy}):
+                    self.assertFalse(bsd.env_bool("SPLUNK_VERIFY_SSL", True))
+
     def test_env_bool_returns_default_when_unset(self) -> None:
         with mock.patch.dict("os.environ", {}, clear=True):
             self.assertTrue(bsd.env_bool("SPLUNK_ABSENT_FLAG", True))
@@ -269,6 +307,24 @@ class TestParseJsonAttribute(unittest.TestCase):
 
     def test_invalid_json_returns_empty(self) -> None:
         self.assertEqual(bsd.parse_json_attribute("not json"), {})
+
+    def test_warns_when_json_string_is_malformed(self) -> None:
+        """REGRESSION: a malformed JSON string was swallowed silently.
+
+        A data model whose definition failed to parse was reported as simply
+        having no root datasets, which is indistinguishable from a model that
+        genuinely has none -- so broken CIM coverage looked like absent coverage.
+        """
+        warnings: list[str] = []
+        self.assertEqual(
+            bsd.parse_json_attribute("{not valid json", warnings=warnings, context="description"),
+            {},
+        )
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("description", warnings[0])
+
+    def test_malformed_json_stays_silent_without_a_warnings_list(self) -> None:
+        self.assertEqual(bsd.parse_json_attribute("{not valid json"), {})
 
     def test_warns_when_json_is_not_an_object(self) -> None:
         """REGRESSION: a JSON array parsed to [] and was silently discarded."""
@@ -380,6 +436,23 @@ class TestSplunkClientRequest(unittest.TestCase):
         with mock.patch.object(urllib.request, "urlopen", return_value=_FakeResponse(b"\xff\xfe\x00binary")):
             with self.assertRaises(RuntimeError):
                 self._client().request("/x")
+
+    def test_body_read_failure_becomes_runtime_error(self) -> None:
+        """REGRESSION: transport failures during the body read escaped as raw OSErrors.
+
+        urllib wraps only connect-phase failures in URLError. A read timeout or a
+        truncated body raised TimeoutError / IncompleteRead straight out of
+        request(), past every caller's `except RuntimeError`, killing the run and
+        discarding everything already collected. A oneshot search outliving the
+        30s socket timeout is the ordinary path into this.
+        """
+        for exc in (TimeoutError("timed out"),
+                    OSError("connection reset by peer"),
+                    http.client.IncompleteRead(b"x", 99)):
+            with self.subTest(exc=type(exc).__name__):
+                with mock.patch.object(urllib.request, "urlopen", return_value=_RaisingResponse(exc)):
+                    with self.assertRaises(RuntimeError):
+                        self._client().request("/x")
 
     def test_http_error_becomes_runtime_error(self) -> None:
         error = urllib.error.HTTPError("https://host:8089/x", 401, "Unauthorized", {}, None)

@@ -197,7 +197,10 @@ Expected output:
 - `Assumptions`
 - Uses `index IN (firewall, proxy)` rather than an `OR` chain
 - Pre-filters to IPv4 values before enrichment (`gnenrich ip_field=...` or a `greynoise_indicators` lookup join)
-- Quotes boolean lookup values in `where` clauses (`noise="true"`, not `noise=true`)
+- Filters on `classification` (the field the documented enrichment paths return),
+  not on a `noise` column that `greynoise_indicators` does not carry
+- If it does compare a boolean-ish lookup field, quotes the value
+  (`noise="true"`, never `noise=true`)
 - Does not invent sourcetypes beyond the two provided
 
 ## 9. Enrichment discovery mode with unknown sourcetypes

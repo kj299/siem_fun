@@ -10,7 +10,7 @@ Use this skill to build multi-index Splunk queries grounded in Splunkbase add-on
 ## Important
 
 - Never invent index names, sourcetypes, or GreyNoise field names. If the schema is uncertain, return a discovery query from [multi-index-patterns.md](references/multi-index-patterns.md) and stop.
-- Prefer `index IN (...)` over `OR`-chained index filters (Splunk 8.2+).
+- Prefer `index IN (...)` over `OR`-chained index filters (Splunk 6.6+). It is shorthand for the same OR chain, so prefer it for readability, not speed.
 - GreyNoise enrichment requires the GreyNoise App for Splunk (SA-GreyNoise). Fall back to a join against the app's `greynoise_indicators` KV store lookup when the custom commands are unavailable, inspecting its fields with `inputlookup` first.
 - Splunk Cloud imposes index naming and management constraints that differ from self-managed deployments; see [splunk-cloud-index-management.md](references/splunk-cloud-index-management.md).
 - Never ask the user to paste API tokens, passwords, or Splunk credentials into chat.
@@ -35,9 +35,8 @@ Optional but recommended:
 ### 1. Classify each index
 
 For each provided index name:
-1. If sourcetypes are unknown, return the enumeration query from [multi-index-patterns.md](references/multi-index-patterns.md) and stop before writing a production query. Discovery mode output:
-   - **Discovery query**: `| tstats count where index IN (<indexes>) by index, sourcetype | sort - count`
-   - **Next step**: one sentence instructing the user to run the query and re-invoke the skill with the confirmed sourcetypes
+1. If sourcetypes are unknown, return the enumeration query from [multi-index-patterns.md](references/multi-index-patterns.md) and stop before writing a production query. Use the discovery shape defined in step 4; the query is
+   `| tstats count where index IN (<indexes>) by index, sourcetype | sort - count`.
 2. If sourcetypes are known or can be inferred from the index name, look them up in [splunkbase-app-catalog.md](references/splunkbase-app-catalog.md) to identify CIM model mappings and key fields.
 3. When the environment is Splunk Cloud, check index naming and REST constraints in [splunk-cloud-index-management.md](references/splunk-cloud-index-management.md).
 
@@ -53,7 +52,10 @@ Use patterns from [multi-index-patterns.md](references/multi-index-patterns.md):
 When the query output contains IP fields (src, dest, src_ip, dest_ip, ClientIP, or equivalent), add GreyNoise enrichment per [greynoise-integration.md](references/greynoise-integration.md):
 - Use `gnenrich ip_field="<field>"` when the GreyNoise App is installed.
 - Fall back to a `lookup greynoise_indicators` join when the custom command is unavailable, confirming the lookup's key field with `inputlookup` first.
-- Filter known-benign infrastructure using Business Services Intelligence (formerly RIOT) status.
+- Filter known-benign infrastructure only when the chosen path actually returns a
+  Business Services Intelligence / RIOT field. `greynoise_indicators` does not carry
+  one; `gnquick` and `gn_scan_deployment_ip_lookup` do. Otherwise filter on
+  `classification` and say so in `Assumptions` rather than inventing a field.
 
 ### 4. Shape the output
 

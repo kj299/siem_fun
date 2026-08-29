@@ -137,7 +137,7 @@ Install-Module powershell-yaml -Scope CurrentUser -Force
 Then run validation locally with:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\validate-skill-pack.ps1
+pwsh -NoProfile -File .\scripts\validate-skill-pack.ps1
 ```
 
 Run the validator's own unit tests (no test framework required):

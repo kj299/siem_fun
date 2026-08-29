@@ -43,15 +43,22 @@ Breaking any of these fails CI, so change them deliberately:
 
 - `agents/claude-opus.yaml` and `agents/codex-gpt-5.4.yaml` in a skill must
   carry identical `prompt_shape`, `default_sections`, `short_sections`,
-  `token_rules`, `truth_order`, and `stop_conditions`. Comparison is
-  case-sensitive and order-sensitive. Edit both files together.
+  `optimization_sections`, `discovery_sections`, `token_rules`, `truth_order`,
+  and `stop_conditions`. Comparison is case-sensitive and order-sensitive. Edit
+  both files together. (The enrichment skill has no `optimization_sections`;
+  each skill's compared set is declared in `$helperChecks`.)
   - Query-builder skills additionally need `behavior.trigger_tuning` in the
     claude helper and `behavior.packaging_rules` in the codex helper.
   - `splunk-data-dictionary-builder` uses a simpler shape: only `token_rules`
     and `stop_conditions` are compared, and it has neither tuning section.
 - Per skill, `openai.yaml` `interface.default_prompt` must be byte-identical to
   `invocation.preferred_prompt` in both helpers. This has drifted before.
-- `openai.yaml` must set `policy.allow_implicit_invocation` to `false`.
+- `openai.yaml` must set `policy.allow_implicit_invocation` to `false`, and must
+  carry non-empty `interface.display_name`, `interface.short_description`, and
+  `interface.default_prompt`.
+- No tracked file may contain a git conflict marker.
+- Every tracked file must be ASCII on disk. The check reads BYTES, so a UTF-8
+  BOM or a UTF-16 re-encode fails even though it would decode to clean text.
 - Every `CIM_SOURCETYPE_HINTS` key in the dictionary builder must be documented
   in [cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md).
 - Relative markdown links must resolve. Links inside fenced code blocks are

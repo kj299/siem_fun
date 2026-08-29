@@ -64,7 +64,7 @@ behavior:
   stop_conditions:
     - "Return discovery mode when the exact dataset name is missing."
     - "Return discovery mode when field mapping depends on an unknown parser or connector."
-    - "Return discovery mode when translation depends on unknown source-table or source-index mapping."
+    - "Return discovery mode when an enrichment field name depends on an unverified lookup or app version."
   packaging_rules:
     - "Keep agents/openai.yaml schema-compliant and minimal for Codex tooling."
     - "Put richer repo-local OpenAI guidance in this companion helper rather than inventing unsupported openai.yaml keys."
