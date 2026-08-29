@@ -140,7 +140,7 @@ The Web data model is the canonical contract for every proxy. Once mapped, one t
 - Add-on: Palo Alto Networks Add-on for Splunk (Splunk_TA_paloalto).
 - `pan:traffic` -> Network_Traffic: src, dest, dest_port, action, app, rule, bytes_in, bytes_out.
 - `pan:threat` -> Intrusion_Detection and Malware; URL filtering subtype -> Web: signature, severity, action, url, category.
-- `pan:globalprotect` -> Authentication and Network_Sessions: user, src, action. Emitted only by the newer PaloAltoNetworks Splunk-Apps TA (v7+); the older Splunk_TA_paloalto has no dedicated GlobalProtect sourcetype.
+- `pan:globalprotect` -> Authentication and Network_Sessions: user, src, action. Present in current add-on versions; confirm with a discovery query on older deployments.
 
 ### Any other vendor
 

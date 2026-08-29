@@ -7,7 +7,7 @@
       "PowerShell(git rev-parse *)",
       "PowerShell(gh issue *)",
       "PowerShell(gh pr list *)",
-      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\validate-skill-pack.ps1)"
+      "PowerShell(pwsh -NoProfile -File .\\scripts\\validate-skill-pack.ps1)"
     ]
   }
 }

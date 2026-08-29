@@ -9,6 +9,11 @@ param(
 $ErrorActionPreference = "Stop"
 $issues = New-Object System.Collections.Generic.List[string]
 
+# .NET file APIs resolve relative paths against the process working directory
+# while PowerShell cmdlets resolve against the session location. Pin $Root to an
+# absolute path so both agree when -Root is passed relative.
+$Root = (Resolve-Path -LiteralPath $Root).Path
+
 # Helper YAML is parsed with a real parser rather than regexes, so legal
 # reformatting (inline comments, flow lists, differing indent width) cannot
 # produce phantom drift failures. Required rather than optional: silently
@@ -43,7 +48,9 @@ function Read-Text {
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         # Assert-Exists reports missing required files; returning empty text
         # lets the run finish and print every collected issue.
-        $raw = Get-Content -Raw -Path $path
+        # -LiteralPath, not -Path: a filename containing [ or ] is a wildcard to
+        # -Path and would abort the run under ErrorActionPreference=Stop.
+        $raw = Get-Content -Raw -LiteralPath $path
         if ($null -ne $raw) {
             $text = $raw
         }
@@ -175,6 +182,14 @@ function Assert-ListsEqual {
     }
 }
 
+# Line-ending-sensitive patterns, defined above the -FunctionsOnly return so the
+# unit suite can assert their CRLF behaviour directly. CI checks out CRLF while
+# the usual dev tree is LF, so a bare '$' anchor here is a silent no-op on the
+# only OS that runs this script.
+$script:conflictMarkerRegex = '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))'
+$script:fencedBlockRegex    = '(?ms)^[ \t]*```.*?^[ \t]*```[ \t]*\r?$'
+$script:whereBooleanRegex   = '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b'
+
 if ($FunctionsOnly) {
     return
 }
@@ -225,8 +240,11 @@ $trackedFiles = @(git -C $Root -c core.quotepath=false ls-files)
 # print "validation passed" -- reporting a clean bill of health for a repo it
 # never actually read. Fail loudly instead.
 if ($LASTEXITCODE -ne 0 -or $trackedFiles.Count -eq 0) {
-    Write-Host "Could not enumerate tracked files (git ls-files exit $LASTEXITCODE, $($trackedFiles.Count) files)." -ForegroundColor Red
-    Write-Host "Refusing to report success on an unread repository." -ForegroundColor Red
+    Add-Issue "Could not enumerate tracked files (git ls-files exit $LASTEXITCODE, $($trackedFiles.Count) files); refusing to report success on an unread repository"
+    # Print rather than bare-exit: issues already collected above (missing
+    # required files, for one) are the more actionable report.
+    Write-Host "Skill pack validation failed:" -ForegroundColor Red
+    foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Red }
     exit 1
 }
 
@@ -246,22 +264,26 @@ foreach ($file in $trackedFiles) {
     # and strips a UTF-8 BOM and transparently decodes UTF-16, so a non-ASCII
     # file could pass a decoded-character check while violating the hard rule
     # on disk.
-    $badByte = $bytes | Where-Object { $_ -ne 9 -and $_ -ne 10 -and $_ -ne 13 -and ($_ -lt 32 -or $_ -gt 126) } | Select-Object -First 1
-    if ($null -ne $badByte) {
-        Add-Issue "$file contains a non-ASCII or control byte 0x$($badByte.ToString('X2'))"
+    # A foreach/break loop, not a Where-Object pipeline: piping every byte of
+    # every tracked file costs roughly 10us/byte and dominated the whole run.
+    foreach ($b in $bytes) {
+        if ($b -ne 9 -and $b -ne 10 -and $b -ne 13 -and ($b -lt 32 -or $b -gt 126)) {
+            Add-Issue "$file contains a non-ASCII or control byte 0x$($b.ToString('X2'))"
+            break
+        }
     }
     # Git conflict markers are exactly seven chars followed by a space+label
     # (<<<<<<< / >>>>>>>) or alone on the line (=======); the right-side anchor
     # avoids flagging setext heading underlines of eight or more equals signs.
     # '\r?$' is required: CI checks out CRLF, where a bare '$' sits after the
     # CR and the lone-marker branch could never match.
-    if ($text -match '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))') {
+    if ($text -match $script:conflictMarkerRegex) {
         Add-Issue "$file contains a conflict marker"
     }
     # SPL 'where' uses eval semantics: an unquoted true/false is a field
     # reference, so the comparison silently matches nothing. Enforce the
     # quoting rule documented in greynoise-integration.md across all docs.
-    if ($file -like "*.md" -and $text -cmatch '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b') {
+    if ($file -like "*.md" -and $text -cmatch $script:whereBooleanRegex) {
         Add-Issue "$file compares against unquoted true/false in an SPL where clause; quote the value (=`"true`")"
     }
 }
@@ -416,7 +438,7 @@ foreach ($file in $markdownFiles) {
     # '\r?$' is required because CI checks out CRLF: with a bare '$' the closing
     # fence never matched there, so this strip was a no-op on the only OS that
     # runs the validator.
-    $scanText = [regex]::Replace($text, '(?ms)^[ \t]*```.*?^[ \t]*```[ \t]*\r?$', '')
+    $scanText = [regex]::Replace($text, $script:fencedBlockRegex, '')
     $baseDir = Split-Path -Parent (Get-RepoFile $file)
     foreach ($match in [regex]::Matches($scanText, $linkRegex)) {
         $target = $match.Groups[1].Value.Trim()

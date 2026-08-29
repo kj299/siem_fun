@@ -65,7 +65,7 @@ Key EventCodes: 4624/4625 (logon/fail), 4648 (explicit logon), 4688 (process cre
 
 | Sourcetype | Source | CIM data model | Key fields |
 | --- | --- | --- | --- |
-| `XmlWinEventLog` | `XmlWinEventLog:Microsoft-Windows-Sysmon/Operational` | Endpoint (Processes, Filesystem, Registry, Services, Ports) | EventCode, process, process_id, parent_process, dest, user, hash, TargetFilename, TargetObject |
+| `XmlWinEventLog` | `XmlWinEventLog:Microsoft-Windows-Sysmon/Operational` | Endpoint (Processes, Filesystem, Registry); network-connect events (EventCode 3) normalize to Network_Traffic, not to an Endpoint dataset | EventCode, process, process_id, parent_process, dest, user, hash, TargetFilename, TargetObject |
 
 The Windows Event Collector variant uses sourcetype `XmlWinEventLog:WEC-Sysmon`.
 Older community Sysmon TAs assigned the full channel path as the sourcetype, so
@@ -273,7 +273,7 @@ Events from `WinEventLog:Security` cover AD authentication. Additional AD-specif
 
 | Sourcetype | Source | CIM data model | Key fields |
 | --- | --- | --- | --- |
-| `WinEventLog` | `Active Directory Web Services` | Change | EventCode, src_user, dest_user |
+| `WinEventLog` | `WinEventLog:Active Directory Web Services` | Change | EventCode, src_user, dest_user |
 
 ## DNS and network resolution add-ons
 
@@ -288,7 +288,7 @@ Events from `WinEventLog:Security` cover AD authentication. Additional AD-specif
 
 | Sourcetype | Source | CIM data model | Key fields |
 | --- | --- | --- | --- |
-| `XmlWinEventLog` | `Microsoft-Windows-DNS-Server/Analytical` | Network_Resolution | EventCode, QNAME, QTYPE, PacketData |
+| `XmlWinEventLog` | `XmlWinEventLog:Microsoft-Windows-DNS-Server/Analytical` | Network_Resolution | EventCode, QNAME, QTYPE, PacketData |
 
 ## Cloud platform add-ons
 

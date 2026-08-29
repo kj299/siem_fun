@@ -323,6 +323,22 @@ class TestParseJsonAttribute(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn("description", warnings[0])
 
+    def test_blank_attribute_is_unset_not_malformed(self) -> None:
+        """REGRESSION: a blank attribute warned as malformed JSON.
+
+        Splunk blanks unset content attributes on some deployments, which
+        produced two spurious warnings per data model and buried the real ones.
+        Blank is treated as unset, matching env_bool in the same module.
+        """
+        for blank in ("", "   ", "\t"):
+            with self.subTest(value=repr(blank)):
+                warnings: list[str] = []
+                self.assertEqual(
+                    bsd.parse_json_attribute(blank, warnings=warnings, context="acceleration"),
+                    {},
+                )
+                self.assertEqual(warnings, [])
+
     def test_malformed_json_stays_silent_without_a_warnings_list(self) -> None:
         self.assertEqual(bsd.parse_json_attribute("{not valid json"), {})
 
@@ -453,6 +469,19 @@ class TestSplunkClientRequest(unittest.TestCase):
                 with mock.patch.object(urllib.request, "urlopen", return_value=_RaisingResponse(exc)):
                     with self.assertRaises(RuntimeError):
                         self._client().request("/x")
+
+    def test_http_error_body_read_failure_becomes_runtime_error(self) -> None:
+        """REGRESSION: the error-body read had no guard of its own.
+
+        An exception raised inside an `except` handler is not routed to a sibling
+        `except` clause, so a non-2xx status followed by a slow or reset body
+        drain still escaped request() as a bare OSError, past every caller.
+        """
+        error = urllib.error.HTTPError("https://host:8089/x", 503, "Busy", {}, None)
+        error.read = lambda: (_ for _ in ()).throw(TimeoutError("timed out"))  # type: ignore[method-assign]
+        with mock.patch.object(urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(RuntimeError):
+                self._client().request("/x")
 
     def test_http_error_becomes_runtime_error(self) -> None:
         error = urllib.error.HTTPError("https://host:8089/x", 401, "Unauthorized", {}, None)

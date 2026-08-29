@@ -76,7 +76,8 @@ Short output (`output_style: short`):
 Discovery mode (step 1) overrides both, whatever `output_style` was requested:
 1. Objective (one line naming what is unknown)
 2. Discovery query
-3. Next step
+3. Next step -- one sentence telling the user to run the query and re-invoke the
+   skill with the confirmed sourcetypes
 4. Assumptions (only if something was inferred; omit otherwise)
 
 Never emit a `Tuning`, `Validate`, or `Why efficient` section whose content is

@@ -16,7 +16,7 @@ Splunk Cloud runs on two infrastructure models:
 | Feature | Victoria Experience | Classic Experience |
 | --- | --- | --- |
 | Self-service index creation | Yes, via Settings > Indexes in Splunk Web | No; requires a Splunk Support case |
-| REST API index management | Yes, with a management token | Limited; structural changes go through Support |
+| Programmatic index management | Yes, via ACS at `admin.splunk.com` | Limited; structural changes go through Support |
 | Direct forwarder port (9997) | Yes | Yes |
 | HEC ingestion | Yes | Yes |
 | `_internal` access | Restricted; granted through the admin role, not self-service | Restricted by default |
@@ -31,8 +31,8 @@ Rules that apply to both stack types:
 
 - Lowercase letters, digits, hyphens (`-`), and underscores (`_`) only.
 - Cannot start with a hyphen or underscore.
-- Cannot be the literal names `kvstore`, `main` is reserved as the default index, and a
-  leading `_` denotes an internal index.
+- Cannot contain the word `kvstore` anywhere in the name.
+- A leading `_` denotes an internal index and is reserved.
 - Valid examples: `firewall`, `prod-windows-endpoint`, `aws_cloudtrail_2024`.
 
 Verify the current constraint set against Splunk Cloud documentation before
@@ -145,9 +145,12 @@ curl -H "Authorization: Bearer $SPLUNK_ACS_TOKEN" \
   -d '{"name":"new_index","searchableDays":90,"maxDataSizeMB":0}'
 ```
 
-Index management on Splunk Cloud goes through ACS at `admin.splunk.com`, not the
-search head's `:8089/services/data/indexes` endpoint, and ACS takes its own
-parameters (`searchableDays`, `maxDataSizeMB`) rather than indexes.conf keys.
+ACS is the supported path for CREATING and modifying indexes on Splunk Cloud, and
+it takes its own parameters (`searchableDays`, `maxDataSizeMB`) rather than
+indexes.conf keys. The search head's `:8089/services/data/indexes` endpoint
+remains available for READING index metadata, which is what the `| rest` queries
+above rely on. Confirm the current ACS surface against Splunk's ACS
+documentation before scripting against it.
 Never pass `-k`: it disables certificate verification while sending a bearer
 token, and both `admin.splunk.com` and stack hostnames present valid public CA
 certificates. Take the token from the environment rather than pasting it inline.

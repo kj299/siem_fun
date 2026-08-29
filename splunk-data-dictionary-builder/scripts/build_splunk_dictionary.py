@@ -102,7 +102,13 @@ class SplunkClient:
                     f"Splunk returned non-JSON for {path} (is this the management port, usually 8089?): {preview}"
                 ) from error
         except urllib.error.HTTPError as error:
-            body = error.read().decode("utf-8", errors="replace")
+            # An exception raised inside an except handler is NOT routed to a
+            # sibling clause, so this read needs its own guard: a 503 followed by
+            # a slow body drain would otherwise escape as a bare OSError.
+            try:
+                body = error.read().decode("utf-8", errors="replace")
+            except (OSError, http.client.HTTPException) as read_error:
+                body = f"<error body unreadable: {read_error!r}>"
             raise RuntimeError(f"Splunk API error {error.code} for {path}: {body}") from error
         except urllib.error.URLError as error:
             raise RuntimeError(f"Splunk connection error for {path}: {error.reason}") from error
@@ -223,7 +229,7 @@ CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {
     "squid:access": ["Web"],
     "cisco:asa": ["Network_Traffic", "Network_Sessions", "Authentication"],
     "cisco:estreamer:data": ["Intrusion_Detection", "Network_Traffic"],
-    "cisco:umbrella:dns": ["Network_Resolution", "Web"],
+    "cisco:umbrella:dns": ["Network_Resolution"],
     "cisco:ise:syslog": ["Authentication", "Network_Sessions"],
     "pan:traffic": ["Network_Traffic"],
     "pan:threat": ["Intrusion_Detection", "Malware", "Web"],
@@ -249,6 +255,11 @@ BASE_DATASET_PARENTS = {"BaseEvent", "BaseTransaction", "BaseSearch"}
 def parse_json_attribute(value: Any, warnings: list[str] | None = None, context: str = "") -> dict[str, Any]:
     """Normalize a Splunk REST content attribute that may be a JSON string or a dict."""
     if isinstance(value, str):
+        if not value.strip():
+            # Blank means the attribute is unset, not malformed. Warning here
+            # would emit two spurious entries per data model on deployments that
+            # blank unset content attributes, burying the real warnings.
+            return {}
         try:
             value = json.loads(value)
         except ValueError as error:
