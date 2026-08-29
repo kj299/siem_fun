@@ -218,6 +218,7 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py",
     "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
     "scripts/tests/validate-skill-pack.tests.ps1",
+    "scripts/tests/mutation-check.py",
     "splunk-enrichment-query-builder/SKILL.md",
     "splunk-enrichment-query-builder/agents/openai.yaml",
     "splunk-enrichment-query-builder/agents/claude-opus.yaml",

@@ -154,6 +154,7 @@ siem_fun/
 |-- README.md
 |-- scripts/
 |   |-- tests/
+|   |   |-- mutation-check.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/

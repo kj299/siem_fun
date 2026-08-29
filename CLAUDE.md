@@ -15,6 +15,9 @@ pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1
 
 # Dictionary builder unit tests
 python -m unittest discover -s splunk-data-dictionary-builder/tests
+
+# Mutation-check both suites (proves the REGRESSION tests actually catch their bugs)
+python3 scripts/tests/mutation-check.py
 ```
 
 CI runs all three on every pull request and on pushes to `main` (two jobs:
@@ -112,7 +115,12 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 - Fix a bug in the validator or the dictionary builder, add a case.
 - When a test is meant to catch a specific bug, reintroduce that bug and
   confirm the test fails. Several tests here looked correct but proved nothing
-  until that check was run.
+  until that check was run. `scripts/tests/mutation-check.py` automates this for
+  the cases already covered; add yours to it when you add a REGRESSION test.
+- The validator runs only on windows-latest, which checks out CRLF while your
+  tree is almost certainly LF. Two checks were silently no-ops on CI for exactly
+  this reason. The mutation-check script exercises a CRLF checkout, a UTF-8 BOM,
+  a UTF-16 file and a wildcard filename; keep those passing.
 
 ## Adding a new skill
 

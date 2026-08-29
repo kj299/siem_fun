@@ -37,6 +37,7 @@ siem_fun/
 |-- QUERY_SKILL_PLAN.md
 |-- scripts/
 |   |-- tests/
+|   |   |-- mutation-check.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
@@ -150,6 +151,12 @@ Run the dictionary builder unit tests (stdlib only, nothing to install):
 
 ```bash
 python -m unittest discover -s splunk-data-dictionary-builder/tests
+```
+
+Mutation-check both suites (reintroduces each bug and asserts its test goes red):
+
+```bash
+python3 scripts/tests/mutation-check.py
 ```
 
 Tests tagged `REGRESSION` pin behavior that a shipped defect got wrong. Keep them
