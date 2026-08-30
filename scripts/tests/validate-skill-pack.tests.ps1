@@ -546,6 +546,18 @@ try {
         Assert-IssueMatching "Executive Summary"
     }
 
+    Test-Case "a fixture section is found on a CRLF line too" {
+        # REGRESSION: the shape-line pattern ended in a bare '$', which on a
+        # CRLF checkout never matches, because [^\r\n]* stops at the \r while
+        # '$' matches only before the \n. The check was a complete no-op on
+        # Windows, which is the only OS that runs the validator in CI, and the
+        # Linux suite passed throughout.
+        $bt = [string][char]96
+        $crlf = '- Uses the shape: ' + $bt + 'Executive Summary' + $bt + "`r`n"
+        Test-FixtureShapeSections $crlf @("Objective")
+        Assert-IssueMatching "Executive Summary"
+    }
+
     Test-Case "a fixture naming only declared sections is silent" {
         $bt = [string][char]96
         $line = '- Uses the optimization shape: ' + $bt + 'Objective' + $bt + ', ' + $bt + 'What changed' + $bt

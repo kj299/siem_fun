@@ -402,7 +402,11 @@ function Test-KqlTableProvenance {
 
 # A fixture asserting a shape names its sections in backticks, e.g.
 # "Uses the optimization shape: `Objective`, `Query`, `What changed`".
-$script:fixtureShapeLineRegex = '(?im)^[^\r\n]*\bshape\b[^\r\n]*$'
+# '\r?$', not a bare '$'. On CI's CRLF checkout the line ends '...\r\n', so
+# [^\r\n]* stops at the \r and a bare '$' -- which matches only before the \n --
+# never matches. The check was a complete no-op on the only OS that runs it, and
+# a Linux run cannot see that: CI caught it, the local suite did not.
+$script:fixtureShapeLineRegex = '(?im)^[^\r\n]*\bshape\b[^\r\n]*\r?$'
 # Sections a SKILL.md declares, as numbered list items in its output shapes.
 $script:skillSectionRegex     = '(?m)^\d+\.[ \t]+`?([A-Z][A-Za-z ]{2,30}?)`?[ \t]*(?:\(|\r?$)'
 
