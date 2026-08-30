@@ -329,6 +329,7 @@ $script:kqlLetValueRegex   = '\blet[ \t]+\w+[ \t]*=[ \t]*([A-Za-z_][A-Za-z0-9_]*
 $script:kqlLetNameRegex    = '\blet[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*='
 $script:knownKqlTables = New-Object 'System.Collections.Generic.HashSet[string]'
 $script:kqlRegistryFile = "splunk-sentinel-query-builder/references/sentinel-table-catalog.md"
+$script:requiredChecksFile = "scripts/required-checks.txt"
 
 # Table references in a KQL block: the leading source, plus union and join
 # operands. Returns names only; the caller decides what is registered.
@@ -395,6 +396,28 @@ function Test-KqlTableProvenance {
     foreach ($name in (Get-KqlTableReferences $Body)) {
         if (-not $script:knownKqlTables.Contains($name)) {
             Add-Issue "$File names Sentinel table '$name', which is not catalogued in sentinel-table-catalog.md; never invent Sentinel identifiers"
+        }
+    }
+}
+
+# A fixture asserting a shape names its sections in backticks, e.g.
+# "Uses the optimization shape: `Objective`, `Query`, `What changed`".
+$script:fixtureShapeLineRegex = '(?im)^[^\r\n]*\bshape\b[^\r\n]*$'
+# Sections a SKILL.md declares, as numbered list items in its output shapes.
+$script:skillSectionRegex     = '(?m)^\d+\.[ \t]+`?([A-Z][A-Za-z ]{2,30}?)`?[ \t]*(?:\(|\r?$)'
+
+# Golden prompts assert the shape of a skill's answer. If a fixture names a
+# section no skill declares, either the fixture or the skill has drifted and the
+# fixture is no longer testing the contract it claims to.
+function Test-FixtureShapeSections {
+    param([string]$FixtureText, [string[]]$DeclaredSections)
+
+    foreach ($line in [regex]::Matches($FixtureText, $script:fixtureShapeLineRegex)) {
+        foreach ($m in [regex]::Matches($line.Value, '`([A-Z][A-Za-z ]{2,30})`')) {
+            $section = $m.Groups[1].Value.Trim()
+            if ($DeclaredSections -cnotcontains $section) {
+                Add-Issue "examples/golden-prompts.md asserts an output section '$section' that no SKILL.md declares"
+            }
         }
     }
 }
@@ -541,6 +564,7 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
     "scripts/tests/validate-skill-pack.tests.ps1",
     "scripts/tests/mutation-check.py",
+    "scripts/required-checks.txt",
     "examples/golden-prompts.md",
     "splunk-enrichment-query-builder/SKILL.md",
     "splunk-enrichment-query-builder/agents/openai.yaml",
@@ -577,6 +601,39 @@ if ($LASTEXITCODE -ne 0 -or $trackedFiles.Count -eq 0) {
     Write-Host "Skill pack validation failed:" -ForegroundColor Red
     foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Red }
     exit 1
+}
+
+# Check inventory. A check can be deleted together with the mutation that
+# covered it, which leaves the mutation suite self-consistent and the run green
+# while the check is simply gone -- a merge resolution did exactly that to 81 of
+# the 82 lines of the KQL provenance feature, and validation still passed.
+# Cross-checked in BOTH directions, like $skills against the filesystem.
+$manifestText = Read-Text $script:requiredChecksFile
+if ($manifestText.Length -eq 0) {
+    Add-Issue "$($script:requiredChecksFile) is missing or empty, so the validator's own check inventory cannot be verified"
+} else {
+    $declaredChecks = @(
+        $manifestText -split '\r?\n' |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_.Length -gt 0 -and -not $_.StartsWith("#") }
+    )
+    # Read this script's own source. The extraction pattern cannot match itself:
+    # 'Add-Issue' is followed by '[' here, not by the space its own [ \t]+ needs.
+    $ownSource = Read-Text "scripts/validate-skill-pack.ps1"
+    $ownMessages = @(
+        [regex]::Matches($ownSource, 'Add-Issue[ \t]+"([^"]*)"') |
+            ForEach-Object { $_.Groups[1].Value }
+    )
+    foreach ($declared in $declaredChecks) {
+        if ($ownMessages -cnotcontains $declared) {
+            Add-Issue "required-checks.txt lists a check the validator no longer performs: '$declared'"
+        }
+    }
+    foreach ($message in $ownMessages) {
+        if ($declaredChecks -cnotcontains $message) {
+            Add-Issue "the validator performs a check that is not listed in required-checks.txt: '$message'"
+        }
+    }
 }
 
 # Populate the sourcetype registry before the content loop reads anything.
@@ -714,6 +771,25 @@ foreach ($skill in $skills) {
     if (-not ($requiredFiles | Where-Object { $_ -clike "$skill/*" })) {
         Add-Issue "$skill has no entries in `$requiredFiles, so its files can be deleted without failing validation"
     }
+}
+
+# Golden-prompt fixtures are checked against the union of sections declared by
+# all skills rather than per skill: a fixture does not record which skill it
+# exercises, and inferring that from its prose would be guesswork. The union
+# still catches a fixture asserting a section that exists nowhere in the pack.
+$declaredSections = New-Object 'System.Collections.Generic.HashSet[string]'
+foreach ($skill in $skills) {
+    foreach ($m in [regex]::Matches((Read-Text "$skill/SKILL.md"), $script:skillSectionRegex)) {
+        $null = $declaredSections.Add($m.Groups[1].Value.Trim())
+    }
+}
+# A run that found no sections at all would pass this check vacuously, which
+# is how the first version of it behaved: it sat above the $skills definition,
+# iterated nothing, and reported every fixture section as undeclared.
+if ($declaredSections.Count -eq 0) {
+    Add-Issue "No output sections could be read from any SKILL.md, so golden-prompt shapes cannot be checked"
+} else {
+    Test-FixtureShapeSections (Read-Text "examples/golden-prompts.md") @($declaredSections)
 }
 
 foreach ($skill in $skills) {

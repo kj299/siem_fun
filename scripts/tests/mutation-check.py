@@ -500,6 +500,32 @@ check_mutation("raw-event search whose only _time is an aggregation",
 check_mutation("unbounded '| search' wearing a leading pipe",
                lambda: append(MDOC, f"\n{BT}spl\n| search index=firewall sourcetype=cisco:asa\n| stats count\n{BT}\n"),
                "no time bound")
+def _delete_a_check(fragment: str) -> None:
+    """Delete one Add-Issue call outright, as a bad merge would.
+
+    The manifest is what notices. Nothing else does: deleting a check together
+    with its mutation leaves section [E] self-consistent and the run green.
+    """
+    p = os.path.join(WORK, VAL)
+    text = open(p).read()
+    line = next(ln for ln in text.splitlines() if "Add-Issue" in ln and fragment in ln)
+    open(p, "w").write(text.replace(line + "\n", ""))
+
+
+check_mutation("a validator check deleted outright",
+               lambda: _delete_a_check("never invent Sentinel identifiers"),
+               "no longer performs")
+check_mutation("a check performed but absent from required-checks.txt",
+               lambda: edit("scripts/required-checks.txt",
+                            "$File names Sentinel table", "$File names SOMETHING ELSE"),
+               "not listed in required-checks.txt")
+check_mutation("gutted check inventory",
+               lambda: write("scripts/required-checks.txt", b""),
+               "check inventory cannot be verified")
+check_mutation("golden-prompt fixture asserting an undeclared output section",
+               lambda: append("examples/golden-prompts.md",
+                              "\n- Uses the invented shape: `Objective`, `Executive Summary`\n"),
+               "that no SKILL.md declares")
 check_mutation("gutted Sentinel table registry",
                lambda: write("splunk-sentinel-query-builder/references/sentinel-table-catalog.md", b""),
                "Sentinel table provenance cannot be checked")
