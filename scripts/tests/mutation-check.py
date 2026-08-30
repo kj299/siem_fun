@@ -395,6 +395,27 @@ def _undocument_lookup_field(field: str) -> None:
 check_mutation("lookup OUTPUT field absent from the documented field list",
                lambda: _undocument_lookup_field("classification"),
                "documented field list")
+check_mutation("three or more bare index= terms chained with OR",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=a OR index=b OR index=c earliest=-24h\n{BT}\n"),
+               "bare index= terms with OR")
+check_mutation("raw-event SPL search with no time bound",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=firewall sourcetype=cisco:asa\n| stats count by src\n{BT}\n"),
+               "no time bound")
+check_mutation("SKILL.md name that does not match its directory",
+               # Skills are loaded by this name, so a mismatch is a live routing
+               # break. The frontmatter check validates only the name's shape.
+               lambda: edit("splunk-enrichment-query-builder/SKILL.md",
+                            "name: splunk-enrichment-query-builder",
+                            "name: wrong-name"),
+               "does not match its directory")
+check_mutation(".env removed from .gitignore",
+               lambda: edit(".gitignore", "\n.env\n", "\n"),
+               "no bare '.env' entry")
+# Split so this file does not itself trip the check it is testing.
+_AWS_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"
+check_mutation("committed credential shape in a tracked file",
+               lambda: append("README.md", f"\n{_AWS_KEY}\n"),
+               "credentials must never be committed")
 check_mutation("broken relative markdown link",
                lambda: append("README.md", "\nSee [ghost](no-such-file.md).\n"),
                "broken local link")

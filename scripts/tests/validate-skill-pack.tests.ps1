@@ -430,6 +430,43 @@ try {
         Assert-NoIssues
     }
 
+    Test-Case "fenced blocks are split into language tag and body" {
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = $fence + "spl`nindex=a`n" + $fence + "`n`n" + $fence + "kql`nTable`n" + $fence + "`n"
+        $blocks = Get-FencedBlocks $doc
+        Assert-Equal @("spl", "kql") @($blocks | ForEach-Object { $_.Language })
+        Assert-True ($blocks[0].Body -match "index=a") "spl body must be captured"
+    }
+
+    Test-Case "three or more bare index= terms chained with OR is reported" {
+        Test-SplBlock "d.md" "index=a OR index=b OR index=c earliest=-24h"
+        Assert-IssueMatching "bare index= terms with OR"
+    }
+
+    Test-Case "an index/sourcetype-paired OR chain is not reported" {
+        # REGRESSION: multi-index-patterns.md documents this as the CORRECT
+        # pattern when schemas differ per index, and 'index IN (...)' cannot
+        # express it. A blanket OR-chain check flagged the repo's own guidance.
+        Test-SplBlock "d.md" "((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=bluecoat:x)) earliest=-24h"
+        Assert-NoIssues
+    }
+
+    Test-Case "a raw-event search with no time bound is reported" {
+        Test-SplBlock "d.md" "index=firewall sourcetype=cisco:asa`n| stats count by src"
+        Assert-IssueMatching "no time bound"
+    }
+
+    Test-Case "generating commands and head-bounded searches need no earliest" {
+        # '| tstats ...' is the documented discovery shape and runs unbounded;
+        # '| head' is the bound the schema-inspection snippets actually use.
+        Test-SplBlock "d.md" "| tstats count where index IN (a, b) by index, sourcetype"
+        Assert-NoIssues
+        Reset-ValidatorState
+        Test-SplBlock "d.md" "sourcetype=YOUR_SOURCETYPE | head 5 | table tag, eventtype"
+        Assert-NoIssues
+    }
+
     Test-Case "a lookup with no documented field list is not reported" {
         # Otherwise every undocumented lookup would produce noise and the check
         # would get switched off rather than fixed. The join key is exempt for

@@ -6,6 +6,11 @@ on:
   push:
     branches:
       - main
+  # A topic branch with no open PR runs nothing, and main can sit untouched for
+  # weeks, so nothing would notice runner-image or module drift until the next
+  # PR blamed it on that PR's diff. Weekly, Monday 06:00 UTC.
+  schedule:
+    - cron: "0 6 * * 1"
 
 # Separate jobs so a validator failure and a Python syntax error each get an
 # independent status check, and neither can mask the other.
