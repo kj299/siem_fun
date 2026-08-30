@@ -25,8 +25,8 @@
 | --- | --- | --- |
 | Grouped stats | `stats` | `summarize` |
 | Time series | `timechart` | `summarize ... by bin(TimeGenerated, ...)` |
-| Top values | `top` | `summarize count() by field | top` style ordering with `sort by` |
-| Rare values | `rare` | `summarize count() by field | sort by count_ asc` |
+| Top values | `top` | `summarize count() by field \| top` style ordering with `sort by` |
+| Rare values | `rare` | `summarize count() by field \| sort by count_ asc` |
 | Deduplicate | `dedup` | `summarize arg_max()` or `distinct` patterns |
 
 ## Enrichment and joins

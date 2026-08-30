@@ -514,6 +514,13 @@ check_mutation("uncatalogued sourcetype in a reference doc",
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=acme:invented:product\n| head 5\n{BT}\n"),
                "never invent Splunk identifiers")
 KDOC = "splunk-sentinel-query-builder/references/query-workflow.md"
+check_mutation("markdown table row with an unescaped pipe in a cell",
+               # GFM splits the row on it even inside an inline code span, so the
+               # cell count no longer matches the header. Two rows of
+               # splunk-to-kql-mapping.md shipped this way.
+               lambda: append(KDOC, "\n| A | B |\n| --- | --- |\n"
+                                    f"| x | {BT[0]}count() by f | top{BT[0]} |\n"),
+               "malformed table row")
 check_mutation("uncatalogued Sentinel table in a KQL block",
                lambda: append(KDOC, f"\n{BT}kql\nInventedTable\n| where TimeGenerated > ago(1d)\n{BT}\n"),
                "never invent Sentinel identifiers")

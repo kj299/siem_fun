@@ -92,7 +92,13 @@ On Splunk Cloud, `splunk_server` must be `local` or the search head hostname. Wi
 
 ## Enumerating indexes via tstats (no admin permissions required)
 
-Any user whose role grants read access to an index can enumerate it:
+Any user whose role grants read access to an index can enumerate it.
+
+`index=*` belongs in discovery only, and this is the one place it is right: you
+cannot enumerate indexes by naming them. Production queries use the explicit
+`index IN (...)` form below, which is what the query-design rules at the end of
+this file require. `index=*` also excludes internal indexes, so `_internal` and
+`_audit` will not appear here even for a role that can read them.
 
 ```spl
 | tstats count where index=* by index
@@ -114,7 +120,12 @@ Scoped to known indexes (faster and safer in production):
 | `_introspection` | Splunk performance metrics | Admin role only |
 | `_telemetry` | Anonymous usage telemetry | Not user-accessible |
 | `history` | Search job history | Owner only |
-| `summary` | Output from scheduled summary searches | User-accessible if role grants it |
+
+`summary` is deliberately absent from that table. It is not a system index: it
+has no leading underscore, carries no special access restriction, and is an
+ordinary `event` index that ships by default and happens to receive
+`sistats`/`sitimechart` output. Treat it like any other user index, and confirm
+it exists before querying it -- a Splunk Cloud stack may not have one.
 
 If a query must target `_internal` (for audit or performance investigation), use the Splunk Monitoring Console or request a platform-managed query through Splunk Support.
 

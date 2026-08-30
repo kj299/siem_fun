@@ -129,7 +129,12 @@ dedicated sourcetype.
 | --- | --- | --- |
 | `cisco:asa` | Network_Traffic, Authentication, Network_Sessions | src, dest, dest_port, action, transport, user, bytes_in, bytes_out, signature |
 
-Key message IDs: %ASA-6-106015 (deny by ACL), %ASA-5-111008 (user command), %ASA-6-716001 (VPN connect).
+Key message IDs: %ASA-4-106023 (deny by ACL), %ASA-6-106015 (deny TCP with no
+existing connection -- a state-table drop evaluated BEFORE the ACL, so it is
+not a policy denial), %ASA-5-111008 (user command), %ASA-6-716001 (VPN connect).
+
+Build "blocked by firewall policy" detections on 106023. A detection built on
+106015 returns connection-table drops and silently misses every real ACL deny.
 
 ### Cisco Firepower / FTD eStreamer
 
@@ -380,7 +385,7 @@ When the user provides index names but no sourcetypes, apply these heuristics be
 
 | Index name pattern | Likely sourcetypes | First step |
 | --- | --- | --- |
-| `*firewall*`, `*paloalto*`, `*pan*` | `pan:traffic`, `cisco:asa`, `fgt_traffic` | `tstats count where index=NAME by sourcetype` |
+| `*firewall*`, `*paloalto*`, `*pan*` | `pan:traffic`, `cisco:asa`, `fgt_traffic` | `\| tstats count where index=NAME by sourcetype` |
 | `*network*`, `*netflow*` | `netflow`, `pan:traffic` | same |
 | `*endpoint*`, `*edr*`, `*crowdstrike*` | `crowdstrike:events:sensor`, `XmlWinEventLog` | same |
 | `*proxy*`, `*web*`, `*zscaler*` | `zscalernss-web`, `bluecoat:proxysg:access:kv` | same |
@@ -392,4 +397,4 @@ When the user provides index names but no sourcetypes, apply these heuristics be
 | `*vuln*` | `tenable:io:vuln`, `qualys:hostDetection` | same |
 | `*windows*`, `*winevent*` | `WinEventLog`, `XmlWinEventLog` | same |
 
-Always confirm with `tstats count where index=NAME by sourcetype` before writing a production query.
+Always confirm with `| tstats count where index=NAME by sourcetype` before writing a production query.

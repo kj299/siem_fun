@@ -67,7 +67,7 @@ Before shipping a CIM-backed query, verify which sourcetypes feed the model:
 Spot-check normalized events:
 
 ```spl
-| datamodel Web search | head 5
+| datamodel Web Web search | head 5
 ```
 
 Check tagging when a sourcetype is missing from the model:
