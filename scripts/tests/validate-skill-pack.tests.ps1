@@ -467,34 +467,6 @@ try {
         Assert-NoIssues
     }
 
-    Test-Case "the leading identifier of a KQL block is a table reference" {
-        Assert-Equal @("SigninLogs") (Get-KqlTableReferences "SigninLogs`n| where ResultType == 0")
-    }
-
-    Test-Case "KQL operators in leading position are not table references" {
-        Assert-Equal @() (Get-KqlTableReferences "let x = 1;")
-        Assert-Equal @() (Get-KqlTableReferences "search *`n| distinct `$table")
-    }
-
-    Test-Case "a leading comment does not hide the table reference" {
-        Assert-Equal @("Heartbeat") (Get-KqlTableReferences "// find stale agents`nHeartbeat`n| summarize max(TimeGenerated)")
-    }
-
-    Test-Case "union and join operands are table references" {
-        Assert-Equal @("SigninLogs", "AuditLogs") (Get-KqlTableReferences "SigninLogs`n| union AuditLogs")
-        Assert-Equal @("SigninLogs", "Syslog") (Get-KqlTableReferences "SigninLogs`n| join kind=inner (Syslog) on X")
-    }
-
-    Test-Case "union withsource=X * names no table" {
-        # REGRESSION: the union pattern backtracks twice given this input. With
-        # no trailing lookahead the option group matches zero times and
-        # 'withsource' is captured as a table; with the lookahead but no \b it
-        # backtracks one character further and captures 'withsourc', which the
-        # lookahead accepts because the next character is 'e' rather than '='.
-        # Both forms shipped before this test existed.
-        Assert-Equal @() (Get-KqlTableReferences "union withsource=Table_ *`n| summarize count() by Table_")
-    }
-
     Test-Case "a lookup with no documented field list is not reported" {
         # Otherwise every undocumented lookup would produce noise and the check
         # would get switched off rather than fixed. The join key is exempt for

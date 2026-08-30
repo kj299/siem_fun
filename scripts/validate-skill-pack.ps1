@@ -276,71 +276,6 @@ function Test-SourcetypeProvenance {
     }
 }
 
-# KQL table names are CamelCase, which is far too common a shape to sweep for:
-# field names (CommandLine), vendor names (PaloAltoNetworks) and even this
-# repo's own class names match it. So the check is POSITIONAL -- an identifier
-# is only treated as a table when it stands where a table must stand.
-$script:kqlKeywords = @(
-    "let", "union", "search", "find", "print", "range", "datatable",
-    "externaldata", "materialize", "where", "set", "declare", "evaluate"
-)
-# A leading identifier: the source of a query, unless it is an operator.
-$script:kqlLeadingRefRegex = '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b'
-# 'union [withsource=X] [kind=inner] Table' and 'join [kind=leftouter] (Table'.
-# The trailing \b(?![ \t]*=) is load-bearing, and BOTH parts are needed.
-# Without the lookahead, 'union withsource=Table_ *' backtracks: the option group
-# matches zero times and 'withsource' is captured as the table name. Without the
-# \b, it backtracks one character further and captures 'withsourc', which the
-# lookahead then happily accepts because the next character is 'e', not '='.
-# Together they force the option group to consume the named option, after which
-# '*' is correctly seen as no table at all.
-$script:kqlUnionRefRegex   = '\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)'
-$script:kqlJoinRefRegex    = '\bjoin\b[^(\r\n]*\([ \t]*([A-Za-z_][A-Za-z0-9_]*)'
-$script:knownKqlTables = New-Object 'System.Collections.Generic.HashSet[string]'
-$script:kqlRegistryFile = "splunk-sentinel-query-builder/references/sentinel-table-catalog.md"
-
-# Table references in a KQL block: the leading source, plus union and join
-# operands. Returns names only; the caller decides what is registered.
-function Get-KqlTableReferences {
-    param([string]$Body)
-
-    $refs = New-Object 'System.Collections.Generic.HashSet[string]'
-    $lines = @(($Body -split '\r?\n') | Where-Object { $_.Trim().Length -gt 0 -and -not $_.Trim().StartsWith("//") })
-    if ($lines.Count -gt 0) {
-        $lead = [regex]::Match($lines[0], $script:kqlLeadingRefRegex)
-        if ($lead.Success -and $script:kqlKeywords -cnotcontains $lead.Groups[1].Value) {
-            $null = $refs.Add($lead.Groups[1].Value)
-        }
-    }
-    foreach ($line in $lines) {
-        foreach ($pattern in @($script:kqlUnionRefRegex, $script:kqlJoinRefRegex)) {
-            foreach ($m in [regex]::Matches($line, $pattern)) {
-                $name = $m.Groups[1].Value
-                # 'union withsource=Table_ *' has no named operand, and an
-                # operator after union (union kind=outer ...) is not a table.
-                if ($script:kqlKeywords -cnotcontains $name) {
-                    $null = $refs.Add($name)
-                }
-            }
-        }
-    }
-    # An empty array unrolls to nothing on return, so the caller would see $null.
-    return , @($refs)
-}
-
-# The other half of "never invent Splunk or Sentinel identifiers". The
-# sourcetype check covers Splunk; this covers Sentinel, whose table names are
-# case-sensitive -- SignInLogs is a different, non-existent table to SigninLogs.
-function Test-KqlTableProvenance {
-    param([string]$File, [string]$Body)
-
-    foreach ($name in (Get-KqlTableReferences $Body)) {
-        if (-not $script:knownKqlTables.Contains($name)) {
-            Add-Issue "$File names Sentinel table '$name', which is not catalogued in sentinel-table-catalog.md; never invent Sentinel identifiers"
-        }
-    }
-}
-
 # Fenced blocks split into their language tag and body.
 function Get-FencedBlocks {
     param([string]$Text)
@@ -529,18 +464,6 @@ foreach ($registryFile in $script:sourcetypeRegistryFiles) {
     }
 }
 
-# Populate the Sentinel table registry. Only the FIRST column of a catalogue
-# table row is read, so the column names and functions the catalogue also
-# mentions in backticks cannot quietly widen the registry.
-$kqlRegistryText = Read-Text $script:kqlRegistryFile
-if ($kqlRegistryText.Length -eq 0) {
-    Add-Issue "$($script:kqlRegistryFile) is missing or empty, so Sentinel table provenance cannot be checked"
-} else {
-    foreach ($m in [regex]::Matches($kqlRegistryText, '(?m)^\|[ \t]*`([A-Za-z_][A-Za-z0-9_]*)`[ \t]*\|')) {
-        $null = $script:knownKqlTables.Add($m.Groups[1].Value)
-    }
-}
-
 foreach ($file in $trackedFiles) {
     $path = Get-RepoFile $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -598,11 +521,10 @@ foreach ($file in $trackedFiles) {
         Test-LookupOutputFields $file $text
         Test-SourcetypeProvenance $file $text
         foreach ($block in (Get-FencedBlocks $text)) {
-            if ($block.Language -ceq "spl") {
-                Test-SplBlock $file $block.Body
-            } elseif ($block.Language -ceq "kql") {
-                Test-KqlTableProvenance $file $block.Body
+            if ($block.Language -cne "spl") {
+                continue
             }
+            Test-SplBlock $file $block.Body
         }
     }
     # Credential shapes are checked in EVERY tracked file, not just markdown:

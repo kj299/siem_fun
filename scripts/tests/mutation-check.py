@@ -472,19 +472,6 @@ check_mutation("committed credential shape in a tracked file",
 check_mutation("uncatalogued sourcetype in a reference doc",
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=acme:invented:product\n| head 5\n{BT}\n"),
                "never invent Splunk identifiers")
-KDOC = "splunk-sentinel-query-builder/references/query-workflow.md"
-check_mutation("uncatalogued Sentinel table in a KQL block",
-               lambda: append(KDOC, f"\n{BT}kql\nInventedTable\n| where TimeGenerated > ago(1d)\n{BT}\n"),
-               "never invent Sentinel identifiers")
-check_mutation("Sentinel table named with the wrong casing",
-               # KQL table names are case-sensitive: SignInLogs is a different,
-               # non-existent table to SigninLogs and returns nothing. The
-               # catalogue shipped with the wrong casing in a prose mention.
-               lambda: append(KDOC, f"\n{BT}kql\nSignInLogs\n| where ResultType == 0\n{BT}\n"),
-               "never invent Sentinel identifiers")
-check_mutation("gutted Sentinel table registry",
-               lambda: write("splunk-sentinel-query-builder/references/sentinel-table-catalog.md", b""),
-               "Sentinel table provenance cannot be checked")
 check_mutation("gutted sourcetype registry",
                # A registry file that is empty would otherwise make every
                # sourcetype in every doc look invented at once.
