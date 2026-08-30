@@ -188,7 +188,97 @@ function Assert-ListsEqual {
 # only OS that runs this script.
 $script:conflictMarkerRegex = '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))'
 $script:fencedBlockRegex    = '(?ms)^[ \t]*```.*?^[ \t]*```[ \t]*\r?$'
-$script:whereBooleanRegex   = '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b'
+# Single-backtick spans. Query text in these docs lives in fenced blocks OR in
+# table cells written as inline code, and a scanner that reads only fences
+# silently skips whole files -- splunk-to-kql-mapping.md has no fenced block at
+# all, and examples-and-troubleshooting.md puts SPL in ```text.
+$script:inlineCodeRegex     = '`([^`\r\n]+)`'
+# Deliberately unanchored and case-insensitive, and applied per code snippet
+# rather than to whole-file text. The previous '^\s*\| where' anchor missed
+# 'index=x | where noise=true' written on one line and every table cell, and the
+# case-sensitive compare missed 'riot=TRUE', which has the identical
+# silent-no-match bug. Scanning per snippet is what makes dropping the anchor
+# safe: prose that names '| where' and 'noise=true' in two separate code spans
+# (CLAUDE.md does exactly this) never forms a single matching string.
+# [^|\r\n]* keeps the match inside one clause on one line.
+$script:whereBooleanRegex   = '(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b'
+# The same pattern anchored to the start of a line, applied to raw file text.
+# The snippet scan alone would have LOST the original check's coverage of a bare
+# prose line beginning with '| where', so both input sets are kept and the
+# issue is raised if either fires.
+$script:whereBooleanLineRegex = '(?im)^[ \t]*\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b'
+# Every OUTPUT field of a documented lookup must appear in that lookup's
+# documented field list. The join KEY is intentionally not checked: these docs
+# treat the key field name as version-dependent and tell the reader to confirm
+# it with inputlookup, so requiring it to be listed would contradict them.
+$script:lookupUsageRegex    = '(?im)\|[ \t]*lookup[ \t]+(?<name>[A-Za-z_]\w*)\b[^|\r\n]*?\bOUTPUT(?:NEW)?[ \t]+(?<fields>[^|\r\n]+)'
+$script:backtickTokenRegex  = '`([A-Za-z_][A-Za-z0-9_.:]*)`'
+
+# Returns the code snippets of a markdown document: the body of every fenced
+# block (any language tag) plus every inline code span outside those blocks.
+function Get-CodeSnippets {
+    param([string]$Text)
+
+    $snippets = New-Object System.Collections.Generic.List[string]
+    foreach ($m in [regex]::Matches($Text, $script:fencedBlockRegex)) {
+        $snippets.Add($m.Value)
+    }
+    # Replace fenced blocks with a newline before hunting inline spans, so the
+    # fence markers themselves cannot pair up into a bogus span.
+    $outsideFences = [regex]::Replace($Text, $script:fencedBlockRegex, "`n")
+    foreach ($m in [regex]::Matches($outsideFences, $script:inlineCodeRegex)) {
+        $snippets.Add($m.Groups[1].Value)
+    }
+    # An empty array unrolls to nothing on return, so the caller would see $null.
+    return , $snippets.ToArray()
+}
+
+# A doc that lists a lookup's fields in one place and OUTPUTs a different field
+# in an example is internally inconsistent, and the query is the half a reader
+# copies. greynoise-integration.md shipped exactly that.
+function Test-LookupOutputFields {
+    param([string]$File, [string]$Text)
+
+    $bt = [string][char]96
+    $usages = [regex]::Matches($Text, $script:lookupUsageRegex)
+    if ($usages.Count -eq 0) {
+        return
+    }
+    # Split once, not once per usage.
+    $lines = $Text -split '\r?\n'
+    foreach ($m in $usages) {
+        $name = $m.Groups['name'].Value
+        $marker = "$bt$name$bt"
+
+        # The documented field list is every backticked identifier on a line that
+        # names this lookup in backticks. A query line names it unbackticked, so
+        # a usage can never document itself.
+        $documented = New-Object 'System.Collections.Generic.HashSet[string]'
+        foreach ($line in $lines) {
+            if (-not $line.Contains($marker)) {
+                continue
+            }
+            foreach ($t in [regex]::Matches($line, $script:backtickTokenRegex)) {
+                $null = $documented.Add($t.Groups[1].Value)
+            }
+        }
+        # The lookup has no documented field list here, so there is nothing to
+        # cross-check. Reporting would just be noise about an undocumented lookup.
+        if ($documented.Count -eq 0) {
+            continue
+        }
+
+        foreach ($raw in ($m.Groups['fields'].Value -split ',')) {
+            $field = $raw.Trim()
+            if ($field.Length -eq 0) {
+                continue
+            }
+            if (-not $documented.Contains($field)) {
+                Add-Issue "$File OUTPUTs '$field' from lookup '$name', which is not in that lookup's documented field list"
+            }
+        }
+    }
+}
 
 if ($FunctionsOnly) {
     return
@@ -284,8 +374,26 @@ foreach ($file in $trackedFiles) {
     # SPL 'where' uses eval semantics: an unquoted true/false is a field
     # reference, so the comparison silently matches nothing. Enforce the
     # quoting rule documented in greynoise-integration.md across all docs.
-    if ($file -like "*.md" -and $text -cmatch $script:whereBooleanRegex) {
-        Add-Issue "$file compares against unquoted true/false in an SPL where clause; quote the value (=`"true`")"
+    if ($file -like "*.md") {
+        # Cheap necessary condition first: every snippet is a substring of the
+        # file, so if the unanchored pattern matches nowhere in the raw text it
+        # cannot match a snippet either. Only then pay for snippet extraction,
+        # which is what rules out prose naming the two halves in separate spans.
+        if ($text -match $script:whereBooleanRegex) {
+            $whereHit = $text -match $script:whereBooleanLineRegex
+            if (-not $whereHit) {
+                foreach ($snippet in (Get-CodeSnippets $text)) {
+                    if ($snippet -match $script:whereBooleanRegex) {
+                        $whereHit = $true
+                        break
+                    }
+                }
+            }
+            if ($whereHit) {
+                Add-Issue "$file compares against unquoted true/false in an SPL where clause; quote the value (=`"true`")"
+            }
+        }
+        Test-LookupOutputFields $file $text
     }
 }
 

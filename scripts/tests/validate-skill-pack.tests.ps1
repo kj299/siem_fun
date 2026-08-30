@@ -371,9 +371,74 @@ try {
     }
 
     Test-Case "where-boolean regex flags unquoted booleans on CRLF too" {
-        Assert-True (("| where noise=true`r`n" -cmatch $script:whereBooleanRegex)) "CRLF unquoted boolean must be caught"
-        Assert-True (("| where noise=true`n"   -cmatch $script:whereBooleanRegex)) "LF unquoted boolean must be caught"
-        Assert-True (-not ('| where noise="true"' -cmatch $script:whereBooleanRegex)) "quoted form must pass"
+        Assert-True (("| where noise=true`r`n" -match $script:whereBooleanLineRegex)) "CRLF unquoted boolean must be caught"
+        Assert-True (("| where noise=true`n"   -match $script:whereBooleanLineRegex)) "LF unquoted boolean must be caught"
+        Assert-True (-not ('| where noise="true"' -match $script:whereBooleanLineRegex)) "quoted form must pass"
+    }
+
+    Test-Case "where-boolean regex catches mid-line and uppercase forms" {
+        # REGRESSION: the original pattern anchored on '^\s*\| where' and compared
+        # with -cmatch, so a single-line 'index=x | where noise=true' and an
+        # uppercase 'riot=TRUE' both evaded it. Both have the identical
+        # silent-no-match bug in SPL.
+        Assert-True ('index=x | where noise=true' -match $script:whereBooleanRegex) "mid-line form must be caught"
+        Assert-True ('| where riot=TRUE' -match $script:whereBooleanRegex) "uppercase value must be caught"
+        Assert-True (-not ('index=x | where noise=true' -match $script:whereBooleanLineRegex)) "the line-anchored pattern is what missed it"
+        Assert-True (-not ('| where a=1 | eval b=true' -match $script:whereBooleanRegex)) "a later command's boolean is not a where comparison"
+    }
+
+    Write-Host "Get-CodeSnippets and lookup OUTPUT fields" -ForegroundColor Cyan
+
+    Test-Case "code snippets cover fenced bodies and inline spans" {
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = $fence + "spl`nindex=a`n" + $fence + "`n`nprose " + $bt + "inline=1" + $bt + " tail`n"
+        $snips = Get-CodeSnippets $doc
+        Assert-True (($snips -join "|") -match "index=a") "fenced body must be captured"
+        Assert-True (($snips -join "|") -match "inline=1") "inline span must be captured"
+    }
+
+    Test-Case "two code spans on one prose line do not combine into a match" {
+        # REGRESSION: dropping the line anchor to catch table cells would flag
+        # CLAUDE.md's own statement of the rule, where '| where' and 'noise=true'
+        # sit in two separate spans. Scanning per snippet is what makes it safe.
+        $bt = [string][char]96
+        $doc = 'In ' + $bt + '| where' + $bt + ', quote booleans: ' + $bt +
+               'noise="true"' + $bt + ', not ' + $bt + 'noise=true' + $bt + '.'
+        $hit = $false
+        foreach ($s in (Get-CodeSnippets $doc)) {
+            if ($s -match $script:whereBooleanRegex) { $hit = $true }
+        }
+        Assert-True (-not $hit) "separate code spans must not combine into a match"
+    }
+
+    Test-Case "an OUTPUT field missing from the documented list is reported" {
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = '| ' + $bt + 'mylookup' + $bt + ' | fields ' + $bt + 'a' + $bt + ', ' + $bt + 'b' + $bt +
+               " |`n`n" + $fence + "spl`n| lookup mylookup key OUTPUT a, zzz`n" + $fence + "`n"
+        Test-LookupOutputFields "doc.md" $doc
+        Assert-IssueMatching "documented field list"
+    }
+
+    Test-Case "OUTPUT fields that are all documented raise no issue" {
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = '| ' + $bt + 'mylookup' + $bt + ' | fields ' + $bt + 'a' + $bt + ', ' + $bt + 'b' + $bt +
+               " |`n`n" + $fence + "spl`n| lookup mylookup key OUTPUT a, b`n" + $fence + "`n"
+        Test-LookupOutputFields "doc.md" $doc
+        Assert-NoIssues
+    }
+
+    Test-Case "a lookup with no documented field list is not reported" {
+        # Otherwise every undocumented lookup would produce noise and the check
+        # would get switched off rather than fixed. The join key is exempt for
+        # the same reason: these docs treat it as version-dependent on purpose.
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = $fence + "spl`n| lookup undocumented_lookup key OUTPUT a, zzz`n" + $fence + "`n"
+        Test-LookupOutputFields "doc.md" $doc
+        Assert-NoIssues
     }
 
     Write-Host "Assert-Exists and Assert-Contains" -ForegroundColor Cyan

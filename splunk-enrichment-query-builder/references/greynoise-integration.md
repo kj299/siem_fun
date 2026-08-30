@@ -66,7 +66,7 @@ The app ships lookups populated on a schedule:
 
 | Lookup | Type | Notes |
 | --- | --- | --- |
-| `greynoise_indicators` | KV store | Feed indicators; fields include `actor`, `first_seen`, `last_seen`, `classification`, `tags`, `cve`, `source_country`, `asn`. Populated by the `greynoise_feed` saved search; indicators with `last_seen` older than 7 days are purged. |
+| `greynoise_indicators` | KV store | Feed indicators; enrichment fields include `actor`, `first_seen`, `last_seen`, `classification`, `tags`, `cve`, `source_country`, `asn`. The IP key field is deliberately not named here because it varies by app version; confirm it with `inputlookup` before joining. Populated by the `greynoise_feed` saved search; indicators with `last_seen` older than 7 days are purged. |
 | `gn_scan_deployment_ip_lookup` | KV store | Results for IPs queried from your deployment; fields include `noise`, `RIOT`, `classification`, `business_service_intelligence`, `internet_scanner_intelligence`. |
 | `greynoise_ip_intel_malicious` / `_suspicious` / `_unknown` / `_benign` | CSV | Per-classification IP intel files. |
 
@@ -100,7 +100,7 @@ carries all of them:
 | --- | --- |
 | Quick check (`gnquick`) | `ip`, `noise` (boolean), `riot` (boolean) |
 | Context (`gncontext` / `gnip`) | `ip`, `first_seen`, `last_seen`, `seen`, `tags`, `actor`, `spoofable`, `classification`, `cve`, `bot`, `vpn`, plus `metadata.asn`, `metadata.city`, `metadata.country`, `metadata.country_code`, `metadata.organization` |
-| `greynoise_indicators` lookup | `actor`, `first_seen`, `last_seen`, `classification`, `tags`, `cve`, `source_country`, `asn` |
+| `greynoise_indicators` lookup | `actor`, `first_seen`, `last_seen`, `classification`, `tags`, `cve`, `source_country`, `asn`, plus a version-dependent IP key field (confirm with `inputlookup`; the examples above show it as `ip`) |
 
 When filtering on boolean-like fields (`noise`, `RIOT`) after a lookup join,
 quote the comparison value: `| where` uses eval semantics, so an unquoted
