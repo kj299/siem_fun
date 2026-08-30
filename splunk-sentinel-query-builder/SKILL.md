@@ -1,6 +1,6 @@
 ---
 name: splunk-sentinel-query-builder
-description: Build and optimize Splunk SPL and Microsoft Sentinel KQL for SIEM hunts, detections, triage, tuning, and SPL/KQL translation using real environment metadata and internal data-dictionary URLs. Use when the user wants query authoring, optimization, or translation in Splunk or Sentinel. Do not use for SIEM deployment, connector setup, platform administration, or generic security education without a query-building objective.
+description: Build and optimize Splunk SPL and Microsoft Sentinel KQL for SIEM hunts, detections, triage, tuning, and SPL/KQL translation using real environment metadata and internal data-dictionary URLs. Use when the user wants query authoring, optimization, or translation in Splunk or Sentinel. Do not use for SIEM deployment, connector setup, platform administration, generic security education without a query-building objective, or multi-index Splunk queries that need Splunkbase add-on schemas or GreyNoise enrichment (use splunk-enrichment-query-builder for those).
 ---
 
 # Splunk Sentinel Query Builder

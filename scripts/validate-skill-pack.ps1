@@ -213,6 +213,108 @@ $script:whereBooleanLineRegex = '(?im)^[ \t]*\|[ \t]*where\b[^|\r\n]*=[ \t]*(tru
 # it with inputlookup, so requiring it to be listed would contradict them.
 $script:lookupUsageRegex    = '(?im)\|[ \t]*lookup[ \t]+(?<name>[A-Za-z_]\w*)\b[^|\r\n]*?\bOUTPUT(?:NEW)?[ \t]+(?<fields>[^|\r\n]+)'
 $script:backtickTokenRegex  = '`([A-Za-z_][A-Za-z0-9_.:]*)`'
+# Language-tagged fenced blocks, so SPL-only rules can be applied to SPL only.
+$script:fencedWithLangRegex = '(?ms)^[ \t]*```(?<lang>[^\r\n]*)\r?\n(?<body>.*?)^[ \t]*```[ \t]*\r?$'
+# Three or more BARE index= terms chained with OR. Deliberately not any OR
+# chain: multi-index-patterns.md documents
+# '((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=...))' as
+# the correct pattern when schemas differ per index, which 'index IN (...)'
+# cannot express. Requiring the disjuncts to be bare index= terms spares it.
+$script:bareIndexOrRegex    = '(?i)index[ \t]*=[ \t]*[\w:*]+(?:[ \t]+OR[ \t]+index[ \t]*=[ \t]*[\w:*]+){2,}'
+# High-precision credential shapes only. A generic 'password=...' pattern would
+# fire on docs that discuss credentials, and a check that cries wolf gets turned
+# off rather than fixed.
+$script:secretPatterns = @(
+    @{ Name = "an AWS access key id";           Pattern = 'AKIA[0-9A-Z]{16}' },
+    @{ Name = "a GitHub token";                 Pattern = 'gh[pousr]_[A-Za-z0-9]{36}' },
+    @{ Name = "a Slack token";                  Pattern = 'xox[baprs]-[A-Za-z0-9-]{10,}' },
+    @{ Name = "a private key block";            Pattern = '-----BEGIN [A-Z ]*PRIVATE KEY-----' },
+    @{ Name = "a Splunk session key or bearer token"; Pattern = '(?i)\b(Splunk|Bearer)[ \t]+[A-Za-z0-9+/]{40,}={0,2}\b' }
+)
+
+# Colon-delimited lowercase tokens: the shape of a Splunk sourcetype. (?-i) is
+# explicit because sourcetypes are lowercase and CamelCase KQL table names must
+# not be swept in.
+$script:sourcetypeTokenRegex = '(?-i)\b[a-z][a-z0-9_]*(?::[a-z0-9_*]+){1,4}\b'
+# Provenance registry for sourcetypes, populated below from the two docs that
+# already exist to catalogue them. Deliberately NOT a new parallel list: a
+# second registry would drift from the catalogue, and "add it to the catalogue"
+# is the behaviour this check should be pushing authors toward anyway.
+$script:knownSourcetypes = New-Object 'System.Collections.Generic.HashSet[string]'
+$script:sourcetypeRegistryFiles = @(
+    "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md",
+    "splunk-sentinel-query-builder/references/cim-vendor-alignment.md"
+)
+
+# "Never invent Splunk or Sentinel identifiers" is this repo's highest-stakes
+# content rule and had no mechanical enforcement at all. Every sourcetype named
+# anywhere in the docs must resolve to the catalogue.
+function Test-SourcetypeProvenance {
+    param([string]$File, [string]$Text)
+
+    $reported = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($m in [regex]::Matches($Text, $script:sourcetypeTokenRegex)) {
+        $token = $m.Value
+        # host:port from a URL, not a sourcetype.
+        if ($token -match ':\d+$') {
+            continue
+        }
+        # Splunk's documented prefix for a federated index; the part after the
+        # colon is an index name, which is customer-defined by nature and so
+        # cannot be registered.
+        if ($token.StartsWith("federated:")) {
+            continue
+        }
+        if ($script:knownSourcetypes.Contains($token)) {
+            continue
+        }
+        # One issue per distinct token per file; a sourcetype used in six
+        # examples is one mistake, not six.
+        if ($reported.Add($token)) {
+            Add-Issue "$File names sourcetype '$token', which is not catalogued in splunkbase-app-catalog.md or cim-vendor-alignment.md; never invent Splunk identifiers"
+        }
+    }
+}
+
+# Fenced blocks split into their language tag and body.
+function Get-FencedBlocks {
+    param([string]$Text)
+
+    $blocks = New-Object System.Collections.Generic.List[object]
+    foreach ($m in [regex]::Matches($Text, $script:fencedWithLangRegex)) {
+        $blocks.Add([pscustomobject]@{
+            Language = $m.Groups['lang'].Value.Trim()
+            Body     = $m.Groups['body'].Value
+        })
+    }
+    # An empty array unrolls to nothing on return, so the caller would see $null.
+    return , $blocks.ToArray()
+}
+
+# SPL correctness rules that can be decided from the text alone.
+function Test-SplBlock {
+    param([string]$File, [string]$Body)
+
+    if ($Body -match $script:bareIndexOrRegex) {
+        Add-Issue "$File chains three or more bare index= terms with OR; use 'index IN (...)'"
+    }
+    # Time bounding. Only raw-event searches are checked: a generating command
+    # ('| tstats ...') is the documented discovery shape and is expected to run
+    # unbounded. '| head' is accepted as an alternative bound, which is how the
+    # schema-inspection snippets legitimately avoid earliest=.
+    $lines = @(($Body -split '\r?\n') | Where-Object { $_.Trim().Length -gt 0 })
+    if ($lines.Count -eq 0) {
+        return
+    }
+    if ($lines[0].Trim().StartsWith("|")) {
+        return
+    }
+    if ($Body -notmatch '(?i)\bearliest[ \t]*=' -and
+        $Body -notmatch '_time' -and
+        $Body -notmatch '(?i)\|[ \t]*head\b') {
+        Add-Issue "$File has a raw-event SPL search with no time bound; add earliest= (or bound it with | head)"
+    }
+}
 
 # Returns the code snippets of a markdown document: the body of every fenced
 # block (any language tag) plus every inline code span outside those blocks.
@@ -309,6 +411,7 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
     "scripts/tests/validate-skill-pack.tests.ps1",
     "scripts/tests/mutation-check.py",
+    "examples/golden-prompts.md",
     "splunk-enrichment-query-builder/SKILL.md",
     "splunk-enrichment-query-builder/agents/openai.yaml",
     "splunk-enrichment-query-builder/agents/claude-opus.yaml",
@@ -321,6 +424,13 @@ $requiredFiles = @(
 
 foreach ($file in $requiredFiles) {
     Assert-Exists $file
+}
+
+# The hard rule is "never commit secrets"; .env being gitignored is what makes
+# that survivable in practice, and nothing verified the entry stayed there.
+$gitignoreText = Read-Text ".gitignore"
+if ($gitignoreText -notmatch '(?m)^\.env[ \t]*\r?$') {
+    Add-Issue ".gitignore has no bare '.env' entry, so a real credentials file could be committed"
 }
 
 # quotepath=false emits non-ASCII filenames raw instead of C-quoted octal,
@@ -337,6 +447,20 @@ if ($LASTEXITCODE -ne 0 -or $trackedFiles.Count -eq 0) {
     Write-Host "Skill pack validation failed:" -ForegroundColor Red
     foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Red }
     exit 1
+}
+
+# Populate the sourcetype registry before the content loop reads anything.
+# A registry file that is missing or empty would make every sourcetype look
+# invented, so say that plainly instead of emitting one issue per token.
+foreach ($registryFile in $script:sourcetypeRegistryFiles) {
+    $registryText = Read-Text $registryFile
+    if ($registryText.Length -eq 0) {
+        Add-Issue "$registryFile is missing or empty, so sourcetype provenance cannot be checked"
+        continue
+    }
+    foreach ($m in [regex]::Matches($registryText, $script:sourcetypeTokenRegex)) {
+        $null = $script:knownSourcetypes.Add($m.Value)
+    }
 }
 
 foreach ($file in $trackedFiles) {
@@ -394,6 +518,20 @@ foreach ($file in $trackedFiles) {
             }
         }
         Test-LookupOutputFields $file $text
+        Test-SourcetypeProvenance $file $text
+        foreach ($block in (Get-FencedBlocks $text)) {
+            if ($block.Language -cne "spl") {
+                continue
+            }
+            Test-SplBlock $file $block.Body
+        }
+    }
+    # Credential shapes are checked in EVERY tracked file, not just markdown:
+    # a leaked key is as damaging in a yaml helper or a script as in a doc.
+    foreach ($secret in $script:secretPatterns) {
+        if ($text -match $secret.Pattern) {
+            Add-Issue "$file appears to contain $($secret.Name); credentials must never be committed"
+        }
     }
 }
 
@@ -443,8 +581,27 @@ foreach ($skill in $skills) {
         continue
     }
     Assert-Contains $skillFile '(?s)^---\s+name:\s+[-a-z0-9]+\s+description:\s+.+?\s+---' "valid skill frontmatter"
+    # The frontmatter check above validates only the SHAPE of the name. Skills
+    # are loaded by that name, so one that does not match its directory is a
+    # live routing break, and it passed validation until this check existed.
+    $nameMatch = [regex]::Match((Read-Text $skillFile), '(?m)^name:[ \t]+(?<n>[^\r\n]+?)[ \t]*\r?$')
+    if ($nameMatch.Success -and $nameMatch.Groups['n'].Value -cne $skill) {
+        Add-Issue "$skillFile declares name '$($nameMatch.Groups['n'].Value)', which does not match its directory '$skill'"
+    }
     Assert-Contains $skillFile '## Important' "top-level Important section"
     Assert-Contains $skillFile '## Inputs' "Inputs section"
+    # A description that says only when to USE a skill leaves the router to
+    # guess between overlapping skills. splunk-sentinel-query-builder's
+    # negatives did not exclude multi-index Splunk work, which is
+    # splunk-enrichment-query-builder's positive trigger, so a request naming
+    # two indexes matched both. Whether two descriptions genuinely overlap needs
+    # a reader; that every skill states its exclusions does not.
+    Assert-Contains $skillFile '(?m)^description:[^\r\n]*\bDo not use\b' "a 'Do not use' clause in its description"
+    # CLAUDE.md's "adding a new skill" checklist ends with "add fixtures to
+    # golden-prompts.md", which nothing enforced.
+    if (-not (Read-Text "examples/golden-prompts.md").Contains($skill)) {
+        Add-Issue "$skill has no fixture in examples/golden-prompts.md"
+    }
 }
 
 foreach ($skill in $skills) {

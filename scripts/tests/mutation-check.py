@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -170,6 +171,29 @@ def _tree_fingerprint() -> str:
 # skims to see how much ran.
 run_counts = {"validator": 0, "environment": 0}
 
+# Every expect_text passed to check_mutation, used by section [E] to prove that
+# no validator check shipped without a mutation behind it.
+expect_texts: list[str] = []
+
+# Add-Issue messages that deliberately have no mutation of their own, and why.
+# Keep this small: an entry here is a check nothing proves fires.
+UNMUTATED_MESSAGES = {
+    "$RelativePath is missing $Description":
+        "generic Assert-Contains template; every caller is covered by its own "
+        "mutation (## Inputs, the frontmatter shape, the 'Do not use' clause)",
+}
+
+# Messages whose literal text is too generic to match a mutation automatically,
+# mapped to the mutation that DOES cover them. Section [E] asserts each named
+# mutation actually ran, so this cannot become a way to wave a check through.
+COVERED_BY_NAME = {
+    "$($entry.Path) is missing $($entry.Section).$($entry.Key)":
+        "helper missing invocation.preferred_prompt entirely",
+}
+
+# Labels of the mutations that ran, for the COVERED_BY_NAME assertion above.
+ran_labels: list[str] = []
+
 
 def check_mutation(label: str, breaker, expect_text: str) -> None:
     """Break the repo, then assert the validator reports it AND says why.
@@ -179,6 +203,8 @@ def check_mutation(label: str, breaker, expect_text: str) -> None:
     check against an unmodified repo rather than as the harness bug it is.
     """
     run_counts["validator"] += 1
+    expect_texts.append(expect_text)
+    ran_labels.append(label)
     fresh()
     before = _tree_fingerprint()
     breaker()
@@ -226,6 +252,9 @@ if _baseline:
 
 print("\n[B] UNIT MUTATIONS - each REGRESSION test vs the bug it names")
 PY_MUTS = [
+    ("max-sourcetypes sampling slice",
+     "    for row in sourcetypes[: args.max_sourcetypes]:",
+     "    for row in sourcetypes:"),
     ("ipv6 brackets preserved in redaction",
      '        if ":" in host:', '        if False:'),
     ("redaction fails closed on unparseable url",
@@ -392,9 +421,94 @@ def _undocument_lookup_field(field: str) -> None:
     open(p, "w").write(text.replace(token, ""))
 
 
+def _drop_golden_fixtures(skill: str) -> None:
+    """Remove every mention of one skill from golden-prompts.md.
+
+    The check asks whether the skill is named at all, so deleting a single
+    fixture heading would leave the other mentions covering it.
+    """
+    p = os.path.join(WORK, "examples/golden-prompts.md")
+    text = open(p).read()
+    assert skill in text, f"{skill} is not mentioned in golden-prompts.md"
+    open(p, "w").write(text.replace(skill, "some-other-skill"))
+
+
+def _drop_yaml_section(rel: str, header: str) -> None:
+    """Delete a top-level YAML block: its header line and every indented line
+    under it, stopping at the next line that starts in column zero."""
+    p = os.path.join(WORK, rel)
+    lines = open(p).read().splitlines(keepends=True)
+    start = next(i for i, ln in enumerate(lines) if ln.startswith(header))
+    end = start + 1
+    while end < len(lines) and (lines[end].startswith((" ", "\t")) or not lines[end].strip()):
+        end += 1
+    open(p, "w").write("".join(lines[:start] + lines[end:]))
+
+
 check_mutation("lookup OUTPUT field absent from the documented field list",
                lambda: _undocument_lookup_field("classification"),
                "documented field list")
+check_mutation("three or more bare index= terms chained with OR",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=a OR index=b OR index=c earliest=-24h\n{BT}\n"),
+               "bare index= terms with OR")
+check_mutation("raw-event SPL search with no time bound",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=firewall sourcetype=cisco:asa\n| stats count by src\n{BT}\n"),
+               "no time bound")
+check_mutation("SKILL.md name that does not match its directory",
+               # Skills are loaded by this name, so a mismatch is a live routing
+               # break. The frontmatter check validates only the name's shape.
+               lambda: edit("splunk-enrichment-query-builder/SKILL.md",
+                            "name: splunk-enrichment-query-builder",
+                            "name: wrong-name"),
+               "does not match its directory")
+check_mutation(".env removed from .gitignore",
+               lambda: edit(".gitignore", "\n.env\n", "\n"),
+               "no bare '.env' entry")
+# Split so this file does not itself trip the check it is testing.
+_AWS_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"
+check_mutation("committed credential shape in a tracked file",
+               lambda: append("README.md", f"\n{_AWS_KEY}\n"),
+               "credentials must never be committed")
+check_mutation("uncatalogued sourcetype in a reference doc",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=acme:invented:product\n| head 5\n{BT}\n"),
+               "never invent Splunk identifiers")
+check_mutation("gutted sourcetype registry",
+               # A registry file that is empty would otherwise make every
+               # sourcetype in every doc look invented at once.
+               lambda: write("splunk-enrichment-query-builder/references/splunkbase-app-catalog.md", b""),
+               "provenance cannot be checked")
+check_mutation("registered skill with no golden-prompt fixture",
+               lambda: _drop_golden_fixtures("splunk-data-dictionary-builder"),
+               "no fixture in examples/golden-prompts.md")
+check_mutation("SKILL.md description with no 'Do not use' clause",
+               lambda: edit("splunk-data-dictionary-builder/SKILL.md",
+                            "Do not use for writing hunt queries",
+                            "Also fine for writing hunt queries"),
+               "'Do not use' clause")
+check_mutation("openai.yaml with no interface section at all",
+               lambda: _drop_yaml_section("splunk-enrichment-query-builder/agents/openai.yaml",
+                                          "interface:"),
+               "missing the interface section")
+check_mutation("openai.yaml with no policy section at all",
+               lambda: _drop_yaml_section("splunk-enrichment-query-builder/agents/openai.yaml",
+                                          "policy:"),
+               "missing the policy section")
+check_mutation("helper missing invocation.preferred_prompt entirely",
+               lambda: _drop_yaml_section("splunk-enrichment-query-builder/agents/claude-opus.yaml",
+                                          "invocation:"),
+               "is missing invocation.preferred_prompt")
+check_mutation("a helper file that is not valid YAML",
+               lambda: append("splunk-enrichment-query-builder/agents/openai.yaml",
+                              "\ninterface:\n  - broken\n   bad_indent: [unclosed\n"),
+               "is not valid YAML")
+check_mutation("CIM_SOURCETYPE_HINTS dictionary removed from the builder",
+               # The declaration is annotated, so it is not a bare '... = {'.
+               # The new name must not START with CIM_SOURCETYPE_HINTS either:
+               # the validator matches '^CIM_SOURCETYPE_HINTS[^=]*=', so a
+               # _RENAMED suffix still satisfies it and the mutation passed.
+               lambda: edit(SRC, "CIM_SOURCETYPE_HINTS: dict[str, list[str]] = {",
+                            "RENAMED_HINTS: dict[str, list[str]] = {"),
+               "missing the CIM_SOURCETYPE_HINTS dictionary")
 check_mutation("broken relative markdown link",
                lambda: append("README.md", "\nSee [ghost](no-such-file.md).\n"),
                "broken local link")
@@ -409,7 +523,10 @@ check_mutation("openai.yaml allow_implicit_invocation flipped",
 check_mutation("openai.yaml missing interface key",
                lambda: edit("splunk-enrichment-query-builder/agents/openai.yaml",
                             "  display_name:", "  display_name_x:"),
-               "missing interface.display_name")
+               # Deliberately includes the leading "is": section [E] matches the
+               # literal fragment of "$openaiPath is missing interface.$key"
+               # against this text, and that fragment carries the "is".
+               "is missing interface.display_name")
 check_mutation("invocation prompt drift across the three files",
                lambda: edit("splunk-enrichment-query-builder/agents/claude-opus.yaml",
                             '  preferred_prompt: "Use $', '  preferred_prompt: "Please use $'),
@@ -538,9 +655,67 @@ runtime = time.time() - t0
 budget = 20.0
 run_counts["environment"] += 1
 ok = runtime < budget
-print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s; ~1.8s on a Linux dev box)")
+# No reference figure here on purpose: a literal "~1.8s on a Linux dev box" has
+# now gone stale three times as checks were added, and a stale number in a
+# passing line is exactly the sort of quiet drift this script exists to catch.
+# The budget is the assertion; the measured value is context.
+print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s)")
 if not ok:
     fails.append("validator runtime regression")
+
+print("\n[E] CHECK COVERAGE - every Add-Issue in the validator has a mutation")
+# Section [C] is hand-maintained, so a new validator check could ship with no
+# mutation behind it and every existing case would still pass -- which is
+# exactly how the $requiredFiles guard shipped uncovered. Comparing the
+# validator's Add-Issue sites against the registered expect texts closes that
+# class instead of catching it one gap at a time in review.
+_val_src = open(os.path.join(REPO, VAL)).read()
+_messages = sorted(set(re.findall(r'Add-Issue\s+"([^"]*)"', _val_src)))
+_lowered = [e.lower() for e in expect_texts]
+
+
+def _covered(template: str) -> bool:
+    """Is this Add-Issue message reachable by some registered mutation?
+
+    Matching runs both ways because the message is a PowerShell interpolated
+    string. 'is missing interface.$key' can never contain the expect text
+    'missing interface.display_name', but its literal fragment
+    'is missing interface.' is contained BY it. Matching one way only reported
+    two checks as uncovered that are in fact exercised.
+    """
+    low = template.lower()
+    if any(e in low for e in _lowered):
+        return True
+    # The literal spans of the template, with the $var and $(...) holes removed.
+    fragments = [f.strip().lower()
+                 for f in re.split(r'\$\([^)]*\)|\$\w+', template)
+                 if len(f.strip()) >= 12]
+    return any(any(f in e for e in _lowered) for f in fragments)
+
+
+_uncovered = [m for m in _messages
+              if m not in UNMUTATED_MESSAGES
+              and m not in COVERED_BY_NAME
+              and not _covered(m)]
+# A COVERED_BY_NAME entry naming a mutation that does not exist would wave a
+# check through, so assert the named mutation actually ran.
+for _msg, _label in COVERED_BY_NAME.items():
+    if _label not in ran_labels:
+        print(f"  *** BAD MAPPING *** '{_label}' does not name a mutation that ran")
+        fails.append(f"COVERED_BY_NAME names no such mutation: {_label}")
+print(f"  {len(_messages)} Add-Issue messages, {len(expect_texts)} mutations, "
+      f"{len(UNMUTATED_MESSAGES)} exemption(s), {len(COVERED_BY_NAME)} named mapping(s)")
+for _m in _uncovered:
+    print(f"  *** UNCOVERED *** {_m[:88]}")
+    fails.append(f"no mutation covers: {_m[:60]}")
+# A stale exemption is a silent gap too: it would keep excusing a message that
+# no longer exists, or one that has since gained a mutation.
+for _m in list(UNMUTATED_MESSAGES) + list(COVERED_BY_NAME):
+    if _m not in _messages:
+        print(f"  *** STALE EXEMPTION *** {_m[:70]}")
+        fails.append(f"stale exemption: {_m[:60]}")
+if not _uncovered:
+    print("  OK   every Add-Issue message is reachable by a registered mutation")
 
 _rmtree(WORK)
 print("\n" + "=" * 74)

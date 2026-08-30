@@ -21,10 +21,11 @@ python3 scripts/tests/mutation-check.py
 ```
 
 CI runs all three on every pull request and on pushes to `main` (two jobs:
-`validate` on windows-latest, `python` on ubuntu-latest). A push to a topic
-branch with no open PR runs nothing, so run them locally before pushing;
-several bugs in this repo's history reached CI only because a local run was
-skipped.
+`validate` on windows-latest, `python` on ubuntu-latest), plus weekly on a
+schedule so runner-image and module drift surfaces on its own rather than as a
+mystery failure in whatever PR happens to come next. A push to a topic branch
+with no open PR runs nothing, so run them locally before pushing; several bugs
+in this repo's history reached CI only because a local run was skipped.
 
 ## Hard rules
 
@@ -34,7 +35,14 @@ skipped.
 - **Never commit secrets.** `.env` is gitignored; `.env.example` is the
   template. Never ask the user to paste a token or password into chat -- the
   dictionary builder reads credentials from environment variables or CLI
-  arguments only.
+  arguments only. The validator enforces two halves of this: `.gitignore` must
+  keep its bare `.env` entry, and no tracked file may contain a high-precision
+  credential shape (AWS key id, GitHub/Slack token, private key block, or a
+  Splunk/Bearer value of 40+ base64 characters). Generic `password=` patterns
+  are deliberately not matched -- a check that fires on docs discussing
+  credentials gets switched off rather than fixed. A test that needs a literal
+  credential shape must split it (`"AKIA" + "..."`) so the file does not trip
+  the check it is testing.
 - **Never invent Splunk or Sentinel identifiers.** Index names, sourcetypes,
   table names, and field names in reference docs must be real. If a schema is
   uncertain, the skills are supposed to emit a discovery query instead of
@@ -88,7 +96,18 @@ Breaking any of these fails CI, so change them deliberately:
   requiring it to be listed would contradict them.
 - Lookup joins leave nulls for unmatched rows. A filter meant to keep unmatched
   rows needs `isnull(...)` or `coalesce(field, "")`, or it silently drops them.
-- Prefer `index IN (a, b)` over `OR` chains, and always bound time first.
+  **Not machine-checked, and deliberately so:** whether a filter is *meant* to
+  keep unmatched rows cannot be read off the text, so any check would be
+  guessing at intent. Reviewer's job, not the validator's.
+- Prefer `index IN (a, b)` over `OR` chains. The validator reports three or more
+  **bare** `index=` terms chained with `OR`. It does not report
+  `((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=...))`,
+  which is the documented correct pattern when schemas differ per index and is
+  something `index IN (...)` cannot express.
+- Always bound time first. The validator reports an `spl` block whose first line
+  is a raw-event search carrying no `earliest=`, no `_time`, and no `| head`.
+  Blocks starting with a generating command (`| tstats ...`) are exempt: that is
+  the documented discovery shape and runs unbounded on purpose.
 
 ## Language traps that have actually broken this repo
 
@@ -124,6 +143,20 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   them passing rather than adjusting the expectation, and read the comment
   before touching one.
 - Fix a bug in the validator or the dictionary builder, add a case.
+- `MainEndToEndTests` drives `main()` against a stubbed `SplunkClient.request`,
+  which is the single network chokepoint (`get` and `search_oneshot` both funnel
+  through it). Every other Python test covers a parser in isolation; without
+  this one the path that actually runs -- argument handling, the `discover_*`
+  sequence, CIM hint attachment, the sampling slice, and the assembled JSON --
+  was exercised nowhere, and CI only byte-compiles the builder.
+- Section `[E]` of the mutation script asserts that every `Add-Issue` message in
+  the validator is reachable by some registered mutation. Section `[C]` is
+  hand-maintained, so a new check could otherwise ship with nothing proving it
+  fires -- which is exactly how the `$requiredFiles` guard shipped uncovered. A
+  message whose literal text is too generic to match automatically goes in
+  `COVERED_BY_NAME` pointing at the mutation that covers it, and that mutation
+  is asserted to have run; one with genuinely no mutation goes in
+  `UNMUTATED_MESSAGES` with a reason. Both are checked for staleness.
 - When a test is meant to catch a specific bug, reintroduce that bug and
   confirm the test fails. Several tests here looked correct but proved nothing
   until that check was run. `scripts/tests/mutation-check.py` automates this and
@@ -141,6 +174,9 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 
 1. `SKILL.md` with frontmatter (`name` matching the directory, `description`
    stating when to use and when not to), plus `## Important` and `## Inputs`.
+   The validator compares `name` to the directory case-sensitively: skills are
+   loaded by that name, so a mismatch is a live routing break rather than a
+   cosmetic one.
 2. `agents/openai.yaml`, `agents/claude-opus.yaml`, `agents/codex-gpt-5.4.yaml`
    following the parity rules above.
 3. `references/` for detail; keep `SKILL.md` short and link out.
