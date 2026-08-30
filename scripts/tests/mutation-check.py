@@ -655,7 +655,11 @@ runtime = time.time() - t0
 budget = 20.0
 run_counts["environment"] += 1
 ok = runtime < budget
-print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s; ~1.8s on a Linux dev box)")
+# No reference figure here on purpose: a literal "~1.8s on a Linux dev box" has
+# now gone stale three times as checks were added, and a stale number in a
+# passing line is exactly the sort of quiet drift this script exists to catch.
+# The budget is the assertion; the measured value is context.
+print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s)")
 if not ok:
     fails.append("validator runtime regression")
 
