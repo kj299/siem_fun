@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create a reusable Codex skill that can:
+Create a reusable skill, for both Claude and Codex, that can:
 
 - understand a target SIEM environment before writing queries
 - generate and optimize Splunk SPL and Microsoft Sentinel KQL
@@ -118,12 +118,18 @@ For Sentinel:
 
 ### Phase 5: Detection-ready outputs
 
-Teach the skill to emit one of four answer shapes:
+Teach the skill to emit one of the five answer shapes SKILL.md declares
+(`query`, `detection`, `translation`, `optimization`, `discovery`):
 
-- quick query
-- optimized query with comments
-- translation from SPL to KQL or KQL to SPL
-- detection package with query, logic notes, tuning notes, and validation steps
+- `query`: quick hunt, triage, or dashboard-panel query
+- `detection`: query plus threshold and tuning notes
+- `translation`: SPL to KQL or KQL to SPL
+- `optimization`: rewritten query plus what changed and why it is cheaper
+- `discovery`: checklist plus starter query when the schema is missing
+
+`discovery` is not optional garnish: Phase 1 above builds the whole skill around
+a discovery pass before any production query, so a list that omits it
+contradicts the phase it depends on.
 
 ### Phase 6: Validation checklist
 
@@ -156,6 +162,7 @@ siem_fun/
 |   |-- tests/
 |   |   |-- mutation-check.py
 |   |   `-- validate-skill-pack.tests.ps1
+|   |-- required-checks.txt
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/

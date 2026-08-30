@@ -525,6 +525,28 @@ try {
         Assert-Equal @("InventedTable") (Get-KqlTableReferences "let recent = InventedTable;`nrecent | take 5")
     }
 
+    Test-Case "a tracked file missing from the layout tree is reported" {
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = $fence + "text`nsiem_fun/`n|-- README.md`n" + $fence + "`n"
+        Test-LayoutTree "README.md" $doc @("README.md", "scripts/required-checks.txt")
+        Assert-IssueMatching "required-checks.txt"
+    }
+
+    Test-Case "a layout tree listing every tracked file is silent" {
+        $bt = [string][char]96
+        $fence = $bt * 3
+        $doc = $fence + "text`nsiem_fun/`n|-- README.md`n|-- scripts/`n|   ``-- a.ps1`n" + $fence + "`n"
+        Test-LayoutTree "README.md" $doc @("README.md", "scripts/a.ps1")
+        Assert-NoIssues
+    }
+
+    Test-Case "a document with no layout tree is reported, not skipped" {
+        # Otherwise deleting the tree would silence the check rather than fail it.
+        Test-LayoutTree "README.md" "no tree here" @("README.md")
+        Assert-IssueMatching "no siem_fun/ layout tree"
+    }
+
     Test-Case "an unescaped pipe inside a table cell is reported" {
         $bt = [string][char]96
         $doc = "| A | B |`n| --- | --- |`n| x | " + $bt + "count() by f | top" + $bt + " |"

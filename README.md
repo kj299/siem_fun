@@ -39,6 +39,7 @@ siem_fun/
 |   |-- tests/
 |   |   |-- mutation-check.py
 |   |   `-- validate-skill-pack.tests.ps1
+|   |-- required-checks.txt
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/
@@ -260,19 +261,23 @@ For lower token use, paste only the relevant section of the data dictionary inst
 
 ## What good output should look like
 
-A strong answer should usually include:
+The exact sections are declared in each skill's `SKILL.md`, which is the single
+source of truth; this is a reader's summary, not a second definition. For the
+query builder the default shape is:
 
-1. A clear objective
-2. The query
-3. Short assumptions
-4. Performance or tuning notes
-5. Validation guidance
+1. `Objective`
+2. `Query`
+3. `Why efficient`
+4. `Assumptions`
+5. `Data dictionary notes`
+6. `Tuning`
+7. `Validate`
 
-For short prompts, the best answer is usually just:
+For short prompts (`Output style: short`), the answer is just:
 
-- objective
-- query
-- assumptions
+- `Objective`
+- `Query`
+- `Assumptions`
 
 ## Tips for better results
 
@@ -323,6 +328,9 @@ To get the best results with either model:
 - [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
 - [scripts/tests/validate-skill-pack.tests.ps1](scripts/tests/validate-skill-pack.tests.ps1): unit tests for the validator's helper functions, including regression coverage for past defects
+- [scripts/tests/mutation-check.py](scripts/tests/mutation-check.py): reintroduces each bug the tests exist for and asserts it is caught, and proves every validator check fires
+- [scripts/required-checks.txt](scripts/required-checks.txt): the inventory of checks the validator must perform, cross-checked against it in both directions
+- [splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py](splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py): the helper script the Local Setup section runs
 - [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
 - [splunk-data-dictionary-builder/references/workflow.md](splunk-data-dictionary-builder/references/workflow.md): discovery strategy, CIM coverage, and query-builder handoff
 - [splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py](splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py): unit tests for the dictionary builder helpers, including regression coverage for past defects
