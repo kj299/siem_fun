@@ -773,6 +773,15 @@ expect("relative -Root", "PASSED" if "validation passed" in r.stdout else "FAILE
 
 fresh()
 shutil.copy(os.path.join(WORK, "README.md"), os.path.join(WORK, "weird[1].md"))
+# The fixture file is tracked, so the layout-tree check now wants it listed.
+# Register it in both trees rather than weakening the assertion: the case exists
+# to prove a '[' in a filename does not abort the run under
+# ErrorActionPreference=Stop, and "PASSED" is the sharpest way to say that.
+for _doc in ("README.md", "QUERY_SKILL_PLAN.md"):
+    _p = os.path.join(WORK, _doc)
+    _t = open(_p).read()
+    assert "siem_fun/\n" in _t, f"no layout tree root in {_doc}"
+    open(_p, "w").write(_t.replace("siem_fun/\n", "siem_fun/\n|-- weird[1].md\n", 1))
 sh("git add -A")
 expect("tracked 'weird[1].md' does not abort", validator(), "PASSED")
 
