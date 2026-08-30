@@ -165,6 +165,12 @@ def _tree_fingerprint() -> str:
     return h.hexdigest()
 
 
+# Counts for the summary line. Derived, not hand-maintained: a literal here goes
+# stale the moment a check is added, and the summary is the only line a reader
+# skims to see how much ran.
+run_counts = {"validator": 0, "environment": 0}
+
+
 def check_mutation(label: str, breaker, expect_text: str) -> None:
     """Break the repo, then assert the validator reports it AND says why.
 
@@ -172,6 +178,7 @@ def check_mutation(label: str, breaker, expect_text: str) -> None:
     returns False and changes nothing, which would otherwise read as a MISSED
     check against an unmodified repo rather than as the harness bug it is.
     """
+    run_counts["validator"] += 1
     fresh()
     before = _tree_fingerprint()
     breaker()
@@ -389,6 +396,40 @@ check_mutation("$skills entry with no SKILL.md on disk",
                lambda: edit(VAL, '    "splunk-enrichment-query-builder"\n)',
                             '    "splunk-enrichment-query-builder",\n    "splunk-phantom-skill"\n)'),
                "no SKILL.md on disk")
+def _drop_required_entries(prefix: str) -> None:
+    """Remove EVERY $requiredFiles entry for one skill.
+
+    The guard fires only when a skill has no entries at all, so dropping a single
+    line proves nothing -- the first draft of this mutation did exactly that.
+    """
+    p = os.path.join(WORK, VAL)
+    lines = open(p).read().splitlines(keepends=True)
+
+    # Scope every edit below to the $requiredFiles array. An earlier draft
+    # searched the whole file for the closing ")" and found the one belonging to
+    # param() on line 7, stripped a comma there, and broke the script's parse --
+    # so the validator failed for the wrong reason and the mutation scored as a
+    # bogus catch.
+    start = next(i for i, ln in enumerate(lines)
+                 if ln.startswith("$requiredFiles = @("))
+    end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == ")")
+
+    body = [ln for ln in lines[start + 1:end] if f'"{prefix}/' not in ln]
+    assert len(body) < end - start - 1, f"no $requiredFiles entries matched {prefix}"
+    # This skill's entries end the array, so removing them strands a trailing
+    # comma on the new last element, which is also a parse error.
+    body[-1] = body[-1].rstrip().rstrip(",") + "\n"
+
+    open(p, "w").write("".join(lines[:start + 1] + body + lines[end:]))
+
+
+check_mutation("skill with no $requiredFiles entries",
+               # A skill on disk AND in $skills AND in $helperChecks, but absent
+               # from $requiredFiles: its files could then be deleted without the
+               # run noticing. Nothing else covered this guard, so breaking it
+               # left every other mutation passing.
+               lambda: _drop_required_entries("splunk-enrichment-query-builder"),
+               "no entries in")
 check_mutation("helperChecks entry missing for a registered skill",
                lambda: edit(VAL, '    @{ Skill = "splunk-data-dictionary-builder";',
                             '    @{ Skill = "splunk-absent-from-skills";'),
@@ -401,6 +442,7 @@ print("\n[D] ENVIRONMENT - conditions CI sees that a Linux dev box does not")
 
 
 def expect(label: str, got: str, want: str) -> None:
+    run_counts["environment"] += 1
     ok = got == want
     print(f"  {'OK  ' if ok else '*** FAIL ***'} {label:38} got={got} want={want}")
     if not ok:
@@ -455,6 +497,7 @@ runtime = time.time() - t0
 # regression being guarded was a ~37x blow-up (a per-byte pipeline), so a real
 # one lands far above this; a tight bound here would just flake.
 budget = 20.0
+run_counts["environment"] += 1
 ok = runtime < budget
 print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s; ~1.2s on a Linux dev box)")
 if not ok:
@@ -468,5 +511,5 @@ if fails:
         print(f"  - {f}")
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell unit, "
-      f"17 validator checks, 6 environment)")
+      f"{run_counts['validator']} validator checks, {run_counts['environment']} environment)")
 sys.exit(0)
