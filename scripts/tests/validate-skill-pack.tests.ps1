@@ -539,6 +539,41 @@ try {
         Assert-Equal @() (Get-KqlTableReferences "union withsource=Table_ *`n| summarize count() by Table_")
     }
 
+    Test-Case "a fixture section no skill declares is reported" {
+        $bt = [string][char]96
+        $line = '- Uses the optimization shape: ' + $bt + 'Objective' + $bt + ', ' + $bt + 'Executive Summary' + $bt
+        Test-FixtureShapeSections $line @("Objective", "Query")
+        Assert-IssueMatching "Executive Summary"
+    }
+
+    Test-Case "a fixture section is found on a CRLF line too" {
+        # REGRESSION: the shape-line pattern ended in a bare '$', which on a
+        # CRLF checkout never matches, because [^\r\n]* stops at the \r while
+        # '$' matches only before the \n. The check was a complete no-op on
+        # Windows, which is the only OS that runs the validator in CI, and the
+        # Linux suite passed throughout.
+        $bt = [string][char]96
+        $crlf = '- Uses the shape: ' + $bt + 'Executive Summary' + $bt + "`r`n"
+        Test-FixtureShapeSections $crlf @("Objective")
+        Assert-IssueMatching "Executive Summary"
+    }
+
+    Test-Case "a fixture naming only declared sections is silent" {
+        $bt = [string][char]96
+        $line = '- Uses the optimization shape: ' + $bt + 'Objective' + $bt + ', ' + $bt + 'What changed' + $bt
+        Test-FixtureShapeSections $line @("Objective", "What changed")
+        Assert-NoIssues
+    }
+
+    Test-Case "backticked names outside a shape line are not treated as sections" {
+        # Fixtures backtick datasets and fields constantly; only the bullet that
+        # asserts a SHAPE is making a claim about output sections.
+        $bt = [string][char]96
+        $line = '- Keeps ' + $bt + 'SigninLogs' + $bt + ' and ' + $bt + 'ResultType' + $bt
+        Test-FixtureShapeSections $line @("Objective")
+        Assert-NoIssues
+    }
+
     Test-Case "a lookup with no documented field list is not reported" {
         # Otherwise every undocumented lookup would produce noise and the check
         # would get switched off rather than fixed. The join key is exempt for

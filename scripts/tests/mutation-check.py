@@ -500,6 +500,55 @@ check_mutation("raw-event search whose only _time is an aggregation",
 check_mutation("unbounded '| search' wearing a leading pipe",
                lambda: append(MDOC, f"\n{BT}spl\n| search index=firewall sourcetype=cisco:asa\n| stats count\n{BT}\n"),
                "no time bound")
+def _delete_a_check(fragment: str) -> None:
+    """Delete one Add-Issue call outright, as a bad merge would.
+
+    The manifest is what notices. Nothing else does: deleting a check together
+    with its mutation leaves section [E] self-consistent and the run green.
+    """
+    p = os.path.join(WORK, VAL)
+    text = open(p).read()
+    line = next(ln for ln in text.splitlines() if "Add-Issue" in ln and fragment in ln)
+    open(p, "w").write(text.replace(line + "\n", ""))
+
+
+check_mutation("a validator check deleted outright",
+               lambda: _delete_a_check("never invent Sentinel identifiers"),
+               "no longer performs")
+check_mutation("a check performed but absent from required-checks.txt",
+               lambda: edit("scripts/required-checks.txt",
+                            "$File names Sentinel table", "$File names SOMETHING ELSE"),
+               "not listed in required-checks.txt")
+check_mutation("gutted check inventory",
+               lambda: write("scripts/required-checks.txt", b""),
+               "check inventory cannot be verified")
+def _flatten_skill_output_shapes() -> None:
+    """Turn every numbered list item in every SKILL.md into a bullet.
+
+    That makes the declared-section list unreadable, which is what the guard
+    exists for: the first version of the fixture-shape check sat above the
+    $skills definition, read nothing, and would have passed vacuously had the
+    fixtures happened to name no sections.
+    """
+    changed = 0
+    for skill in ("splunk-sentinel-query-builder", "splunk-enrichment-query-builder",
+                  "splunk-data-dictionary-builder"):
+        p = os.path.join(WORK, skill, "SKILL.md")
+        text = open(p).read()
+        flattened = re.sub(r"(?m)^\d+\.[ \t]+", "- ", text)
+        if flattened != text:
+            open(p, "w").write(flattened)
+            changed += 1
+    assert changed, "no SKILL.md had a numbered output shape to flatten"
+
+
+check_mutation("no output sections readable from any SKILL.md",
+               _flatten_skill_output_shapes,
+               "No output sections could be read")
+check_mutation("golden-prompt fixture asserting an undeclared output section",
+               lambda: append("examples/golden-prompts.md",
+                              "\n- Uses the invented shape: `Objective`, `Executive Summary`\n"),
+               "that no SKILL.md declares")
 check_mutation("gutted Sentinel table registry",
                lambda: write("splunk-sentinel-query-builder/references/sentinel-table-catalog.md", b""),
                "Sentinel table provenance cannot be checked")

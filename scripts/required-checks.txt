@@ -1,0 +1,59 @@
+# Every check the validator must perform, one Add-Issue message per line.
+#
+# Cross-checked against scripts/validate-skill-pack.ps1 in BOTH directions on
+# every run: a line here with no matching Add-Issue fails, and an Add-Issue with
+# no line here fails.
+#
+# This exists because a check can be deleted together with the mutation that
+# covered it, leaving the suite self-consistent and the run green while the
+# check is simply gone. That is not hypothetical: a merge resolution dropped 81
+# of the 82 lines of the KQL provenance feature, and validation still passed
+# because the catalogue it read was still a required file.
+#
+# Messages are matched EXACTLY as they appear in the source, PowerShell
+# interpolation and all. Rewording a message means updating this file, which is
+# the point: the edit should be deliberate.
+#
+# Lines starting with # are comments. Blank lines are ignored.
+Missing required file: $RelativePath
+$RelativePath is missing $Description
+$RelativePath is not valid YAML: $($_.Exception.Message)
+Helper drift: $Name is declared in neither file
+Helper drift: $Name is declared in only one of the two files
+Helper drift detected in $Name
+$File names sourcetype '$token', which is not catalogued in splunkbase-app-catalog.md or cim-vendor-alignment.md; never invent Splunk identifiers
+$File names Sentinel table '$name', which is not catalogued in sentinel-table-catalog.md; never invent Sentinel identifiers
+examples/golden-prompts.md asserts an output section '$section' that no SKILL.md declares
+$File chains three or more bare index= terms with OR; use 'index IN (...)'
+$File has a raw-event SPL search with no time bound; add earliest= (or bound it with | head)
+$File OUTPUTs '$field' from lookup '$name', which is not in that lookup's documented field list
+.gitignore has no bare '.env' entry, so a real credentials file could be committed
+Could not enumerate tracked files (git ls-files exit $LASTEXITCODE, $($trackedFiles.Count) files); refusing to report success on an unread repository
+$($script:requiredChecksFile) is missing or empty, so the validator's own check inventory cannot be verified
+required-checks.txt lists a check the validator no longer performs: '$declared'
+the validator performs a check that is not listed in required-checks.txt: '$message'
+$registryFile is missing or empty, so sourcetype provenance cannot be checked
+$($script:kqlRegistryFile) is missing or empty, so Sentinel table provenance cannot be checked
+$file contains a non-ASCII or control byte 0x$($b.ToString('X2'))
+$file contains a conflict marker
+$file compares against unquoted true/false in an SPL where clause; quote the value (=`
+$file appears to contain $($secret.Name); credentials must never be committed
+$dir has a SKILL.md but is not registered in the validator's `$skills list, so none of the per-skill checks run against it
+`$skills lists '$registered', which has no SKILL.md on disk
+$skill has no entries in `$requiredFiles, so its files can be deleted without failing validation
+No output sections could be read from any SKILL.md, so golden-prompt shapes cannot be checked
+$skillFile declares name '$($nameMatch.Groups['n'].Value)', which does not match its directory '$skill'
+$skill has no fixture in examples/golden-prompts.md
+$openaiPath is missing the interface section
+$openaiPath is missing interface.$key
+$openaiPath is missing the policy section
+$openaiPath must set policy.allow_implicit_invocation to false
+$skill has no helperChecks entry, so its helper parity would go unchecked
+helperChecks references '$configured', which is not in the skills list
+$claudePath is missing behavior.trigger_tuning
+$codexPath is missing behavior.packaging_rules
+$($entry.Path) is missing $($entry.Section).$($entry.Key)
+Invocation prompt drift in ${skill}: openai default_prompt and helper preferred_prompt values differ
+build_splunk_dictionary.py is missing the CIM_SOURCETYPE_HINTS dictionary
+CIM hint sourcetype '$sourcetype' is not documented in cim-vendor-alignment.md
+$file has broken local link: $target

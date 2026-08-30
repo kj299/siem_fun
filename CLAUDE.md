@@ -43,10 +43,25 @@ in this repo's history reached CI only because a local run was skipped.
   credentials gets switched off rather than fixed. A test that needs a literal
   credential shape must split it (`"AKIA" + "..."`) so the file does not trip
   the check it is testing.
-- **Never invent Splunk or Sentinel identifiers.** Index names, sourcetypes,
-  table names, and field names in reference docs must be real. If a schema is
-  uncertain, the skills are supposed to emit a discovery query instead of
-  guessing, and the docs should model that. Two halves of this are mechanical:
+- **Never invent Splunk or Sentinel identifiers.** Index names, sourcetypes, and
+  table names in reference docs must be real. If a schema is uncertain, the
+  skills are supposed to emit a discovery query instead of guessing, and the
+  docs should model that.
+
+  **Field names are deliberately looser, and this file used to contradict the
+  skills on it.** `splunk-sentinel-query-builder/SKILL.md` states the rule the
+  pack actually ships: the dataset rule covers indexes, sourcetypes and tables,
+  *not* fields, and a well-known field of a named dataset may be used even when
+  it is absent from a supplied field list, provided it is named in
+  `Assumptions` so the user can drop it (`EventCode=1` on a Sysmon sourcetype is
+  the usual case). Fields are therefore not mechanically checked: there is no
+  exhaustive per-dataset field registry to check against, and the catalogues
+  list *key* fields as a highlight rather than a schema, so a check built on
+  them would reject correct queries. The lookup `OUTPUT` rule below is the one
+  field-level case that *is* decidable, because there the doc supplies both
+  halves itself.
+
+  Two parts of the identifier rule are mechanical:
   - **Sourcetypes** must be catalogued in
     [splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md)
     or [cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md).
@@ -91,6 +106,21 @@ Breaking any of these fails CI, so change them deliberately:
   ignored, so illustrative examples are safe.
 - Adding a file that must not disappear? Add it to `$requiredFiles` in the
   validator.
+- Every `Add-Issue` message must be listed verbatim in
+  [scripts/required-checks.txt](scripts/required-checks.txt), and every line
+  there must match a live `Add-Issue`. Cross-checked in both directions on every
+  run, so **adding a check means adding a line, and rewording a message means
+  editing one.** This exists because a check can be deleted together with the
+  mutation that covered it, which leaves the mutation suite self-consistent and
+  the run green while the check is simply gone. Not hypothetical: a merge
+  resolution dropped 81 of the 82 lines of the KQL provenance feature and
+  validation still passed, because the catalogue it read was still a required
+  file. Section `[E]` of the mutation script cannot catch that -- it only proves
+  the checks that *exist* have mutations.
+- Golden-prompt fixtures assert output shapes. A section named in backticks on a
+  fixture's "shape" bullet must be declared by some `SKILL.md`. Checked against
+  the union across skills, because a fixture does not record which skill it
+  exercises and inferring that from its prose would be guesswork.
 
 ## SPL in reference docs
 
