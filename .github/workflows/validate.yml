@@ -31,6 +31,15 @@ jobs:
         shell: pwsh
         run: ./scripts/validate-skill-pack.ps1
 
+      # Proves the REGRESSION tests actually catch their bugs and that every
+      # validator check fires. Needs both pwsh and python, so it runs here where
+      # powershell-yaml is already installed. Without this the harness would sit
+      # in the repo unrun, which is the failure mode it exists to prevent.
+      - name: Mutation-check the suites and the validator's checks
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: python scripts/tests/mutation-check.py
+
   python:
     runs-on: ubuntu-latest
     steps:

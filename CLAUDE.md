@@ -115,8 +115,12 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 - Fix a bug in the validator or the dictionary builder, add a case.
 - When a test is meant to catch a specific bug, reintroduce that bug and
   confirm the test fails. Several tests here looked correct but proved nothing
-  until that check was run. `scripts/tests/mutation-check.py` automates this for
-  the cases already covered; add yours to it when you add a REGRESSION test.
+  until that check was run. `scripts/tests/mutation-check.py` automates this and
+  runs in CI: it covers every REGRESSION test in both suites, every check the
+  validator performs, and the CI-only environment cases. Add a case to it when
+  you add a REGRESSION test or a validator check; if a test genuinely cannot be
+  mutated, record it in that script's `NOT_MUTATABLE` with the reason rather
+  than leaving a silent gap.
 - The validator runs only on windows-latest, which checks out CRLF while your
   tree is almost certainly LF. Two checks were silently no-ops on CI for exactly
   this reason. The mutation-check script exercises a CRLF checkout, a UTF-8 BOM,
@@ -132,8 +136,10 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 4. Register it in the validator: add the directory to `$skills` (every per-skill
    check iterates that list), its files to `$requiredFiles`, and an entry to
    `$helperChecks` declaring which sections its helper pair must share. The
-   validator cross-checks `$skills` against `$helperChecks`, so missing one is
-   reported rather than silently skipping checks.
+   validator cross-checks `$skills` against `$helperChecks`, against
+   `$requiredFiles`, and against the directories on disk that hold a SKILL.md,
+   in both directions -- so a skill registered nowhere is reported rather than
+   silently receiving zero checks.
 5. Update the layout trees and file lists in [README.md](README.md) and
    [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md).
 6. Add fixtures to [examples/golden-prompts.md](examples/golden-prompts.md).

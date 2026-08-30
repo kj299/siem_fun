@@ -298,6 +298,35 @@ $skills = @(
     "splunk-enrichment-query-builder"
 )
 
+# $skills is hand-maintained, so cross-check it against the filesystem in BOTH
+# directions. A skill directory that exists on disk but is registered nowhere
+# receives zero checks and passes green -- the failure this guard exists to
+# prevent. A registered skill with no SKILL.md means the list has gone stale.
+# A directory is a skill if and only if it holds a SKILL.md.
+$onDisk = @(
+    Get-ChildItem -LiteralPath $Root -Directory |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "SKILL.md") -PathType Leaf } |
+        ForEach-Object { $_.Name }
+)
+foreach ($dir in $onDisk) {
+    if ($skills -cnotcontains $dir) {
+        Add-Issue "$dir has a SKILL.md but is not registered in the validator's `$skills list, so none of the per-skill checks run against it"
+    }
+}
+foreach ($registered in $skills) {
+    if ($onDisk -cnotcontains $registered) {
+        Add-Issue "`$skills lists '$registered', which has no SKILL.md on disk"
+    }
+}
+
+# Required-file coverage: a registered skill whose files were never added to
+# $requiredFiles can have them deleted without the run noticing.
+foreach ($skill in $skills) {
+    if (-not ($requiredFiles | Where-Object { $_ -clike "$skill/*" })) {
+        Add-Issue "$skill has no entries in `$requiredFiles, so its files can be deleted without failing validation"
+    }
+}
+
 foreach ($skill in $skills) {
     $skillFile = "$skill/SKILL.md"
     # A missing file is already reported by Assert-Exists; content checks on it

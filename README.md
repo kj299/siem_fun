@@ -153,7 +153,8 @@ Run the dictionary builder unit tests (stdlib only, nothing to install):
 python -m unittest discover -s splunk-data-dictionary-builder/tests
 ```
 
-Mutation-check both suites (reintroduces each bug and asserts its test goes red):
+Mutation-check the suites and the validator (reintroduces each bug and asserts
+it is caught; also runs in CI):
 
 ```bash
 python3 scripts/tests/mutation-check.py
