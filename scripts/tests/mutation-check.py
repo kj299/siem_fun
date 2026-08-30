@@ -527,6 +527,16 @@ check_mutation("uncatalogued sourcetype in a reference doc",
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=acme:invented:product\n| head 5\n{BT}\n"),
                "never invent Splunk identifiers")
 KDOC = "splunk-sentinel-query-builder/references/query-workflow.md"
+check_mutation("reference file absent from a helper's references map",
+               # The pair-parity check only proves the two helpers agree; both
+               # were equally wrong about sentinel-table-catalog.md for two days.
+               lambda: edit("splunk-sentinel-query-builder/agents/claude-opus.yaml",
+                            '  sentinel_table_catalog: "../references/sentinel-table-catalog.md"\n', ""),
+               "does not list references/")
+check_mutation("helper listing a reference file that does not exist",
+               lambda: edit("splunk-sentinel-query-builder/agents/codex-gpt-5.4.yaml",
+                            "../references/model-guidance.md", "../references/ghost.md"),
+               "which does not exist")
 check_mutation("tracked file absent from the layout trees",
                # CLAUDE.md requires updating both trees when a file is added,
                # and required-checks.txt was missing from both for a day.

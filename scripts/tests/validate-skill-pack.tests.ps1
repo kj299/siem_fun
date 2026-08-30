@@ -525,6 +525,24 @@ try {
         Assert-Equal @("InventedTable") (Get-KqlTableReferences "let recent = InventedTable;`nrecent | take 5")
     }
 
+    Test-Case "a reference file missing from a helper's map is reported" {
+        $doc = "references:`n  primary_skill: `"../SKILL.md`"`n  a: `"../references/a.md`"`n"
+        Test-HelperReferences "skill" "skill/agents/claude-opus.yaml" $doc @("a.md", "b.md")
+        Assert-IssueMatching "does not list references/b.md"
+    }
+
+    Test-Case "a helper listing a reference that does not exist is reported" {
+        $doc = "references:`n  a: `"../references/a.md`"`n  ghost: `"../references/ghost.md`"`n"
+        Test-HelperReferences "skill" "skill/agents/claude-opus.yaml" $doc @("a.md")
+        Assert-IssueMatching "which does not exist"
+    }
+
+    Test-Case "a helper map matching the reference directory is silent" {
+        $doc = "references:`n  primary_skill: `"../SKILL.md`"`n  a: `"../references/a.md`"`n  b: `"../references/b.md`"`n"
+        Test-HelperReferences "skill" "skill/agents/claude-opus.yaml" $doc @("a.md", "b.md")
+        Assert-NoIssues
+    }
+
     Test-Case "a tracked file missing from the layout tree is reported" {
         $bt = [string][char]96
         $fence = $bt * 3

@@ -493,6 +493,32 @@ function Test-LayoutTree {
     }
 }
 
+# A helper's references: map tells the model which files exist for progressive
+# disclosure, so a reference file missing from it is one the model never learns
+# about. Nothing compared the map to the directory: the pair-parity check only
+# proves the two helpers agree, and they were both equally wrong about
+# sentinel-table-catalog.md for two days after it was added.
+$script:helperReferenceRegex = '(?m)^[ \t]+\w+:[ \t]*"\.\./references/([^"]+)"'
+
+function Test-HelperReferences {
+    param([string]$Skill, [string]$HelperPath, [string]$HelperText, [string[]]$ReferenceFiles)
+
+    $listed = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($m in [regex]::Matches($HelperText, $script:helperReferenceRegex)) {
+        $null = $listed.Add($m.Groups[1].Value)
+    }
+    foreach ($reference in $ReferenceFiles) {
+        if (-not $listed.Contains($reference)) {
+            Add-Issue "$HelperPath does not list references/$reference, so the model is never pointed at it"
+        }
+    }
+    foreach ($entry in $listed) {
+        if ($ReferenceFiles -cnotcontains $entry) {
+            Add-Issue "$HelperPath lists references/$entry, which does not exist"
+        }
+    }
+}
+
 # Fenced blocks split into their language tag and body.
 function Get-FencedBlocks {
     param([string]$Text)
@@ -846,6 +872,23 @@ foreach ($registered in $skills) {
 foreach ($skill in $skills) {
     if (-not ($requiredFiles | Where-Object { $_ -clike "$skill/*" })) {
         Add-Issue "$skill has no entries in `$requiredFiles, so its files can be deleted without failing validation"
+    }
+}
+
+# Each helper's references: map against the skill's actual reference directory.
+foreach ($skill in $skills) {
+    $referenceDir = Get-RepoFile "$skill/references"
+    if (-not (Test-Path -LiteralPath $referenceDir -PathType Container)) {
+        continue
+    }
+    $referenceFiles = @(
+        Get-ChildItem -LiteralPath $referenceDir -Filter "*.md" -File | ForEach-Object { $_.Name }
+    )
+    foreach ($helper in @("claude-opus.yaml", "codex-gpt-5.4.yaml")) {
+        $helperPath = "$skill/agents/$helper"
+        if (Test-RepoFile $helperPath) {
+            Test-HelperReferences $skill $helperPath (Read-Text $helperPath) $referenceFiles
+        }
     }
 }
 
