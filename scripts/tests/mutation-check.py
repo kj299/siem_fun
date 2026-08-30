@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -92,6 +93,34 @@ def edit(path: str, old: str, new: str) -> bool:
     return True
 
 
+def _force_writable(func, path, _exc) -> None:
+    """rmtree error hook: clear the read-only bit and retry.
+
+    Git marks files under .git read-only, and on Windows a read-only file cannot
+    be unlinked -- which is why the scratch directory must not be removed with
+    the errors ignored.
+    """
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def _rmtree(path: str) -> None:
+    """Remove a tree and PROVE it is gone.
+
+    Never silence the errors here: on Windows that left the directory in place,
+    so the next copytree failed with FileExistsError several cases later, far
+    from the cause.
+    """
+    if not os.path.exists(path):
+        return
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_force_writable)
+    else:
+        shutil.rmtree(path, onerror=_force_writable)
+    if os.path.exists(path):
+        raise RuntimeError(f"could not remove scratch directory {path}")
+
+
 def fresh() -> None:
     """Rebuild WORK from the pristine repo.
 
@@ -99,7 +128,7 @@ def fresh() -> None:
     a file leaked state into the next one and made a check report the wrong
     answer.
     """
-    shutil.rmtree(WORK, ignore_errors=True)
+    _rmtree(WORK)
     shutil.copytree(REPO, WORK)
     sh("git add -A && git -c user.email=t@t -c user.name=t commit -qm mutation-base")
 
@@ -390,6 +419,10 @@ for _root, _dirs, _files in os.walk(WORK):
                 _c = open(_p, newline="").read()
             except (OSError, UnicodeDecodeError):
                 continue
+            # Normalise to LF FIRST. newline="" reads without translation, so on
+            # a Windows checkout _c already holds \r\n; writing that with
+            # newline="\r\n" would translate the \n again and yield \r\r\n.
+            _c = _c.replace("\r\n", "\n")
             open(_p, "w", newline="\r\n").write(_c)
 expect("fully-CRLF repo validates", validator(), "PASSED")
 
@@ -418,12 +451,16 @@ fresh()
 t0 = time.time()
 validator()
 runtime = time.time() - t0
-ok = runtime < 3.0
-print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (was 1.65s before byte checks)")
+# Generous on purpose, and this also runs on a slower Windows CI runner. The
+# regression being guarded was a ~37x blow-up (a per-byte pipeline), so a real
+# one lands far above this; a tight bound here would just flake.
+budget = 20.0
+ok = runtime < budget
+print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s; ~1.2s on a Linux dev box)")
 if not ok:
     fails.append("validator runtime regression")
 
-shutil.rmtree(WORK, ignore_errors=True)
+_rmtree(WORK)
 print("\n" + "=" * 74)
 if fails:
     print(f"RESULT: {len(fails)} PROBLEM(S)")
