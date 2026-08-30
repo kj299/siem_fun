@@ -18,6 +18,7 @@ from __future__ import annotations
 import http.client
 import json
 import sys
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
@@ -504,6 +505,162 @@ class TestSplunkClientRequest(unittest.TestCase):
             self._client().search_oneshot("| tstats count", "-24h")
         self.assertIn("count=0", captured["data"].decode("utf-8"))
 
+class MainEndToEndTests(unittest.TestCase):
+    """Drive main() end to end against a stubbed transport.
+
+    Every other test here covers a parser in isolation. Nothing exercised the
+    path that actually runs: argument handling, the discover_* sequence, CIM
+    hint attachment, the sampling slice, and the assembled JSON document. A
+    break anywhere in that wiring was invisible to the suite, and the builder
+    is never executed in CI either -- it is only byte-compiled.
+
+    SplunkClient.request is the single network chokepoint (get() and
+    search_oneshot() both funnel through it), so stubbing it covers every call
+    without touching the discovery functions themselves.
+    """
+
+    INDEXES = {
+        "entry": [
+            {"name": "firewall", "content": {"disabled": "0"}},
+            {"name": "proxy", "content": {"disabled": "0"}},
+            # Splunk returns booleans as strings; a disabled index must not be
+            # inventoried as if it held data.
+            {"name": "retired", "content": {"disabled": "1"}},
+        ]
+    }
+    DATAMODELS = {
+        "entry": [
+            {
+                "name": "Network_Traffic",
+                "content": {
+                    "acceleration": '{"enabled": true}',
+                    "description": '{"objects": [{"objectName": "All_Traffic", "parentName": "BaseEvent"}]}',
+                },
+            }
+        ]
+    }
+
+    def _fake_request(self, path, data=None):
+        self.calls.append(path)
+        if path.startswith("/services/data/indexes"):
+            return self.INDEXES
+        if path.startswith("/services/datamodel/model"):
+            return self.DATAMODELS
+        if path == "/services/search/jobs/oneshot":
+            search = data["search"]
+            if "tstats count where" in search:
+                return {
+                    "results": [
+                        {"index": "firewall", "sourcetype": "cisco:asa", "count": "900"},
+                        {"index": "proxy", "sourcetype": "squid:access", "count": "10"},
+                    ]
+                }
+            if search.startswith("search index="):
+                return {
+                    "results": [
+                        {"src": "10.0.0.1", "action": "blocked", "_time": "2026-01-01T00:00:00Z",
+                         "_bkt": "internal-should-be-dropped"}
+                    ]
+                }
+            return {"results": []}
+        return {"entry": []}
+
+    def _run_main(self, extra_args=()):
+        self.calls = []
+        out = Path(self.tmp.name) / "dict.json"
+        argv = ["build_splunk_dictionary.py",
+                "--base-url", "https://splunk.example:8089",
+                "--token", "fake-token-for-test",
+                "--no-cim-coverage",
+                "--output", str(out), *extra_args]
+        with mock.patch.object(bsd.SplunkClient, "request", self._fake_request), \
+                mock.patch.object(sys, "argv", argv):
+            code = bsd.main()
+        return code, json.loads(out.read_text(encoding="utf-8"))
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_main_writes_a_complete_dictionary(self):
+        code, doc = self._run_main()
+        self.assertEqual(0, code)
+        # Discovery ran in order and reached every endpoint.
+        self.assertTrue(any(p.startswith("/services/data/indexes") for p in self.calls))
+        self.assertTrue(any(p.startswith("/services/datamodel/model") for p in self.calls))
+        # The disabled index is excluded; the rest are inventoried.
+        self.assertEqual(["firewall", "proxy"], doc["indexes"])
+        self.assertEqual(["Network_Traffic"], [m["name"] for m in doc["cim_datamodels"]])
+        self.assertEqual([], doc["cim_coverage"])
+        self.assertEqual([], doc["warnings"])
+        self.assertIn("permission_notes", doc)
+
+    def test_main_attaches_cim_hints_and_samples_fields(self):
+        _, doc = self._run_main()
+        by_sourcetype = {row["sourcetype"]: row for row in doc["sourcetypes"]}
+        # cisco:asa is a CIM_SOURCETYPE_HINTS key, so main() must decorate it.
+        self.assertEqual(["Network_Traffic", "Network_Sessions", "Authentication"],
+                         by_sourcetype["cisco:asa"]["cim_datamodel_hints"])
+        sample = next(s for s in doc["field_samples"] if s["sourcetype"] == "cisco:asa")
+        self.assertEqual(1, sample["sample_count"])
+        self.assertIn("src", sample["fields"])
+        # Internal fields are dropped, except the two that are kept on purpose.
+        self.assertNotIn("_bkt", sample["fields"])
+        self.assertIn("_time", sample["fields"])
+
+    def test_main_honours_the_sampling_slice(self):
+        # REGRESSION: sourcetypes are sorted by volume so that this slice takes
+        # the highest-volume ones. Sampling must stop at --max-sourcetypes while
+        # the full inventory is still reported.
+        _, doc = self._run_main(["--max-sourcetypes", "1"])
+        self.assertEqual(2, len(doc["sourcetypes"]))
+        self.assertEqual(1, len(doc["field_samples"]))
+        self.assertEqual("cisco:asa", doc["field_samples"][0]["sourcetype"])
+
+    def test_main_redacts_credentials_from_the_recorded_url(self):
+        self.calls = []
+        out = Path(self.tmp.name) / "d.json"
+        argv = ["build_splunk_dictionary.py",
+                "--base-url", "https://user:secret@splunk.example:8089",
+                "--token", "fake-token-for-test", "--no-cim-coverage",
+                "--output", str(out)]
+        with mock.patch.object(bsd.SplunkClient, "request", self._fake_request), \
+                mock.patch.object(sys, "argv", argv):
+            self.assertEqual(0, bsd.main())
+        doc = json.loads(out.read_text(encoding="utf-8"))
+        self.assertNotIn("secret", doc["splunk_base_url"])
+
+    def test_main_rejects_missing_credentials_without_calling_out(self):
+        argv = ["build_splunk_dictionary.py", "--base-url", "https://splunk.example:8089",
+                "--output", str(Path(self.tmp.name) / "unused.json")]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(bsd.SplunkClient, "request",
+                                  lambda *a, **k: self.fail("must not reach the network")):
+            self.assertEqual(2, bsd.main())
+
+    def test_a_failed_search_is_recorded_and_does_not_abort_the_run(self):
+        # A transport failure mid-run must degrade to a warning, not discard
+        # everything already collected.
+        # Takes the client as its first argument: this is a plain function, so
+        # patching it onto the class makes it a descriptor and it is re-bound on
+        # lookup. self._fake_request elsewhere is already a bound method, which
+        # is not re-bound, so it takes no client argument.
+        def flaky(_client, path, data=None):
+            if path == "/services/search/jobs/oneshot" and "tstats" not in data["search"]:
+                raise RuntimeError("Splunk read error for /oneshot: TimeoutError()")
+            return self._fake_request(path, data)
+
+        out = Path(self.tmp.name) / "d.json"
+        argv = ["build_splunk_dictionary.py", "--base-url", "https://splunk.example:8089",
+                "--token", "fake-token-for-test", "--no-cim-coverage", "--output", str(out)]
+        self.calls = []
+        with mock.patch.object(bsd.SplunkClient, "request", flaky), \
+                mock.patch.object(sys, "argv", argv):
+            self.assertEqual(0, bsd.main())
+        doc = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(["firewall", "proxy"], doc["indexes"])
+        self.assertTrue(any("read error" in w for w in doc["warnings"]))
+        self.assertTrue(all(s["sample_count"] == 0 for s in doc["field_samples"]))
 
 if __name__ == "__main__":
     unittest.main()

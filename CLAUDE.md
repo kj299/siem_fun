@@ -143,6 +143,20 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   them passing rather than adjusting the expectation, and read the comment
   before touching one.
 - Fix a bug in the validator or the dictionary builder, add a case.
+- `MainEndToEndTests` drives `main()` against a stubbed `SplunkClient.request`,
+  which is the single network chokepoint (`get` and `search_oneshot` both funnel
+  through it). Every other Python test covers a parser in isolation; without
+  this one the path that actually runs -- argument handling, the `discover_*`
+  sequence, CIM hint attachment, the sampling slice, and the assembled JSON --
+  was exercised nowhere, and CI only byte-compiles the builder.
+- Section `[E]` of the mutation script asserts that every `Add-Issue` message in
+  the validator is reachable by some registered mutation. Section `[C]` is
+  hand-maintained, so a new check could otherwise ship with nothing proving it
+  fires -- which is exactly how the `$requiredFiles` guard shipped uncovered. A
+  message whose literal text is too generic to match automatically goes in
+  `COVERED_BY_NAME` pointing at the mutation that covers it, and that mutation
+  is asserted to have run; one with genuinely no mutation goes in
+  `UNMUTATED_MESSAGES` with a reason. Both are checked for staleness.
 - When a test is meant to catch a specific bug, reintroduce that bug and
   confirm the test fails. Several tests here looked correct but proved nothing
   until that check was run. `scripts/tests/mutation-check.py` automates this and

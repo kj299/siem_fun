@@ -232,6 +232,50 @@ $script:secretPatterns = @(
     @{ Name = "a Splunk session key or bearer token"; Pattern = '(?i)\b(Splunk|Bearer)[ \t]+[A-Za-z0-9+/]{40,}={0,2}\b' }
 )
 
+# Colon-delimited lowercase tokens: the shape of a Splunk sourcetype. (?-i) is
+# explicit because sourcetypes are lowercase and CamelCase KQL table names must
+# not be swept in.
+$script:sourcetypeTokenRegex = '(?-i)\b[a-z][a-z0-9_]*(?::[a-z0-9_*]+){1,4}\b'
+# Provenance registry for sourcetypes, populated below from the two docs that
+# already exist to catalogue them. Deliberately NOT a new parallel list: a
+# second registry would drift from the catalogue, and "add it to the catalogue"
+# is the behaviour this check should be pushing authors toward anyway.
+$script:knownSourcetypes = New-Object 'System.Collections.Generic.HashSet[string]'
+$script:sourcetypeRegistryFiles = @(
+    "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md",
+    "splunk-sentinel-query-builder/references/cim-vendor-alignment.md"
+)
+
+# "Never invent Splunk or Sentinel identifiers" is this repo's highest-stakes
+# content rule and had no mechanical enforcement at all. Every sourcetype named
+# anywhere in the docs must resolve to the catalogue.
+function Test-SourcetypeProvenance {
+    param([string]$File, [string]$Text)
+
+    $reported = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($m in [regex]::Matches($Text, $script:sourcetypeTokenRegex)) {
+        $token = $m.Value
+        # host:port from a URL, not a sourcetype.
+        if ($token -match ':\d+$') {
+            continue
+        }
+        # Splunk's documented prefix for a federated index; the part after the
+        # colon is an index name, which is customer-defined by nature and so
+        # cannot be registered.
+        if ($token.StartsWith("federated:")) {
+            continue
+        }
+        if ($script:knownSourcetypes.Contains($token)) {
+            continue
+        }
+        # One issue per distinct token per file; a sourcetype used in six
+        # examples is one mistake, not six.
+        if ($reported.Add($token)) {
+            Add-Issue "$File names sourcetype '$token', which is not catalogued in splunkbase-app-catalog.md or cim-vendor-alignment.md; never invent Splunk identifiers"
+        }
+    }
+}
+
 # Fenced blocks split into their language tag and body.
 function Get-FencedBlocks {
     param([string]$Text)
@@ -405,6 +449,20 @@ if ($LASTEXITCODE -ne 0 -or $trackedFiles.Count -eq 0) {
     exit 1
 }
 
+# Populate the sourcetype registry before the content loop reads anything.
+# A registry file that is missing or empty would make every sourcetype look
+# invented, so say that plainly instead of emitting one issue per token.
+foreach ($registryFile in $script:sourcetypeRegistryFiles) {
+    $registryText = Read-Text $registryFile
+    if ($registryText.Length -eq 0) {
+        Add-Issue "$registryFile is missing or empty, so sourcetype provenance cannot be checked"
+        continue
+    }
+    foreach ($m in [regex]::Matches($registryText, $script:sourcetypeTokenRegex)) {
+        $null = $script:knownSourcetypes.Add($m.Value)
+    }
+}
+
 foreach ($file in $trackedFiles) {
     $path = Get-RepoFile $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -460,6 +518,7 @@ foreach ($file in $trackedFiles) {
             }
         }
         Test-LookupOutputFields $file $text
+        Test-SourcetypeProvenance $file $text
         foreach ($block in (Get-FencedBlocks $text)) {
             if ($block.Language -cne "spl") {
                 continue
@@ -531,6 +590,18 @@ foreach ($skill in $skills) {
     }
     Assert-Contains $skillFile '## Important' "top-level Important section"
     Assert-Contains $skillFile '## Inputs' "Inputs section"
+    # A description that says only when to USE a skill leaves the router to
+    # guess between overlapping skills. splunk-sentinel-query-builder's
+    # negatives did not exclude multi-index Splunk work, which is
+    # splunk-enrichment-query-builder's positive trigger, so a request naming
+    # two indexes matched both. Whether two descriptions genuinely overlap needs
+    # a reader; that every skill states its exclusions does not.
+    Assert-Contains $skillFile '(?m)^description:[^\r\n]*\bDo not use\b' "a 'Do not use' clause in its description"
+    # CLAUDE.md's "adding a new skill" checklist ends with "add fixtures to
+    # golden-prompts.md", which nothing enforced.
+    if (-not (Read-Text "examples/golden-prompts.md").Contains($skill)) {
+        Add-Issue "$skill has no fixture in examples/golden-prompts.md"
+    }
 }
 
 foreach ($skill in $skills) {
