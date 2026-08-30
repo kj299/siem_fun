@@ -17,7 +17,7 @@ this repo's rule to discover rather than guess.
 | Term | Meaning |
 | --- | --- |
 | Noise | An IP observed mass-scanning or crawling the public internet (Shodan-style scanners, vulnerability scanners, opportunistic exploiters). A noisy IP is likely opportunistic, not a targeted threat. |
-| Business Services Intelligence (formerly RIOT, "Rule It Out") | IPs belonging to known internet services such as Google DNS, AWS CloudFront, and Fastly. Filter these first to reduce alert volume. Older app versions and field names still say RIOT. |
+| Business Service Intelligence (formerly RIOT, "Rule It Out") | IPs belonging to known internet services such as Google DNS, AWS CloudFront, and Fastly. Filter these first to reduce alert volume. Older app versions and field names still say RIOT. |
 | Classification | One of four values: `malicious`, `suspicious`, `benign`, `unknown`. |
 | Tags | Behavioral labels such as `SSH Scanner`, `Tor Exit Node`, `Mirai`, `Log4Shell Exploit`, `VNC Scanner`, `Web Crawler`. |
 

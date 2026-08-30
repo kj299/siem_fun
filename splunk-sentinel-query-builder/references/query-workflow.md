@@ -76,30 +76,37 @@ Always include:
 - field substitutions for different schemas
 - dictionary-specific caveats such as delayed ingestion or deprecated fields
 
-## Output templates
+## What goes in each section
 
-### Hunt query
+The section list itself lives in [SKILL.md](../SKILL.md) and is the single
+source of truth. Do not add, rename, or drop sections here: this file said
+"fast-tuning notes" and "logic summary" while SKILL.md mandates `Tuning` and
+`Objective`, so the shape depended on which file was read last.
 
-- objective
-- query
-- assumptions
-- fast-tuning notes
+What changes per task is the *content* of those sections, not their names:
 
-### Detection query
+### Hunt
 
-- logic summary
-- query
-- data dictionary notes
-- threshold options
-- suppression ideas
-- validation method
+- `Objective`: the analyst question in one line.
+- `Why efficient`: which filter does the work, and why it is cheap.
+- `Tuning`: the levers that widen or narrow the hunt.
+
+### Detection
+
+- `Objective`: the detection logic in one line, including the trigger condition.
+- `Tuning`: thresholds, suppression candidates, and the false-positive levers.
+- `Validate`: how to confirm the rule fires on a known-true event.
 
 ### Translation
 
-- original intent
-- translated query
-- schema gaps
-- platform differences
+- `Objective`: the original intent, stated independently of either dialect.
+- `Assumptions`: the schema gaps and any mapping that is not one-to-one.
+- `Why efficient`: only the platform differences that change cost.
+
+### Optimization
+
+Use the `optimization` shape from SKILL.md, which replaces `Tuning` with
+`What changed`. List only edits that alter cost, each with the reason.
 
 ## When to stop and ask for schema details
 
@@ -144,10 +151,10 @@ Use these against the Common Information Model or any accelerated data model:
 | tstats count from datamodel=Endpoint.Processes by index
 ```
 
-Add `summariesonly=t` when the data model is accelerated and only summarized results are needed:
+Add `summariesonly=true` when the data model is accelerated and only summarized results are needed:
 
 ```spl
-| tstats summariesonly=t count from datamodel=Authentication.Authentication by index, sourcetype
+| tstats summariesonly=true count from datamodel=Authentication.Authentication by index, sourcetype
 ```
 
 ### Verify a field is indexed
@@ -195,18 +202,24 @@ Heartbeat
 | summarize LastSeen = max(TimeGenerated) by Computer, OSType, Category
 ```
 
-`SentinelHealth` shows connector and analytics-rule status:
+`_SentinelHealth()` shows connector and analytics-rule status. Prefer the
+prebuilt function over the `SentinelHealth` table: Microsoft maintains it across
+schema changes, so a query built on it keeps working when the table changes.
 
 ```kql
-SentinelHealth
+_SentinelHealth()
 | where TimeGenerated > ago(7d)
 | summarize count() by SentinelResourceName, Status
 ```
 
 ### Column and value discovery within a known table
 
+Two statements, so they need the semicolon: KQL requires any two statements to
+be separated by one, and without it this is a syntax error rather than two
+queries.
+
 ```kql
-TableName | getschema
+TableName | getschema;
 TableName | take 5
 ```
 

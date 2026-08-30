@@ -73,6 +73,10 @@ querying those two tables directly. Microsoft maintains the functions across
 schema changes, so a query built on them keeps working when the underlying
 table changes.
 
+These are **functions, not tables**, so they are not registered above and the
+validator does not treat a query leading with one as a table reference. An
+identifier followed by `(` is a call, wherever it appears.
+
 ## Microsoft Defender XDR (via the Defender XDR connector)
 
 These stream into purpose-built tables only when the Defender XDR connector is

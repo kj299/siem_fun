@@ -305,7 +305,12 @@ $script:kqlKeywords = @(
     "externaldata", "materialize", "where", "set", "declare", "evaluate"
 )
 # A leading identifier: the source of a query, unless it is an operator.
-$script:kqlLeadingRefRegex = '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b'
+# The (?!\() matters: a query may lead with a FUNCTION rather than a table.
+# Microsoft ships _SentinelHealth() and _SentinelAudit() and tells you to prefer
+# them over the underlying tables, and without this guard the recommended form
+# is reported as an uncatalogued table. The let-value pattern below already
+# excluded function calls for the same reason.
+$script:kqlLeadingRefRegex = '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()'
 # 'union [withsource=X] [kind=inner] Table' and 'join [kind=leftouter] (Table'.
 # The trailing \b(?![ \t]*=) is load-bearing, and BOTH parts are needed.
 # Without the lookahead, 'union withsource=Table_ *' backtracks: the option group
@@ -422,6 +427,38 @@ function Test-FixtureShapeSections {
             if ($DeclaredSections -cnotcontains $section) {
                 Add-Issue "examples/golden-prompts.md asserts an output section '$section' that no SKILL.md declares"
             }
+        }
+    }
+}
+
+# GFM splits a table row on every unescaped '|', INCLUDING one inside an inline
+# code span. Query text in a table cell therefore has to write it as '\|', and
+# forgetting that silently mangles the row into extra columns. Two rows of
+# splunk-to-kql-mapping.md shipped broken this way, and escaping a leading pipe
+# into a cell of splunkbase-app-catalog.md broke a third while fixing them.
+function Test-MarkdownTables {
+    param([string]$File, [string]$Text)
+
+    $lines = $Text -split '\r?\n'
+    $headerCells = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i].Trim()
+        if (-not ($line.StartsWith("|") -and $line.EndsWith("|"))) {
+            $headerCells = -1
+            continue
+        }
+        # Count cells the way GFM does: split on unescaped pipes.
+        $cells = ([regex]::Split($line, '(?<!\\)\|')).Count - 2
+        if ($headerCells -lt 0) {
+            $headerCells = $cells
+            continue
+        }
+        # The --- separator row under the header is not a data row.
+        if ($line -match '^\|[ \t:|-]+\|$') {
+            continue
+        }
+        if ($cells -ne $headerCells) {
+            Add-Issue "$File has a malformed table row at line $($i + 1): $cells cells against a $headerCells-cell header (an unescaped | inside a cell splits it; write it as \|)"
         }
     }
 }
@@ -722,6 +759,7 @@ foreach ($file in $trackedFiles) {
         }
         Test-LookupOutputFields $file $text
         Test-SourcetypeProvenance $file $text
+        Test-MarkdownTables $file $text
         foreach ($block in (Get-FencedBlocks $text)) {
             if ($block.Language -ceq "spl") {
                 Test-SplBlock $file $block.Body

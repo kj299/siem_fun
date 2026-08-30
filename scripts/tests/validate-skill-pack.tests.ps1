@@ -525,6 +525,33 @@ try {
         Assert-Equal @("InventedTable") (Get-KqlTableReferences "let recent = InventedTable;`nrecent | take 5")
     }
 
+    Test-Case "an unescaped pipe inside a table cell is reported" {
+        $bt = [string][char]96
+        $doc = "| A | B |`n| --- | --- |`n| x | " + $bt + "count() by f | top" + $bt + " |"
+        Test-MarkdownTables "d.md" $doc
+        Assert-IssueMatching "malformed table row"
+    }
+
+    Test-Case "an escaped pipe inside a table cell is fine" {
+        $bt = [string][char]96
+        $doc = "| A | B |`n| --- | --- |`n| x | " + $bt + "count() by f \| top" + $bt + " |"
+        Test-MarkdownTables "d.md" $doc
+        Assert-NoIssues
+    }
+
+    Test-Case "the header separator row is not counted as a data row" {
+        # ':---' and '---:' alignment forms must not read as a short row.
+        Test-MarkdownTables "d.md" "| A | B | C |`n| :--- | ---: | --- |`n| 1 | 2 | 3 |"
+        Assert-NoIssues
+    }
+
+    Test-Case "a query leading with a function is not a table reference" {
+        # REGRESSION: Microsoft tells you to prefer _SentinelHealth() over the
+        # SentinelHealth table, and the leading-identifier pattern reported that
+        # recommended form as an uncatalogued table.
+        Assert-Equal @() (Get-KqlTableReferences "_SentinelHealth()`n| where SentinelResourceType == `"Analytics Rule`"")
+    }
+
     Test-Case "a function call on the right of a let is not a table" {
         Assert-Equal @() (Get-KqlTableReferences "let cutoff = ago(1d);`nlet x = 5;")
     }
