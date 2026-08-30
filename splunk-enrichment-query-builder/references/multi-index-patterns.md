@@ -29,16 +29,19 @@ Return these queries (and stop) before writing a production query when:
 
 ## Index filter patterns
 
-### Preferred: `index IN (...)` (Splunk 8.2+)
+### Preferred: `index IN (...)` (Splunk 6.6+)
 
 ```spl
 index IN (firewall, proxy, dns) sourcetype=pan:traffic earliest=-24h
 | stats count by src, dest, dest_port
 ```
 
-`index IN (...)` is evaluated at the Bloom filter layer and scales better than an equivalent `OR` chain.
+`index IN (...)` is shorthand for an `OR` chain over the same values. Prefer it for
+readability, not for speed: Splunk documents `IN` as equivalent to the expanded form,
+so do not promise a performance gain the search head does not deliver. The real
+optimizations are bounding time first and naming sourcetypes.
 
-### `OR` chain (Splunk 7.x and earlier, or when only two indexes)
+### `OR` chain (Splunk 6.5 and earlier, or when only two indexes)
 
 ```spl
 (index=firewall OR index=proxy) sourcetype=pan:traffic earliest=-24h
@@ -73,9 +76,13 @@ Drop `summariesonly=true` when the model is not accelerated or events are very r
 When the index list is stored in a CSV lookup file:
 
 ```spl
-[inputlookup index_list.csv | rename index_name as index | return 100 index]
+[| inputlookup index_list.csv | rename index_name as index | return 100 index]
 sourcetype=pan:traffic earliest=-24h
 ```
+
+The leading pipe inside the brackets is required: `inputlookup` is a generating
+command, and without it the subsearch parses as a bare keyword search for the
+literal word "inputlookup" and contributes no index filter at all.
 
 `return` converts each row into an `OR`-ed index filter up to the specified row limit.
 

@@ -106,6 +106,8 @@ function Reset-ValidatorState {
 
 # --- load the validator's functions and point them at a fixture directory ---
 
+$fence = [string][char]96 + [char]96 + [char]96
+
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("skillpack-tests-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $fixtureRoot -Force | Out-Null
 
@@ -264,6 +266,14 @@ try {
         Remove-Item -LiteralPath $probe -Force
     }
 
+    Test-Case "Read-Text handles a filename containing wildcard characters" {
+        # REGRESSION: Get-Content -Path treats [ ] as a wildcard, so a tracked file
+        # named like this aborted the whole run under ErrorActionPreference=Stop
+        # instead of being read.
+        Set-Content -LiteralPath (Join-Path $fixtureRoot "weird[1].md") -Value "bracket content" -NoNewline
+        Assert-Equal "bracket content" (Read-Text "weird[1].md")
+    }
+
     Test-Case "Test-RepoFile distinguishes files, directories and absences" {
         Assert-True (Test-RepoFile "present.md") "an existing file should be true"
         Assert-True (-not (Test-RepoFile "definitely-not-here.md")) "a missing path should be false"
@@ -327,6 +337,43 @@ try {
         Set-Content -LiteralPath (Join-Path $fixtureRoot "shapes.yaml") -Value $yaml -NoNewline
         Assert-Equal @("a", "b") (Get-YamlList (Get-YamlDocument "shapes.yaml") "behavior" "token_rules")
         Assert-NoIssues
+    }
+
+    Write-Host "Line-ending-sensitive patterns (CI checks out CRLF)" -ForegroundColor Cyan
+
+    Test-Case "conflict-marker regex catches a lone marker on both LF and CRLF" {
+        # REGRESSION: the lone-marker branch was '={7}$'. In .NET multiline mode
+        # '$' matches before the LF, i.e. AFTER the CR, so on a CRLF checkout the
+        # branch could never match -- and CI is the only place this runs.
+        Assert-True (("a`n=======`nb" -match $script:conflictMarkerRegex)) "LF lone marker must match"
+        Assert-True (("a`r`n=======`r`nb" -match $script:conflictMarkerRegex)) "CRLF lone marker must match"
+        Assert-True (("a`r`n<<<<<<< HEAD`r`nb" -match $script:conflictMarkerRegex)) "CRLF labelled marker must match"
+    }
+
+    Test-Case "conflict-marker regex ignores a setext heading underline" {
+        Assert-True (-not ("Heading`r`n========`r`n" -match $script:conflictMarkerRegex)) "8 equals signs is a heading, not a marker"
+        Assert-True (-not ("Heading`n========`n" -match $script:conflictMarkerRegex)) "same on LF"
+    }
+
+    Test-Case "fenced-block strip removes the block on both LF and CRLF" {
+        # REGRESSION: the closing-fence anchor was '[ \t]*$', which cannot match
+        # before a CR. The strip was a complete no-op on CRLF, so the documented
+        # guarantee that fenced links are ignored was false on the CI runner.
+        $lf   = "intro`n" + $fence + "`n[x](nope.md)`n" + $fence + "`n"
+        $crlf = $lf -replace "`n", "`r`n"
+        Assert-True (-not ([regex]::Replace($lf,   $script:fencedBlockRegex, "") -match "nope.md")) "LF block must be stripped"
+        Assert-True (-not ([regex]::Replace($crlf, $script:fencedBlockRegex, "") -match "nope.md")) "CRLF block must be stripped"
+    }
+
+    Test-Case "fenced-block strip leaves prose links alone" {
+        $crlf = "see [real](target.md) here`r`n"
+        Assert-True ([regex]::Replace($crlf, $script:fencedBlockRegex, "") -match "target.md") "a link outside any fence must survive"
+    }
+
+    Test-Case "where-boolean regex flags unquoted booleans on CRLF too" {
+        Assert-True (("| where noise=true`r`n" -cmatch $script:whereBooleanRegex)) "CRLF unquoted boolean must be caught"
+        Assert-True (("| where noise=true`n"   -cmatch $script:whereBooleanRegex)) "LF unquoted boolean must be caught"
+        Assert-True (-not ('| where noise="true"' -cmatch $script:whereBooleanRegex)) "quoted form must pass"
     }
 
     Write-Host "Assert-Exists and Assert-Contains" -ForegroundColor Cyan

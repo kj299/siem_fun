@@ -26,7 +26,7 @@ Never assume index names. Indexes are deployment-specific; verify with discovery
 | Network_Resolution | DNS | src, dest, query, reply_code, record_type, answer |
 | Network_Sessions | All_Sessions | action, src_ip, dest_ip, user, duration |
 | Authentication | Authentication | action, app, src, dest, user, signature, authentication_method |
-| Endpoint | Processes, Filesystem, Registry, Services | process, process_name, parent_process_name, process_guid, dest, user, action |
+| Endpoint | Processes, Filesystem, Registry, Services, Ports | process, process_name, parent_process_name, process_guid, dest, user, action |
 | Malware | Malware_Attacks | signature, action, file_name, file_path, file_hash, dest, user, vendor_product |
 | Email | All_Email | action, src_user, recipient, subject, file_name, file_hash, url, message_id |
 | Intrusion_Detection | IDS_Attacks | signature, severity, action, src, dest, category, vendor_product |
@@ -50,7 +50,7 @@ Accelerated data model search (fast path):
 | tstats summariesonly=true count from datamodel=Authentication.Authentication where Authentication.action="failure" by Authentication.user, Authentication.src
 ```
 
-Drop `summariesonly=true` when the model is not accelerated or very recent events matter. The Endpoint model has several root datasets (Processes, Filesystem, Registry, Services); select one in the `from` clause and prefix fields with it:
+Drop `summariesonly=true` when the model is not accelerated or very recent events matter. The Endpoint model has several root datasets (Processes, Filesystem, Registry, Services, Ports); select one in the `from` clause and prefix fields with it:
 
 ```spl
 | tstats summariesonly=true count from datamodel=Endpoint.Processes by Processes.process_name, Processes.dest
@@ -99,7 +99,7 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 ### Microsoft Windows Defender / Defender for Endpoint
 
 - Defender for Endpoint alerts via the Splunk Add-on for Microsoft Security: `ms:defender:atp:alerts` -> Alerts, Malware, Endpoint: signature, severity, dest, user, file_name, file_hash.
-- On-host Windows Defender operational log via the Splunk Add-on for Microsoft Windows: `XmlWinEventLog` with source `Microsoft-Windows-Windows Defender/Operational` -> Malware: signature, action, file_name, file_path, dest, user.
+- On-host Windows Defender operational log via the Splunk Add-on for Microsoft Windows: `XmlWinEventLog` with source `XmlWinEventLog:Microsoft-Windows-Windows Defender/Operational` -> Malware: signature, action, file_name, file_path, dest, user.
 
 ### CrowdStrike Falcon
 
@@ -140,7 +140,7 @@ The Web data model is the canonical contract for every proxy. Once mapped, one t
 - Add-on: Palo Alto Networks Add-on for Splunk (Splunk_TA_paloalto).
 - `pan:traffic` -> Network_Traffic: src, dest, dest_port, action, app, rule, bytes_in, bytes_out.
 - `pan:threat` -> Intrusion_Detection and Malware; URL filtering subtype -> Web: signature, severity, action, url, category.
-- `pan:globalprotect` -> Authentication and Network_Sessions: user, src, action.
+- `pan:globalprotect` -> Authentication and Network_Sessions: user, src, action. Present in current add-on versions; confirm with a discovery query on older deployments.
 
 ### Any other vendor
 

@@ -9,6 +9,11 @@ param(
 $ErrorActionPreference = "Stop"
 $issues = New-Object System.Collections.Generic.List[string]
 
+# .NET file APIs resolve relative paths against the process working directory
+# while PowerShell cmdlets resolve against the session location. Pin $Root to an
+# absolute path so both agree when -Root is passed relative.
+$Root = (Resolve-Path -LiteralPath $Root).Path
+
 # Helper YAML is parsed with a real parser rather than regexes, so legal
 # reformatting (inline comments, flow lists, differing indent width) cannot
 # produce phantom drift failures. Required rather than optional: silently
@@ -43,7 +48,9 @@ function Read-Text {
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         # Assert-Exists reports missing required files; returning empty text
         # lets the run finish and print every collected issue.
-        $raw = Get-Content -Raw -Path $path
+        # -LiteralPath, not -Path: a filename containing [ or ] is a wildcard to
+        # -Path and would abort the run under ErrorActionPreference=Stop.
+        $raw = Get-Content -Raw -LiteralPath $path
         if ($null -ne $raw) {
             $text = $raw
         }
@@ -175,6 +182,14 @@ function Assert-ListsEqual {
     }
 }
 
+# Line-ending-sensitive patterns, defined above the -FunctionsOnly return so the
+# unit suite can assert their CRLF behaviour directly. CI checks out CRLF while
+# the usual dev tree is LF, so a bare '$' anchor here is a silent no-op on the
+# only OS that runs this script.
+$script:conflictMarkerRegex = '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))'
+$script:fencedBlockRegex    = '(?ms)^[ \t]*```.*?^[ \t]*```[ \t]*\r?$'
+$script:whereBooleanRegex   = '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b'
+
 if ($FunctionsOnly) {
     return
 }
@@ -203,6 +218,7 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py",
     "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
     "scripts/tests/validate-skill-pack.tests.ps1",
+    "scripts/tests/mutation-check.py",
     "splunk-enrichment-query-builder/SKILL.md",
     "splunk-enrichment-query-builder/agents/openai.yaml",
     "splunk-enrichment-query-builder/agents/claude-opus.yaml",
@@ -219,35 +235,57 @@ foreach ($file in $requiredFiles) {
 
 # quotepath=false emits non-ASCII filenames raw instead of C-quoted octal,
 # which would fail Test-Path and silently skip those files from validation.
-$trackedFiles = git -C $Root -c core.quotepath=false ls-files
+$trackedFiles = @(git -C $Root -c core.quotepath=false ls-files)
+# Every whole-repo content check below iterates this list. If git fails or the
+# list comes back empty, those checks would each no-op and the run would still
+# print "validation passed" -- reporting a clean bill of health for a repo it
+# never actually read. Fail loudly instead.
+if ($LASTEXITCODE -ne 0 -or $trackedFiles.Count -eq 0) {
+    Add-Issue "Could not enumerate tracked files (git ls-files exit $LASTEXITCODE, $($trackedFiles.Count) files); refusing to report success on an unread repository"
+    # Print rather than bare-exit: issues already collected above (missing
+    # required files, for one) are the more actionable report.
+    Write-Host "Skill pack validation failed:" -ForegroundColor Red
+    foreach ($issue in $issues) { Write-Host " - $issue" -ForegroundColor Red }
+    exit 1
+}
+
 foreach ($file in $trackedFiles) {
     $path = Get-RepoFile $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         continue
     }
-    $text = Get-Content -Raw -Path $path
+    # -LiteralPath, not -Path: a tracked filename containing [ or ] is a wildcard
+    # to -Path and would abort the run under ErrorActionPreference=Stop.
+    $bytes = [System.IO.File]::ReadAllBytes($path)
+    $text = Get-Content -Raw -LiteralPath $path
     if ($null -eq $text) {
-        continue
+        $text = ""
+    }
+    # ASCII is checked against BYTES, not the decoded string: Get-Content sniffs
+    # and strips a UTF-8 BOM and transparently decodes UTF-16, so a non-ASCII
+    # file could pass a decoded-character check while violating the hard rule
+    # on disk.
+    # A foreach/break loop, not a Where-Object pipeline: piping every byte of
+    # every tracked file costs roughly 10us/byte and dominated the whole run.
+    foreach ($b in $bytes) {
+        if ($b -ne 9 -and $b -ne 10 -and $b -ne 13 -and ($b -lt 32 -or $b -gt 126)) {
+            Add-Issue "$file contains a non-ASCII or control byte 0x$($b.ToString('X2'))"
+            break
+        }
     }
     # Git conflict markers are exactly seven chars followed by a space+label
     # (<<<<<<< / >>>>>>>) or alone on the line (=======); the right-side anchor
     # avoids flagging setext heading underlines of eight or more equals signs.
-    if ($text -match '(?m)^(<{7}( |$)|={7}$|>{7}( |$))') {
+    # '\r?$' is required: CI checks out CRLF, where a bare '$' sits after the
+    # CR and the lone-marker branch could never match.
+    if ($text -match $script:conflictMarkerRegex) {
         Add-Issue "$file contains a conflict marker"
     }
     # SPL 'where' uses eval semantics: an unquoted true/false is a field
     # reference, so the comparison silently matches nothing. Enforce the
     # quoting rule documented in greynoise-integration.md across all docs.
-    if ($file -like "*.md" -and $text -cmatch '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b') {
+    if ($file -like "*.md" -and $text -cmatch $script:whereBooleanRegex) {
         Add-Issue "$file compares against unquoted true/false in an SPL where clause; quote the value (=`"true`")"
-    }
-    foreach ($char in $text.ToCharArray()) {
-        $code = [int][char]$char
-        $allowed = ($code -eq 9) -or ($code -eq 10) -or ($code -eq 13) -or (($code -ge 32) -and ($code -le 126))
-        if (-not $allowed) {
-            Add-Issue "$file contains non-ASCII character U+$($code.ToString('X4'))"
-            break
-        }
     }
 }
 
@@ -397,7 +435,11 @@ foreach ($file in $markdownFiles) {
     $text = Read-Text $file
     # Fenced code blocks quote example markdown; links inside them are
     # illustrations, not navigation, so strip the blocks before scanning.
-    $scanText = [regex]::Replace($text, '(?ms)^\s*```.*?^\s*```[ \t]*$', '')
+    # '[ \t]*' (not '\s*') keeps the opening fence anchored to its own line, and
+    # '\r?$' is required because CI checks out CRLF: with a bare '$' the closing
+    # fence never matched there, so this strip was a no-op on the only OS that
+    # runs the validator.
+    $scanText = [regex]::Replace($text, $script:fencedBlockRegex, '')
     $baseDir = Split-Path -Parent (Get-RepoFile $file)
     foreach ($match in [regex]::Matches($scanText, $linkRegex)) {
         $target = $match.Groups[1].Value.Trim()

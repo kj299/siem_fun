@@ -15,6 +15,9 @@ pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1
 
 # Dictionary builder unit tests
 python -m unittest discover -s splunk-data-dictionary-builder/tests
+
+# Mutation-check both suites (proves the REGRESSION tests actually catch their bugs)
+python3 scripts/tests/mutation-check.py
 ```
 
 CI runs all three on every pull request and on pushes to `main` (two jobs:
@@ -43,15 +46,22 @@ Breaking any of these fails CI, so change them deliberately:
 
 - `agents/claude-opus.yaml` and `agents/codex-gpt-5.4.yaml` in a skill must
   carry identical `prompt_shape`, `default_sections`, `short_sections`,
-  `token_rules`, `truth_order`, and `stop_conditions`. Comparison is
-  case-sensitive and order-sensitive. Edit both files together.
+  `optimization_sections`, `discovery_sections`, `token_rules`, `truth_order`,
+  and `stop_conditions`. Comparison is case-sensitive and order-sensitive. Edit
+  both files together. (The enrichment skill has no `optimization_sections`;
+  each skill's compared set is declared in `$helperChecks`.)
   - Query-builder skills additionally need `behavior.trigger_tuning` in the
     claude helper and `behavior.packaging_rules` in the codex helper.
   - `splunk-data-dictionary-builder` uses a simpler shape: only `token_rules`
     and `stop_conditions` are compared, and it has neither tuning section.
 - Per skill, `openai.yaml` `interface.default_prompt` must be byte-identical to
   `invocation.preferred_prompt` in both helpers. This has drifted before.
-- `openai.yaml` must set `policy.allow_implicit_invocation` to `false`.
+- `openai.yaml` must set `policy.allow_implicit_invocation` to `false`, and must
+  carry non-empty `interface.display_name`, `interface.short_description`, and
+  `interface.default_prompt`.
+- No tracked file may contain a git conflict marker.
+- Every tracked file must be ASCII on disk. The check reads BYTES, so a UTF-8
+  BOM or a UTF-16 re-encode fails even though it would decode to clean text.
 - Every `CIM_SOURCETYPE_HINTS` key in the dictionary builder must be documented
   in [cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md).
 - Relative markdown links must resolve. Links inside fenced code blocks are
@@ -105,7 +115,12 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 - Fix a bug in the validator or the dictionary builder, add a case.
 - When a test is meant to catch a specific bug, reintroduce that bug and
   confirm the test fails. Several tests here looked correct but proved nothing
-  until that check was run.
+  until that check was run. `scripts/tests/mutation-check.py` automates this for
+  the cases already covered; add yours to it when you add a REGRESSION test.
+- The validator runs only on windows-latest, which checks out CRLF while your
+  tree is almost certainly LF. Two checks were silently no-ops on CI for exactly
+  this reason. The mutation-check script exercises a CRLF checkout, a UTF-8 BOM,
+  a UTF-16 file and a wildcard filename; keep those passing.
 
 ## Adding a new skill
 

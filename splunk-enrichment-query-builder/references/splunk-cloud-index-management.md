@@ -13,13 +13,13 @@
 
 Splunk Cloud runs on two infrastructure models:
 
-| Feature | Victoria stack | Classic (Federated) stack |
+| Feature | Victoria Experience | Classic Experience |
 | --- | --- | --- |
 | Self-service index creation | Yes, via Settings > Indexes in Splunk Web | No; requires a Splunk Support case |
-| REST API index management | Yes, with a management token | Limited; structural changes go through Support |
+| Programmatic index management | Yes, via ACS at `admin.splunk.com` | Limited; structural changes go through Support |
 | Direct forwarder port (9997) | Yes | Yes |
 | HEC ingestion | Yes | Yes |
-| `_internal` access | Admin role via `splunk_system_user` | Restricted by default |
+| `_internal` access | Restricted; granted through the admin role, not self-service | Restricted by default |
 | Storage tiers | Hot/Warm/Frozen + Dynamic Data Active Archive | Same |
 | Self-service index count | Up to the subscription tier limit | Same via Support |
 
@@ -30,10 +30,13 @@ Victoria is the default for new Splunk Cloud deployments. Classic stacks remain 
 Rules that apply to both stack types:
 
 - Lowercase letters, digits, hyphens (`-`), and underscores (`_`) only.
-- Maximum 80 characters.
 - Cannot start with a hyphen or underscore.
-- Reserved prefixes: `_` (system indexes) and `dm_` (data model summary indexes).
+- Cannot contain the word `kvstore` anywhere in the name.
+- A leading `_` denotes an internal index and is reserved.
 - Valid examples: `firewall`, `prod-windows-endpoint`, `aws_cloudtrail_2024`.
+
+Verify the current constraint set against Splunk Cloud documentation before
+scripting index creation; limits differ by stack type and change between releases.
 
 ## Index types
 
@@ -41,16 +44,17 @@ Rules that apply to both stack types:
 | --- | --- | --- |
 | Event | `event` | Timestamped log events (default) |
 | Metric | `metric` | Numeric time-series data for `mstats` queries |
-| Summary | `summary` | Accelerated `sistats`/`sitimechart` output |
 
-`datatype` is set at creation time and cannot be changed afterward.
+`datatype` is set at creation time and cannot be changed afterward. There is no
+`summary` datatype: a summary index is an ordinary `event` index that happens to
+receive `sistats`/`sitimechart` output from a scheduled search.
 
 ## Key index properties
 
 | Property | Description | Default on Splunk Cloud |
 | --- | --- | --- |
 | `maxTotalDataSizeMB` | Maximum on-disk size before data is frozen | Subscription-dependent; often 500 GB per index |
-| `frozenTimePeriodInSecs` | Age in seconds after which events freeze (deleted or archived) | 188697600 (approximately 6 years) |
+| `frozenTimePeriodInSecs` | Age in seconds after which events freeze (deleted or archived) | Subscription-dependent; commonly 90 days on Splunk Cloud. 188697600 (~6 years) is the Splunk Enterprise indexes.conf default, not a Cloud default. |
 | `homePath` | Hot/warm bucket path | Platform-managed; do not set manually |
 | `coldPath` | Cold bucket path | Platform-managed |
 | `enableDataIntegrityControl` | SHA-256 hash per bucket for tamper detection | Configurable on request |
@@ -105,7 +109,7 @@ Scoped to known indexes (faster and safer in production):
 
 | Index | Contents | Splunk Cloud access |
 | --- | --- | --- |
-| `_internal` | Platform logs: scheduler, metrics, dispatch | Admin via `splunk_system_user` role only |
+| `_internal` | Platform logs: scheduler, metrics, dispatch | Admin role only |
 | `_audit` | Search audit and file integrity events | Admin role only |
 | `_introspection` | Splunk performance metrics | Admin role only |
 | `_telemetry` | Anonymous usage telemetry | Not user-accessible |
@@ -132,15 +136,24 @@ Prerequisites:
 
 **Splunk Web**: Settings > Indexes > New Index > fill in name, type, and retention.
 
-**REST API** (management token required):
+**Admin Config Service (ACS)**, the supported programmatic path on Victoria:
 
 ```bash
-curl -k -H "Authorization: Bearer YOUR_TOKEN" \
-  https://YOUR-STACK.splunkcloud.com:8089/services/data/indexes \
-  -d name=new_index \
-  -d datatype=event \
-  -d frozenTimePeriodInSecs=7776000
+curl -H "Authorization: Bearer $SPLUNK_ACS_TOKEN" \
+  https://admin.splunk.com/YOUR-STACK/adminconfig/v2/indexes \
+  -H "Content-Type: application/json" \
+  -d '{"name":"new_index","searchableDays":90,"maxDataSizeMB":0}'
 ```
+
+ACS is the supported path for CREATING and modifying indexes on Splunk Cloud, and
+it takes its own parameters (`searchableDays`, `maxDataSizeMB`) rather than
+indexes.conf keys. The search head's `:8089/services/data/indexes` endpoint
+remains available for READING index metadata, which is what the `| rest` queries
+above rely on. Confirm the current ACS surface against Splunk's ACS
+documentation before scripting against it.
+Never pass `-k`: it disables certificate verification while sending a bearer
+token, and both `admin.splunk.com` and stack hostnames present valid public CA
+certificates. Take the token from the environment rather than pasting it inline.
 
 **Classic stack**: open a Splunk Support case with the index name, type, retention period, and maximum size.
 

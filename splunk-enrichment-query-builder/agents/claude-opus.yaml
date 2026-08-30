@@ -64,7 +64,7 @@ behavior:
   stop_conditions:
     - "Return discovery mode when the exact dataset name is missing."
     - "Return discovery mode when field mapping depends on an unknown parser or connector."
-    - "Return discovery mode when translation depends on unknown source-table or source-index mapping."
+    - "Return discovery mode when no documented lookup or command supplies the field the query needs."
   trigger_tuning:
     - "If the skill undertriggers, add more trigger detail to the description."
     - "If the skill overtriggers, add negative triggers and tighten scope."
