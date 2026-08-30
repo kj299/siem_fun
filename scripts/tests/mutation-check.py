@@ -282,8 +282,11 @@ PS_MUTS = [
      r"""$script:fencedBlockRegex    = '(?ms)^[ \t]*""" + BT + r""".*?^[ \t]*""" + BT + r"""[ \t]*\r?$'""",
      r"""$script:fencedBlockRegex    = '(?ms)^\s*""" + BT + r""".*?^\s*""" + BT + r"""[ \t]*$'"""),
     ("where-boolean regex",
-     r"""$script:whereBooleanRegex   = '(?m)^\s*\| where [^|\r\n]*=\s*(true|false)\b'""",
-     r"""$script:whereBooleanRegex   = '(?m)^ZZZNEVERMATCHES'"""),
+     r"""$script:whereBooleanRegex   = '(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b'""",
+     r"""$script:whereBooleanRegex   = '(?i)ZZZNEVERMATCHES'"""),
+    ("where-boolean line-anchored regex",
+     r"""$script:whereBooleanLineRegex = '(?im)^[ \t]*\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b'""",
+     r"""$script:whereBooleanLineRegex = '(?im)^ZZZNEVERMATCHES'"""),
     ("Read-Text uses -LiteralPath",
      "        $raw = Get-Content -Raw -LiteralPath $path",
      "        $raw = Get-Content -Raw -Path $path"),
@@ -352,10 +355,46 @@ check_mutation("conflict marker in a tracked file",
 check_mutation("non-ASCII byte in a tracked file",
                lambda: append_bytes("README.md", b"\ncaf\xc3\xa9\n"),
                "non-ASCII or control byte")
+MDOC = "splunk-enrichment-query-builder/references/multi-index-patterns.md"
 check_mutation("unquoted SPL where-boolean in markdown",
-               lambda: append("splunk-enrichment-query-builder/references/multi-index-patterns.md",
-                              "\n| where noise=true\n"),
+               lambda: append(MDOC, "\n| where noise=true\n"),
                "unquoted true/false")
+# The three forms that evaded the original line-anchored, case-sensitive check.
+# Each has the identical silent-no-match bug in SPL, so each is a real defect.
+check_mutation("unquoted where-boolean mid-line in a fenced block",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=foo | where noise=true\n{BT}\n"),
+               "unquoted true/false")
+check_mutation("unquoted where-boolean with an uppercase value",
+               lambda: append(MDOC, f"\n{BT}spl\n| where riot=TRUE\n{BT}\n"),
+               "unquoted true/false")
+check_mutation("unquoted where-boolean inside a markdown table cell",
+               # Query text in a table is an inline code span, not a fenced
+               # block. splunk-to-kql-mapping.md is written entirely this way,
+               # so a fence-only scanner skips that file completely.
+               lambda: append(MDOC, "\n| SPL | Note |\n| --- | --- |\n"
+                                    f"| {BT[0]}index=a | where noise=true{BT[0]} | x |\n"),
+               "unquoted true/false")
+
+
+def _undocument_lookup_field(field: str) -> None:
+    """Drop one field from EVERY documented list for greynoise_indicators.
+
+    The documented set is the union over every line naming the lookup, so
+    removing the field from a single row proves nothing -- the other row still
+    covers it.
+    """
+    p = os.path.join(WORK, "splunk-enrichment-query-builder/references/greynoise-integration.md")
+    # Read before opening for write: open(p, "w") truncates, so passing an
+    # inline read as the write argument silently produces an empty file.
+    text = open(p).read()
+    token = f"{BT[0]}{field}{BT[0]}, "
+    assert text.count(token) >= 2, f"expected {field} in both documented rows"
+    open(p, "w").write(text.replace(token, ""))
+
+
+check_mutation("lookup OUTPUT field absent from the documented field list",
+               lambda: _undocument_lookup_field("classification"),
+               "documented field list")
 check_mutation("broken relative markdown link",
                lambda: append("README.md", "\nSee [ghost](no-such-file.md).\n"),
                "broken local link")
@@ -499,7 +538,7 @@ runtime = time.time() - t0
 budget = 20.0
 run_counts["environment"] += 1
 ok = runtime < budget
-print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s; ~1.2s on a Linux dev box)")
+print(f"  {'OK  ' if ok else '*** FAIL ***'} {'validator runtime':38} {runtime:.2f}s (budget {budget:.0f}s; ~1.8s on a Linux dev box)")
 if not ok:
     fails.append("validator runtime regression")
 

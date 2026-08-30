@@ -73,8 +73,19 @@ Breaking any of these fails CI, so change them deliberately:
 
 - In `| where`, quote boolean comparisons: `noise="true"`, not `noise=true`.
   `where` uses eval semantics, so a bare `true` is a *field reference* and the
-  filter silently matches nothing. The validator greps markdown for this.
-  Unquoted values are fine in the `search` command.
+  filter silently matches nothing. The validator checks markdown for this
+  case-insensitively (`riot=TRUE` has the identical bug) across three input
+  sets: fenced blocks of any language, inline code spans -- which is how table
+  cells carry queries, and how splunk-to-kql-mapping.md writes every one of
+  them -- and raw lines beginning with `| where`. Scanning per code snippet
+  rather than per file is what lets the pattern be unanchored without flagging
+  prose that names `| where` and `noise=true` in two separate spans, as the
+  bullet above does. Unquoted values are fine in the `search` command.
+- Every field named by `| lookup <name> ... OUTPUT` must appear in that lookup's
+  documented field list in the same file. The validator enforces this. The join
+  KEY is deliberately exempt: these docs treat the key field name as
+  version-dependent and tell the reader to confirm it with `inputlookup`, so
+  requiring it to be listed would contradict them.
 - Lookup joins leave nulls for unmatched rows. A filter meant to keep unmatched
   rows needs `isnull(...)` or `coalesce(field, "")`, or it silently drops them.
 - Prefer `index IN (a, b)` over `OR` chains, and always bound time first.
