@@ -25,6 +25,8 @@ $File names sourcetype '$token', which is not catalogued in splunkbase-app-catal
 $File names Sentinel table '$name', which is not catalogued in sentinel-table-catalog.md; never invent Sentinel identifiers
 examples/golden-prompts.md asserts an output section '$section' that no SKILL.md declares
 $File has a malformed table row at line $($i + 1): $cells cells against a $headerCells-cell header (an unescaped | inside a cell splits it; write it as \|)
+$File has no siem_fun/ layout tree, so the file list cannot be checked
+$File's layout tree does not mention '$name' ($tracked)
 $File chains three or more bare index= terms with OR; use 'index IN (...)'
 $File has a raw-event SPL search with no time bound; add earliest= (or bound it with | head)
 $File OUTPUTs '$field' from lookup '$name', which is not in that lookup's documented field list

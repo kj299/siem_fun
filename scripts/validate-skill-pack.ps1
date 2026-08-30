@@ -463,6 +463,36 @@ function Test-MarkdownTables {
     }
 }
 
+# The layout trees in README.md and QUERY_SKILL_PLAN.md. CLAUDE.md requires
+# updating both when a file is added, and nothing enforced it -- scripts/
+# required-checks.txt was missing from both for a day after being added.
+#
+# Deliberately a BASENAME PRESENCE test rather than a parse of the ASCII art.
+# Parsing it is fiddly enough that the first attempt at one reported README.md
+# as absent from its own tree, and the failure this guards against is omission,
+# which a presence test catches. A file listed under the wrong parent still
+# passes; that is the accepted false negative in exchange for a check that
+# cannot itself be subtly wrong.
+$script:layoutTreeRegex = '(?ms)^```text\r?$\r?\n(siem_fun/.*?)^```'
+$script:layoutTreeDocs = @("README.md", "QUERY_SKILL_PLAN.md")
+
+function Test-LayoutTree {
+    param([string]$File, [string]$Text, [string[]]$TrackedFiles)
+
+    $m = [regex]::Match($Text, $script:layoutTreeRegex)
+    if (-not $m.Success) {
+        Add-Issue "$File has no siem_fun/ layout tree, so the file list cannot be checked"
+        return
+    }
+    $tree = $m.Groups[1].Value
+    foreach ($tracked in $TrackedFiles) {
+        $name = Split-Path -Leaf $tracked
+        if (-not $tree.Contains($name)) {
+            Add-Issue "$File's layout tree does not mention '$name' ($tracked)"
+        }
+    }
+}
+
 # Fenced blocks split into their language tag and body.
 function Get-FencedBlocks {
     param([string]$Text)
@@ -701,6 +731,10 @@ if ($kqlRegistryText.Length -eq 0) {
     foreach ($m in [regex]::Matches($kqlRegistryText, '(?m)^\|[ \t]*`([A-Za-z_][A-Za-z0-9_]*)`[ \t]*\|')) {
         $null = $script:knownKqlTables.Add($m.Groups[1].Value)
     }
+}
+
+foreach ($layoutDoc in $script:layoutTreeDocs) {
+    Test-LayoutTree $layoutDoc (Read-Text $layoutDoc) $trackedFiles
 }
 
 foreach ($file in $trackedFiles) {

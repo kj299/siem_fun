@@ -462,6 +462,19 @@ def _undocument_lookup_field(field: str) -> None:
     open(p, "w").write(text.replace(token, ""))
 
 
+def _strip_layout_tree(rel: str) -> None:
+    """Remove the siem_fun/ layout tree block entirely.
+
+    Deleting the tree must fail rather than silence the check, or the easiest
+    way past a stale-tree failure would be to delete the tree.
+    """
+    p = os.path.join(WORK, rel)
+    text = open(p).read()
+    stripped = re.sub(r"```text\n(siem_fun/.*?)```", "(tree removed)\n", text, flags=re.S)
+    assert stripped != text, f"no layout tree found in {rel}"
+    open(p, "w").write(stripped)
+
+
 def _drop_golden_fixtures(skill: str) -> None:
     """Remove every mention of one skill from golden-prompts.md.
 
@@ -514,6 +527,15 @@ check_mutation("uncatalogued sourcetype in a reference doc",
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=acme:invented:product\n| head 5\n{BT}\n"),
                "never invent Splunk identifiers")
 KDOC = "splunk-sentinel-query-builder/references/query-workflow.md"
+check_mutation("tracked file absent from the layout trees",
+               # CLAUDE.md requires updating both trees when a file is added,
+               # and required-checks.txt was missing from both for a day.
+               lambda: (write("splunk-sentinel-query-builder/references/brand-new.md", b"# new\n"),
+                        sh("git add -A")),
+               "layout tree does not mention")
+check_mutation("layout tree deleted outright",
+               lambda: _strip_layout_tree("README.md"),
+               "no siem_fun/ layout tree")
 check_mutation("markdown table row with an unescaped pipe in a cell",
                # GFM splits the row on it even inside an inline code span, so the
                # cell count no longer matches the header. Two rows of
