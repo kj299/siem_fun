@@ -195,8 +195,43 @@ COVERED_BY_NAME = {
 ran_labels: list[str] = []
 
 
+TEXT_EXTENSIONS = ("md", "yaml", "yml", "json", "ps1", "py", "txt", "example")
+
+
+def convert_line_endings(to_crlf: bool) -> None:
+    """Rewrite every text file in the scratch tree to one line ending.
+
+    A file that will not decode as UTF-8 is left alone: the non-ASCII mutation
+    plants a byte on purpose, and rewriting it would destroy what is under test.
+    Anything named .git* is skipped, including the .git-hidden left behind by the
+    git-ls-files mutation, so a conversion never walks into object storage.
+    """
+    for root, dirs, files in os.walk(WORK):
+        dirs[:] = [d for d in dirs if not d.startswith(".git")]
+        for fn in files:
+            if fn.rsplit(".", 1)[-1] not in TEXT_EXTENSIONS:
+                continue
+            path = os.path.join(root, fn)
+            try:
+                # newline="" reads without translation, so a CRLF checkout
+                # arrives as \r\n rather than already-normalised \n.
+                text = open(path, newline="").read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            text = text.replace("\r\n", "\n")
+            with open(path, "w", newline=("\r\n" if to_crlf else "\n")) as fh:
+                fh.write(text)
+
+
 def check_mutation(label: str, breaker, expect_text: str) -> None:
     """Break the repo, then assert the validator reports it AND says why.
+
+    Run under BOTH line endings, explicitly normalised, rather than under
+    whatever the checkout happens to use. Otherwise the harness silently tests
+    a different thing on each platform: a Linux dev box only ever exercises LF,
+    and a check whose pattern ends in a bare '$' is a no-op on CRLF while every
+    local mutation still passes. That shipped -- the fixture-shape check did
+    nothing on Windows and only CI could see it.
 
     The breaker's effect is verified: an edit() whose pattern was ambiguous
     returns False and changes nothing, which would otherwise read as a MISSED
@@ -212,14 +247,20 @@ def check_mutation(label: str, breaker, expect_text: str) -> None:
         print(f"  SETUP-FAIL     {label}  (breaker changed nothing)")
         fails.append(f"setup: {label}")
         return
-    out = validator_output()
-    failed = "validation passed" not in out
-    named = expect_text.lower() in out.lower()
-    ok = failed and named
-    detail = "" if ok else f"  (failed={failed} named={named})"
-    print(f"  {'CAUGHT ' if ok else '*** MISSED ***'} {label}{detail}")
-    if not ok:
-        fails.append(label)
+
+    missed = []
+    for ending, to_crlf in (("LF", False), ("CRLF", True)):
+        convert_line_endings(to_crlf)
+        out = validator_output()
+        failed = "validation passed" not in out
+        named = expect_text.lower() in out.lower()
+        if not (failed and named):
+            missed.append(f"{ending}(failed={failed} named={named})")
+    if missed:
+        print(f"  *** MISSED *** {label}  {' '.join(missed)}")
+        fails.append(f"{label} [{' '.join(missed)}]")
+    else:
+        print(f"  CAUGHT  {label}")
 
 
 print("=" * 74)
@@ -686,23 +727,16 @@ def expect(label: str, got: str, want: str) -> None:
 
 
 fresh()
-# In-process, not a shell heredoc: this script also runs on the Windows job,
-# where the shell is cmd.exe and heredocs do not exist.
-for _root, _dirs, _files in os.walk(WORK):
-    _dirs[:] = [d for d in _dirs if d != ".git"]
-    for _fn in _files:
-        if _fn.rsplit(".", 1)[-1] in ("md", "yaml", "yml", "json", "ps1", "py", "example", "txt"):
-            _p = os.path.join(_root, _fn)
-            try:
-                _c = open(_p, newline="").read()
-            except (OSError, UnicodeDecodeError):
-                continue
-            # Normalise to LF FIRST. newline="" reads without translation, so on
-            # a Windows checkout _c already holds \r\n; writing that with
-            # newline="\r\n" would translate the \n again and yield \r\r\n.
-            _c = _c.replace("\r\n", "\n")
-            open(_p, "w", newline="\r\n").write(_c)
+# convert_line_endings, not a shell heredoc: this script also runs on the
+# Windows job, where the shell is cmd.exe and heredocs do not exist. Section [C]
+# uses the same helper, so there is one conversion implementation rather than
+# two that can drift.
+convert_line_endings(to_crlf=True)
 expect("fully-CRLF repo validates", validator(), "PASSED")
+
+fresh()
+convert_line_endings(to_crlf=False)
+expect("fully-LF repo validates", validator(), "PASSED")
 
 fresh()
 r = sh("pwsh -NoProfile -File ./validate-skill-pack.ps1 -Root ..", cwd=os.path.join(WORK, "scripts"))
