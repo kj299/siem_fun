@@ -316,7 +316,7 @@ Splunk Add-on for Microsoft Cloud Services (`Splunk_TA_microsoft-cloudservices`)
 | --- | --- | --- |
 | `mscs:azure:audit` | Change, Authentication | operationName, caller, resultType |
 | `mscs:nsg:flow` | Network_Traffic | src_ip, dest_ip, dest_port, protocol, action |
-| `azure:monitor:aad` | Authentication, Change | Event Hub AAD logs; SignInLogs and AuditLogs are categories within this sourcetype |
+| `azure:monitor:aad` | Authentication, Change | Event Hub AAD logs; SigninLogs and AuditLogs are categories within this sourcetype |
 
 Splunk Add-on for Microsoft Azure (TA-MS-AAD, community-supported):
 

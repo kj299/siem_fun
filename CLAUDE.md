@@ -46,7 +46,22 @@ in this repo's history reached CI only because a local run was skipped.
 - **Never invent Splunk or Sentinel identifiers.** Index names, sourcetypes,
   table names, and field names in reference docs must be real. If a schema is
   uncertain, the skills are supposed to emit a discovery query instead of
-  guessing, and the docs should model that.
+  guessing, and the docs should model that. Two halves of this are mechanical:
+  - **Sourcetypes** must be catalogued in
+    [splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md)
+    or [cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md).
+  - **Sentinel tables** named in table position in a `kql` block must be
+    catalogued in [sentinel-table-catalog.md](splunk-sentinel-query-builder/references/sentinel-table-catalog.md),
+    which cites Microsoft's own documentation per table. **KQL table names are
+    case-sensitive**: `SignInLogs` is a different, non-existent table to
+    `SigninLogs` and returns nothing, so the comparison is case-sensitive too.
+    That exact mistake was already in the docs.
+
+    The check is positional, not shape-based: it reads the leading identifier
+    of a block plus `union` and `join` operands. CamelCase alone is far too
+    common a shape -- field names, vendor names, and this repo's own class
+    names all match it. Index names are deliberately not registered: they are
+    customer-defined, so `index=firewall` is a placeholder, not a claim.
 
 ## Invariants the validator enforces
 

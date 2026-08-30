@@ -131,6 +131,7 @@ Load only the smallest relevant reference:
 - [references/query-workflow.md](references/query-workflow.md) for new hunts, detections, or triage
 - [references/cim-vendor-alignment.md](references/cim-vendor-alignment.md) for CIM data models and vendor sourcetype mappings (Zscaler, CrowdStrike, Palo Alto, Cisco, and other common security vendors)
 - [references/splunk-to-kql-mapping.md](references/splunk-to-kql-mapping.md) for translation
+- [references/sentinel-table-catalog.md](references/sentinel-table-catalog.md) before naming any Sentinel table
 - [references/data-dictionary-integration.md](references/data-dictionary-integration.md) for internal URLs or excerpts
 - [references/examples-and-troubleshooting.md](references/examples-and-troubleshooting.md) for concrete prompt patterns and failure handling
 - [references/model-guidance.md](references/model-guidance.md) only when tuning the skill itself

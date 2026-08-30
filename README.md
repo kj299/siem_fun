@@ -75,6 +75,7 @@ siem_fun/
         |-- examples-and-troubleshooting.md
         |-- model-guidance.md
         |-- query-workflow.md
+        |-- sentinel-table-catalog.md
         `-- splunk-to-kql-mapping.md
 ```
 
@@ -332,6 +333,7 @@ To get the best results with either model:
 - [references/query-workflow.md](splunk-sentinel-query-builder/references/query-workflow.md): query workflow
 - [references/cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md): CIM data models and vendor sourcetype mappings
 - [references/splunk-to-kql-mapping.md](splunk-sentinel-query-builder/references/splunk-to-kql-mapping.md): translation support
+- [references/sentinel-table-catalog.md](splunk-sentinel-query-builder/references/sentinel-table-catalog.md): the provenance registry for Sentinel table names
 - [references/data-dictionary-integration.md](splunk-sentinel-query-builder/references/data-dictionary-integration.md): internal URL usage
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning

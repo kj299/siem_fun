@@ -192,6 +192,7 @@ siem_fun/
         |-- examples-and-troubleshooting.md
         |-- model-guidance.md
         |-- query-workflow.md
+        |-- sentinel-table-catalog.md
         `-- splunk-to-kql-mapping.md
 ```
 
