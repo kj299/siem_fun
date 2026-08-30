@@ -211,9 +211,17 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   mutated, record it in that script's `NOT_MUTATABLE` with the reason rather
   than leaving a silent gap.
 - The validator runs only on windows-latest, which checks out CRLF while your
-  tree is almost certainly LF. Two checks were silently no-ops on CI for exactly
-  this reason. The mutation-check script exercises a CRLF checkout, a UTF-8 BOM,
-  a UTF-16 file and a wildcard filename; keep those passing.
+  tree is almost certainly LF. Three checks have now been silently no-ops on CI
+  for exactly this reason. The mutation-check script exercises a CRLF checkout,
+  an LF checkout, a UTF-8 BOM, a UTF-16 file and a wildcard filename; keep those
+  passing.
+- **Every validator mutation runs under both line endings**, normalised
+  explicitly rather than inherited from the checkout. Without that the harness
+  tests a different thing on each platform: a Linux run only ever exercises LF,
+  so a pattern ending in a bare `$` is a no-op on CRLF while all 49 mutations
+  still report CAUGHT. That is not hypothetical -- the golden-prompt shape check
+  did nothing at all on Windows, every local run was green, and only CI caught
+  it. It roughly doubles the validator-mutation time and is worth it.
 
 ## Adding a new skill
 
