@@ -221,6 +221,19 @@ $script:fencedWithLangRegex = '(?ms)^[ \t]*```(?<lang>[^\r\n]*)\r?\n(?<body>.*?)
 # the correct pattern when schemas differ per index, which 'index IN (...)'
 # cannot express. Requiring the disjuncts to be bare index= terms spares it.
 $script:bareIndexOrRegex    = '(?i)index[ \t]*=[ \t]*[\w:*]+(?:[ \t]+OR[ \t]+index[ \t]*=[ \t]*[\w:*]+){2,}'
+# A DENYLIST, not a whitelist of generating commands. In SPL a leading pipe
+# already means the first command is generating -- you cannot pipe into the
+# first command -- and every app adds its own (the GreyNoise commands here start
+# pipelines the same way tstats does), so a whitelist can never be complete and
+# would report each new one as a defect. What a leading pipe does NOT guarantee
+# is that the command generates rather than searches: '| search index=... ' is
+# a raw-event search wearing a generating command's syntax, and that is the case
+# worth naming.
+$script:splNonGeneratingLeadCommands = @("search")
+# An actual time PREDICATE, not a mention of _time. 'index=firewall | stats
+# latest(_time)' scans all history but contains the string '_time', so a bare
+# substring test exempted it.
+$script:splTimePredicateRegex = '(?i)(\bearliest[ \t]*=|\blatest[ \t]*=|_time[ \t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \t]*_time|\bbin[ \t]*\([ \t]*_time)'
 # High-precision credential shapes only. A generic 'password=...' pattern would
 # fire on docs that discuss credentials, and a check that cries wolf gets turned
 # off rather than fixed.
@@ -233,9 +246,16 @@ $script:secretPatterns = @(
 )
 
 # Colon-delimited lowercase tokens: the shape of a Splunk sourcetype. (?-i) is
-# explicit because sourcetypes are lowercase and CamelCase KQL table names must
-# not be swept in.
-$script:sourcetypeTokenRegex = '(?-i)\b[a-z][a-z0-9_]*(?::[a-z0-9_*]+){1,4}\b'
+# Segments accept either case. An earlier version required a lowercase first
+# letter on the assumption that sourcetypes are lowercase; the repo's own
+# catalogue disproves it (OktaIM2:log), and the effect was that the whole
+# OktaIM2:* family -- including an invented OktaIM2:whatever -- was never
+# matched and so bypassed the provenance check entirely.
+# The colon is what identifies the shape, not the casing. Registry comparison
+# stays case-sensitive (an ordinal HashSet), so wrong casing is still reported.
+# The (?<!\$) rules out PowerShell scope syntax: allowing uppercase segments
+# made '$env:SPLUNK_TOKEN' in the README read as a sourcetype.
+$script:sourcetypeTokenRegex = '(?-i)(?<!\$)\b[A-Za-z][A-Za-z0-9_]*(?::[A-Za-z0-9_*]+){1,4}\b'
 # Provenance registry for sourcetypes, populated below from the two docs that
 # already exist to catalogue them. Deliberately NOT a new parallel list: a
 # second registry would drift from the catalogue, and "add it to the catalogue"
@@ -295,7 +315,18 @@ $script:kqlLeadingRefRegex = '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b'
 # Together they force the option group to consume the named option, after which
 # '*' is correctly seen as no table at all.
 $script:kqlUnionRefRegex   = '\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)'
-$script:kqlJoinRefRegex    = '\bjoin\b[^(\r\n]*\([ \t]*([A-Za-z_][A-Za-z0-9_]*)'
+# union takes a comma-separated list, so the operands after the first need their
+# own pass: 'union SigninLogs, InventedTable' hid everything past the comma.
+$script:kqlUnionMoreRegex  = ',[ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])'
+# (?s) so 'join (' followed by the table on the NEXT line is still seen. The
+# line-at-a-time version missed every multiline join.
+$script:kqlJoinRefRegex    = '(?s)\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)'
+# 'let recent = SigninLogs;' binds a table. The negative lookahead for '(' keeps
+# function calls out ('let cutoff = ago(1d);' must not read as a table 'ago').
+$script:kqlLetValueRegex   = '\blet[ \t]+\w+[ \t]*=[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()'
+# The names those let statements bind. They are locals, not tables, and a later
+# 'recent | take 5' must not be reported as an uncatalogued table.
+$script:kqlLetNameRegex    = '\blet[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*='
 $script:knownKqlTables = New-Object 'System.Collections.Generic.HashSet[string]'
 $script:kqlRegistryFile = "splunk-sentinel-query-builder/references/sentinel-table-catalog.md"
 
@@ -306,23 +337,50 @@ function Get-KqlTableReferences {
 
     $refs = New-Object 'System.Collections.Generic.HashSet[string]'
     $lines = @(($Body -split '\r?\n') | Where-Object { $_.Trim().Length -gt 0 -and -not $_.Trim().StartsWith("//") })
+
+    # Names bound by 'let' are locals, not tables. Collected first so a later
+    # reference to one is not reported as an uncatalogued table.
+    $locals = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($m in [regex]::Matches($Body, $script:kqlLetNameRegex)) {
+        $null = $locals.Add($m.Groups[1].Value)
+    }
+
     if ($lines.Count -gt 0) {
         $lead = [regex]::Match($lines[0], $script:kqlLeadingRefRegex)
         if ($lead.Success -and $script:kqlKeywords -cnotcontains $lead.Groups[1].Value) {
             $null = $refs.Add($lead.Groups[1].Value)
         }
     }
-    foreach ($line in $lines) {
-        foreach ($pattern in @($script:kqlUnionRefRegex, $script:kqlJoinRefRegex)) {
-            foreach ($m in [regex]::Matches($line, $pattern)) {
-                $name = $m.Groups[1].Value
-                # 'union withsource=Table_ *' has no named operand, and an
-                # operator after union (union kind=outer ...) is not a table.
-                if ($script:kqlKeywords -cnotcontains $name) {
-                    $null = $refs.Add($name)
-                }
+    # Whole-body, not line-at-a-time: a join operand may sit on the line after
+    # its '(', and a union list may wrap.
+    foreach ($pattern in @($script:kqlUnionRefRegex, $script:kqlJoinRefRegex, $script:kqlLetValueRegex)) {
+        foreach ($m in [regex]::Matches($Body, $pattern)) {
+            $name = $m.Groups[1].Value
+            # 'union withsource=Table_ *' has no named operand, and an
+            # operator after union (union kind=outer ...) is not a table.
+            if ($script:kqlKeywords -cnotcontains $name) {
+                $null = $refs.Add($name)
             }
         }
+    }
+    # Trailing operands of a union list, taken only from the union statement
+    # itself so that commas elsewhere (project, summarize by) are not mistaken
+    # for table references.
+    foreach ($u in [regex]::Matches($Body, $script:kqlUnionRefRegex)) {
+        $tail = $Body.Substring($u.Index + $u.Length)
+        $stop = $tail.IndexOfAny([char[]]@("|", "`r", "`n"))
+        if ($stop -ge 0) {
+            $tail = $tail.Substring(0, $stop)
+        }
+        foreach ($m in [regex]::Matches($tail, $script:kqlUnionMoreRegex)) {
+            $name = $m.Groups[1].Value
+            if ($script:kqlKeywords -cnotcontains $name) {
+                $null = $refs.Add($name)
+            }
+        }
+    }
+    foreach ($local in $locals) {
+        $null = $refs.Remove($local)
     }
     # An empty array unrolls to nothing on return, so the caller would see $null.
     return , @($refs)
@@ -371,11 +429,17 @@ function Test-SplBlock {
     if ($lines.Count -eq 0) {
         return
     }
-    if ($lines[0].Trim().StartsWith("|")) {
-        return
+    $first = $lines[0].Trim()
+    if ($first.StartsWith("|")) {
+        # Only GENERATING commands are exempt, not every pipeline-prefixed
+        # query. Exempting any leading pipe let '| search index=firewall ...'
+        # -- a raw-event search by any other name -- skip the check entirely.
+        $cmd = [regex]::Match($first, '^\|[ \t]*([A-Za-z_]\w*)')
+        if (-not ($cmd.Success -and $script:splNonGeneratingLeadCommands -contains $cmd.Groups[1].Value.ToLowerInvariant())) {
+            return
+        }
     }
-    if ($Body -notmatch '(?i)\bearliest[ \t]*=' -and
-        $Body -notmatch '_time' -and
+    if ($Body -notmatch $script:splTimePredicateRegex -and
         $Body -notmatch '(?i)\|[ \t]*head\b') {
         Add-Issue "$File has a raw-event SPL search with no time bound; add earliest= (or bound it with | head)"
     }

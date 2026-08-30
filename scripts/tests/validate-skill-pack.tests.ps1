@@ -457,6 +457,28 @@ try {
         Assert-IssueMatching "no time bound"
     }
 
+    Test-Case "mentioning _time is not a time bound" {
+        # REGRESSION: the exemption tested for the substring '_time', so an
+        # aggregation over it exempted a search that scans all history.
+        Test-SplBlock "d.md" "index=firewall`n| stats latest(_time)"
+        Assert-IssueMatching "no time bound"
+        Reset-ValidatorState
+        Test-SplBlock "d.md" "index=firewall`n| where _time > relative_time(now(), `"-1d`")"
+        Assert-NoIssues
+    }
+
+    Test-Case "a leading pipe alone does not exempt a raw-event search" {
+        # REGRESSION: every pipeline-prefixed block was exempt, so '| search ...'
+        # -- a raw-event search in generating-command clothing -- skipped the
+        # check. Custom generating commands from apps must stay exempt, which is
+        # why this is a denylist rather than a whitelist of known commands.
+        Test-SplBlock "d.md" "| search index=firewall sourcetype=cisco:asa`n| stats count"
+        Assert-IssueMatching "no time bound"
+        Reset-ValidatorState
+        Test-SplBlock "d.md" "| gncontext ip=`"203.0.113.42`""
+        Assert-NoIssues
+    }
+
     Test-Case "generating commands and head-bounded searches need no earliest" {
         # '| tstats ...' is the documented discovery shape and runs unbounded;
         # '| head' is the bound the schema-inspection snippets actually use.
@@ -483,6 +505,28 @@ try {
     Test-Case "union and join operands are table references" {
         Assert-Equal @("SigninLogs", "AuditLogs") (Get-KqlTableReferences "SigninLogs`n| union AuditLogs")
         Assert-Equal @("SigninLogs", "Syslog") (Get-KqlTableReferences "SigninLogs`n| join kind=inner (Syslog) on X")
+    }
+
+    Test-Case "every operand of a union list is a table reference" {
+        # REGRESSION: only the first operand was read, so everything after the
+        # comma in 'union SigninLogs, InventedTable' skipped validation.
+        Assert-Equal @("SigninLogs", "AuditLogs", "Heartbeat") (Get-KqlTableReferences "SigninLogs`n| union AuditLogs, Heartbeat")
+    }
+
+    Test-Case "a join operand on the following line is still found" {
+        # REGRESSION: matching ran line-at-a-time, so a multiline join hid its
+        # operand entirely.
+        Assert-Equal @("SigninLogs", "InventedTable") (Get-KqlTableReferences "SigninLogs`n| join (`n    InventedTable`n) on X")
+    }
+
+    Test-Case "a let-bound table is a reference, and the local name is not" {
+        # REGRESSION: 'let recent = InventedTable;' bound a table that was never
+        # checked. The binding NAME must not then be reported as a table itself.
+        Assert-Equal @("InventedTable") (Get-KqlTableReferences "let recent = InventedTable;`nrecent | take 5")
+    }
+
+    Test-Case "a function call on the right of a let is not a table" {
+        Assert-Equal @() (Get-KqlTableReferences "let cutoff = ago(1d);`nlet x = 5;")
     }
 
     Test-Case "union withsource=X * names no table" {

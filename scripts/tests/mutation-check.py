@@ -482,6 +482,24 @@ check_mutation("Sentinel table named with the wrong casing",
                # catalogue shipped with the wrong casing in a prose mention.
                lambda: append(KDOC, f"\n{BT}kql\nSignInLogs\n| where ResultType == 0\n{BT}\n"),
                "never invent Sentinel identifiers")
+check_mutation("uncatalogued MIXED-CASE sourcetype",
+               # The token pattern required a lowercase first letter, so the
+               # catalogue's own OktaIM2:* family was never matched and an
+               # invented OktaIM2:whatever bypassed the check entirely.
+               lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=OktaIM2:invented\n| head 5\n{BT}\n"),
+               "never invent Splunk identifiers")
+check_mutation("uncatalogued table in a union list or multiline join",
+               lambda: append(KDOC, f"\n{BT}kql\nSigninLogs\n| union AuditLogs, InventedTable\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued table bound by let",
+               lambda: append(KDOC, f"\n{BT}kql\nlet recent = InventedTable;\nrecent | take 5\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("raw-event search whose only _time is an aggregation",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=firewall\n| stats latest(_time)\n{BT}\n"),
+               "no time bound")
+check_mutation("unbounded '| search' wearing a leading pipe",
+               lambda: append(MDOC, f"\n{BT}spl\n| search index=firewall sourcetype=cisco:asa\n| stats count\n{BT}\n"),
+               "no time bound")
 check_mutation("gutted Sentinel table registry",
                lambda: write("splunk-sentinel-query-builder/references/sentinel-table-catalog.md", b""),
                "Sentinel table provenance cannot be checked")
