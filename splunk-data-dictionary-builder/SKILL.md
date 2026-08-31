@@ -50,16 +50,19 @@ Return or write JSON with:
 
 ## Script Usage
 
-Use environment variables from `.env.example` or pass arguments directly:
+Read credentials from the environment rather than typing them into the command.
+A literal password or token on the command line lands in shell history and is
+visible to every other user on the host through `ps`. Copy `.env.example` to
+`.env` and export the values, or pass them as below:
 
 ```powershell
-python .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py --base-url https://splunk.example.com:8089 --username USER --password PASS --output .\out\splunk-data-dictionary.json
+python .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py --base-url $env:SPLUNK_BASE_URL --username $env:SPLUNK_USERNAME --password $env:SPLUNK_PASSWORD --output .\out\splunk-data-dictionary.json
 ```
 
 For token auth:
 
 ```powershell
-python .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py --base-url https://splunk.example.com:8089 --token TOKEN --output .\out\splunk-data-dictionary.json
+python .\splunk-data-dictionary-builder\scripts\build_splunk_dictionary.py --base-url $env:SPLUNK_BASE_URL --token $env:SPLUNK_TOKEN --output .\out\splunk-data-dictionary.json
 ```
 
 ## References
