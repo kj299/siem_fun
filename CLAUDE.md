@@ -16,12 +16,23 @@ pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1
 # Dictionary builder unit tests
 python -m unittest discover -s splunk-data-dictionary-builder/tests
 
-# Mutation-check both suites (proves the REGRESSION tests actually catch their bugs)
+# Golden-prompt grader unit tests
+python -m unittest discover -s scripts/tests -p "test_*.py"
+
+# Mutation-check every suite (proves the REGRESSION tests and the grader's
+# checks actually catch their bugs)
 python3 scripts/tests/mutation-check.py
+
+# Behavioral half of the golden prompts: drives a model through every fixture
+# and grades the answers. Needs a credential in the environment, never on the
+# command line (pip install anthropic; export ANTHROPIC_API_KEY=...).
+python3 scripts/run_golden_prompts.py
+python3 scripts/grade_golden_output.py --all out/golden
 ```
 
-CI runs all three on every pull request and on pushes to `main` (two jobs:
-`validate` on windows-latest, `python` on ubuntu-latest), plus weekly on a
+CI runs everything except the model run on every pull request and on pushes
+to `main` (two jobs: `validate` on windows-latest, `python` on
+ubuntu-latest), plus weekly on a
 schedule so runner-image and module drift surfaces on its own rather than as a
 mystery failure in whatever PR happens to come next. A push to a topic branch
 with no open PR runs nothing, so run them locally before pushing; several bugs
@@ -82,10 +93,16 @@ in this repo's history reached CI only because a local run was skipped.
 
     The positional registry is deliberately tighter than the shape one: it is
     the first backticked cell of each catalogue row plus the opening name of
-    each CIM alignment bullet, kept in its own set. Folding the shape set into
-    the positional one would work, but the reverse would not:
-    `WinEventLog:Security` is a *source* listed in a second catalogue column,
-    and the shape check must keep accepting it from prose.
+    each CIM alignment bullet, kept in its own set, and the positional check
+    accepts nothing else. The shape set must not be used as a fallback: it
+    holds every colon token in the registry files, which includes *sources*
+    the catalogue lists next to their sourcetype (`okta:im2` is the source
+    whose sourcetype is `OktaIM2:log`), and the first version of the check
+    accepted it, so a query naming `okta:im2` as its sourcetype passed and
+    would return nothing. That sentence cannot write the offending query
+    literally: this file is scanned too. The shape check keeps
+    its wider set on purpose, because `WinEventLog:Security` in a second
+    catalogue column must still be accepted from prose.
   - **Sentinel tables** named in table position in a `kql` block must be
     catalogued in [sentinel-table-catalog.md](splunk-sentinel-query-builder/references/sentinel-table-catalog.md),
     which cites Microsoft's own documentation per table. **KQL table names are
@@ -142,6 +159,15 @@ Breaking any of these fails CI, so change them deliberately:
   fixture's "shape" bullet must be declared by some `SKILL.md`. Checked against
   the union across skills, because a fixture does not record which skill it
   exercises and inferring that from its prose would be guesswork.
+- Every fixture in [examples/golden-prompts.md](examples/golden-prompts.md)
+  carries exactly one fenced `json` grader spec under its prose bullets, and
+  the grader's tests fail otherwise. The spec is what runs against a model's
+  answer; the bullets are for a reader. They sit next to each other so a
+  bullet changed without its spec shows in the same diff, but nothing checks
+  that they agree: reviewer's job. A spec may only require sections a
+  `SKILL.md` declares, and it must not write a literal `sourcetype=` inside a
+  regular expression, because the positional provenance check reads the
+  fixture file too.
 
 ## SPL in reference docs
 
@@ -236,6 +262,17 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   for exactly this reason. The mutation-check script exercises a CRLF checkout,
   an LF checkout, a UTF-8 BOM, a UTF-16 file and a wildcard filename; keep those
   passing.
+- The golden-prompt grader (`scripts/grade_golden_output.py`) applies the
+  validator's rules to model OUTPUT: unquoted `| where` booleans, unbounded
+  raw searches, KQL without `TimeGenerated`, invented identifiers read by
+  position, and a request to paste a credential. Its checks are registered in
+  `GRADER_MUTS` in the mutation script, so a grader check that stops firing
+  goes red the same way a validator check does. The model run itself is not
+  in CI because CI holds no credential: run it locally after changing a
+  `SKILL.md` or a reference file, and record what it found in
+  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). The first run's finding was a
+  fixture that contradicted the skill, not a skill that was wrong, and only a
+  model run could have shown that.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
   tests a different thing on each platform: a Linux run only ever exercises LF,

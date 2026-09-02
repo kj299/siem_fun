@@ -282,7 +282,9 @@ $script:sourcetypeInRegex    = '(?i)\bsourcetype[ \t]+IN[ \t]*\(([^)]*)\)'
 # $knownSourcetypes on purpose: that set is colon tokens harvested from all
 # prose, and replacing it with this one would make the prose check report
 # WinEventLog:Security -- a SOURCE, correctly listed in a second column -- as an
-# uncatalogued sourcetype. The positional check accepts a value from either set.
+# uncatalogued sourcetype. The positional check accepts ONLY this set: the
+# colon-token set contains those same sources, and accepting it as a fallback
+# let sourcetype=okta:im2 pass.
 $script:knownSourcetypeNames = New-Object 'System.Collections.Generic.HashSet[string]'
 $script:catalogueFirstCellRegex = '(?m)^\|[ \t]*`([^`]+)`(?:[ \t]*/[ \t]*`([^`]+)`)*'
 $script:cimBulletNameRegex      = '(?m)^-[ \t]+[^`\r\n]*`([A-Za-z][A-Za-z0-9_:.*/-]*)`[^`\r\n]*->'
@@ -316,7 +318,13 @@ function Test-SourcetypeValues {
     param([string]$File, [string]$Text)
 
     foreach ($value in (Get-SourcetypeValues $Text)) {
-        if ($script:knownSourcetypeNames.Contains($value) -or $script:knownSourcetypes.Contains($value)) {
+        # Only the positional registry counts here. The colon-token set is
+        # harvested from every backticked token in the registry files, and that
+        # includes SOURCES the catalogue lists next to their sourcetype:
+        # okta:im2 is named there as the source whose sourcetype is OktaIM2:log,
+        # so accepting it from that set let sourcetype=okta:im2 pass and return
+        # nothing. Reviewed as a P1 after the check first shipped.
+        if ($script:knownSourcetypeNames.Contains($value)) {
             continue
         }
         Add-Issue "$File writes sourcetype=$value, which is not a catalogued sourcetype of any shape; never invent Splunk identifiers"
@@ -718,6 +726,9 @@ $requiredFiles = @(
     "splunk-data-dictionary-builder/tests/test_build_splunk_dictionary.py",
     "scripts/tests/validate-skill-pack.tests.ps1",
     "scripts/tests/mutation-check.py",
+    "scripts/tests/test_grade_golden_output.py",
+    "scripts/grade_golden_output.py",
+    "scripts/run_golden_prompts.py",
     "scripts/required-checks.txt",
     "examples/golden-prompts.md",
     "splunk-enrichment-query-builder/SKILL.md",

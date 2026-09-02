@@ -4,7 +4,8 @@
 record -- the reasoning behind what was built, in the order it was decided --
 rather than as a roadmap. For what the pack does today, read
 [README.md](README.md); for the rules that keep it correct, read
-[CLAUDE.md](CLAUDE.md). The one item still genuinely open is listed at the end.
+[CLAUDE.md](CLAUDE.md). What the first model run found, and the one decision
+still open, are at the end.
 
 ## Goal
 
@@ -167,8 +168,11 @@ siem_fun/
 |-- scripts/
 |   |-- tests/
 |   |   |-- mutation-check.py
+|   |   |-- test_grade_golden_output.py
 |   |   `-- validate-skill-pack.tests.ps1
+|   |-- grade_golden_output.py
 |   |-- required-checks.txt
+|   |-- run_golden_prompts.py
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/
@@ -223,15 +227,48 @@ documents are read by a model at query time, so a factual error in them is a
 wrong query with no error message. README.md explains what it enforces;
 CLAUDE.md explains what it deliberately does not.
 
+## What the first model run found
+
+The last open item was executing the fixtures in
+[examples/golden-prompts.md](examples/golden-prompts.md) against a model and
+grading the output: the only way to find guidance that is accurate and
+consistent and still produces a poor query. That now has tooling. Each fixture
+carries a grader spec next to its prose bullets;
+[scripts/grade_golden_output.py](scripts/grade_golden_output.py) grades an
+answer against the spec and against the rules the validator applies to the
+documents; [scripts/run_golden_prompts.py](scripts/run_golden_prompts.py)
+drives a model through all ten with the skill loaded exactly as a client would
+load it. The grader's checks are mutation-tested like the validator's.
+
+First run, 2026-09-02, on Claude Opus (the session's `opus` alias) with each
+fixture executed by an agent given SKILL.md and the references the way the
+runner hands them over. Result after correction: 10 of 10.
+
+- **One fixture was wrong, no skill was.** Fixture 8 asserted
+  `index IN (firewall, proxy)`. The skill says to filter per index when the
+  sourcetypes' schemas differ, the two supplied ones do, and the model did
+  exactly that, explaining why in Assumptions. The fixture failed a correct
+  answer. It now accepts either documented shape and forbids only the bare
+  `OR` chain. Neither the validator nor a careful read could have found this:
+  the fixture and the skill are each internally consistent.
+- **Four grader rules were too strict for real answers**, each corrected and
+  now unit-tested: a discovery answer offering three starter queries was
+  graded on the first fence only; a translation answer echoing the source SPL
+  under Query tripped a rule about the target KQL; a `getschema` block was
+  held to the `TimeGenerated` rule; and "I will never ask you to type a
+  token" tripped the credential-request check.
+- **Every answer** bounded time first, named its assumptions, switched to
+  discovery when the dataset was unknown, used only supplied or catalogued
+  identifiers, and never asked for a credential. Answer 10's claims about the
+  dictionary builder's flags and environment-variable defaults were checked
+  against the script and are true.
+
 ## What is still open
 
-Executing the fixtures in [examples/golden-prompts.md](examples/golden-prompts.md)
-against a model and grading the output. The structural half is done -- every
-fixture asserts only output sections a skill declares, and the fixtures inherit
-every identifier and SPL check -- but the behavioral half needs a model call,
-which this repository's CI cannot make. It is the only remaining way to find
-the class of defect neither the checks nor a careful read can reach: guidance
-that is accurate and consistent and still produces a poor query.
+Running the model half on a schedule. CI holds no model credential, so the
+weekly run covers everything except the one check that needs a model. Adding
+a repository secret for the API key would close that, and it is the repository
+owner's decision, not this plan's.
 
 ## For your own environment
 

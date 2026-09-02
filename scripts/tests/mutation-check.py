@@ -68,6 +68,14 @@ def py_suite() -> str:
     return "OK" if r.stderr.strip().endswith("OK") else "FAILED"
 
 
+GRADER = "scripts/grade_golden_output.py"
+
+
+def grader_suite() -> str:
+    r = sh(f'{PY_EXE} -m unittest discover -s scripts/tests -p "test_*.py"')
+    return "OK" if r.stderr.strip().endswith("OK") else "FAILED"
+
+
 def ps_suite() -> str:
     r = sh("pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1")
     for line in r.stdout.splitlines():
@@ -273,10 +281,11 @@ print("\n[A] BASELINE AT HEAD")
 # the suite turns red, so a suite that is ALREADY red makes every mutation
 # against it look caught and can still exit 0. Abort instead: with a red
 # baseline every result below is meaningless, not merely suspect.
-_v, _ps, _py = validator(), ps_suite(), py_suite()
+_v, _ps, _py, _gr = validator(), ps_suite(), py_suite(), grader_suite()
 print(f"  validator      : {_v}")
 print(f"  powershell     : {_ps}")
 print(f"  python         : {_py}")
+print(f"  grader         : {_gr}")
 _baseline = []
 if _v != "PASSED":
     _baseline.append(f"validator not green at baseline ({_v})")
@@ -284,6 +293,8 @@ if not (_ps.endswith(", 0 failed") and _ps[0].isdigit()):
     _baseline.append(f"powershell suite not green at baseline ({_ps})")
 if _py != "OK":
     _baseline.append(f"python suite not green at baseline ({_py})")
+if _gr != "OK":
+    _baseline.append(f"grader suite not green at baseline ({_gr})")
 if _baseline:
     print("\n" + "=" * 74)
     print("ABORTING: baseline is not green, so no mutation result would mean anything.")
@@ -382,6 +393,42 @@ PS_MUTS = [
 ]
 for label, old, new in PS_MUTS:
     unit_mutation(label, VAL, old, new, ps_suite)
+
+# The golden-prompt grader applies the validator's rules to model OUTPUT, so a
+# grader check that silently stopped firing would let a bad answer pass the
+# behavioral half while the structural half still reported green. Each entry
+# disables one check; the grader suite must go red.
+GRADER_MUTS = [
+    ("grader: unquoted where-boolean check",
+     r'_WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")',
+     r'_WHERE_BOOLEAN_RE = re.compile(r"ZZZNEVERMATCHES")'),
+    ("grader: raw-event spl block needs a time bound",
+     '        if lang == "spl" and first and not first.startswith("|"):',
+     "        if False:"),
+    ("grader: placeholders and wildcards are not identifier claims",
+     '    return value.startswith(("YOUR_", "<")) or value == "..." or "*" in value',
+     "    return False"),
+    ("grader: section order enforced",
+     "        if positions == sorted(positions):",
+     "        if True:"),
+    ("grader: labels inside fenced blocks ignored",
+     '    stripped = _FENCE_RE.sub("", text)',
+     "    stripped = text"),
+    ("grader: credential-paste check",
+     '    r"(?i)\\b(paste|share|send|provide|enter|type)\\b[^.\\n]{0,60}\\b(token|password|secret|credential|api key)"',
+     '    r"ZZZNEVERMATCHES"'),
+    ("grader: CRLF answers normalised before grading",
+     '        return fh.read().replace("\\r\\n", "\\n")',
+     "        return fh.read()"),
+    ("grader: query block read from under the Query label, not the first fence",
+     '    for label in ("Query", "Discovery query"):\n        body = section_body(text, label, declared)',
+     '    for label in ("Query", "Discovery query"):\n        body = text'),
+    ("grader: a fixture with no spec is an error",
+     "        if len(specs) != 1:",
+     "        if len(specs) > 1:"),
+]
+for label, old, new in GRADER_MUTS:
+    unit_mutation(label, GRADER, old, new, grader_suite)
 
 for name, why in NOT_MUTATABLE.items():
     print(f"  (skipped)      {name}\n                 reason: {why}")
@@ -570,6 +617,13 @@ check_mutation("invented colon-free sourcetype in query position",
                "not a catalogued sourcetype of any shape")
 check_mutation("invented hyphenated sourcetype in query position",
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=also-invented-web earliest=-24h\n| stats count\n{BT}\n"),
+               "not a catalogued sourcetype of any shape")
+check_mutation("a catalogued SOURCE written as a sourcetype",
+               # okta:im2 is in the catalogue, in the source column, next to
+               # its real sourcetype OktaIM2:log. The first positional check
+               # accepted any colon token from the registry files and so let
+               # this through; reviewed as a P1 after it merged.
+               lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=okta:im2 earliest=-24h\n| stats count\n{BT}\n"),
                "not a catalogued sourcetype of any shape")
 check_mutation("uncatalogued MIXED-CASE sourcetype",
                # The token pattern required a lowercase first letter, so the
@@ -895,6 +949,7 @@ if fails:
     for f in fails:
         print(f"  - {f}")
     sys.exit(1)
-print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell unit, "
+print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
+      f"{len(GRADER_MUTS)} grader unit, "
       f"{run_counts['validator']} validator checks, {run_counts['environment']} environment)")
 sys.exit(0)

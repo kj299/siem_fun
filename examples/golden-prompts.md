@@ -27,6 +27,19 @@ Expected output:
 - May use `EventCode=1` even though it is outside the supplied field list, provided
   it is named in `Assumptions`
 
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Query", "Assumptions"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "query_matches": ["index=windows", "sourcetype=XmlWinEventLog"],
+  "indexes": ["windows"],
+  "sourcetypes": ["XmlWinEventLog"],
+  "assumed_if_used": ["EventCode"]
+}
+```
+
 ## 2. Splunk discovery mode with tstats
 
 Prompt:
@@ -53,6 +66,19 @@ Expected output:
 
 - States that exact index or sourcetype mapping is needed before productionizing
 
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Discovery query", "Next step"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "query_matches": ["\\|\\s*tstats\\s+count\\s+where\\s+index=\\*[^\\n|]*\\bby\\s+index,\\s*sourcetype"],
+  "matches": ["(?i)re-?invoke"],
+  "indexes": [],
+  "sourcetypes": []
+}
+```
+
 ## 3. Sentinel known-table optimization
 
 Prompt:
@@ -73,6 +99,19 @@ Expected output:
 - Pushes `where TimeGenerated > ago(7d)` before `extend`
 - Filters before shaping columns
 - Explains only material tuning changes
+
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Query", "What changed", "Why efficient", "Assumptions"],
+  "forbid_sections": ["Tuning"],
+  "tables": ["SigninLogs"],
+  "query_lang": "kql",
+  "query_matches": ["^SigninLogs", "where\\s+TimeGenerated\\s*>\\s*ago\\(7d\\)", "ResultType\\s*!=\\s*\"0\""],
+  "query_not_matches": ["(?s)\\|\\s*extend.*\\|\\s*where\\s+TimeGenerated"]
+}
+```
 
 ## 4. Sentinel discovery mode with Usage and getschema
 
@@ -102,6 +141,17 @@ Usage
 | sort by TotalGB desc
 ```
 
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Discovery query", "Next step"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "matches": ["\\bUsage\\b", "getschema", "(?i)\\bunion\\b[^\\n]*\\*"],
+  "tables": ["Usage", "DeviceProcessEvents", "SecurityEvent", "Syslog", "CommonSecurityLog"]
+}
+```
+
 ## 5. SPL to KQL translation with data dictionary excerpt
 
 Prompt:
@@ -126,6 +176,19 @@ Expected output:
 - Maps `user` to `UserPrincipalName`
 - Maps `src_ip` to `IPAddress`
 - Calls out any assumption about `action=failure` mapping, such as `ResultType != "0"`
+
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Query", "Why efficient", "Assumptions", "Data dictionary notes", "Tuning", "Validate"],
+  "tables": ["SigninLogs"],
+  "query_lang": "kql",
+  "query_matches": ["^SigninLogs", "UserPrincipalName", "IPAddress", "ago\\(24h\\)", "count\\(\\)", "ResultType"],
+  "query_not_matches": ["\\bsrc_ip\\b", "\\buser\\b", "windows_auth"],
+  "matches": ["ResultType"]
+}
+```
 
 ## 6. Splunk CIM multi-vendor hunt
 
@@ -156,6 +219,19 @@ Example shape:
 | tstats summariesonly=true count from datamodel=Web.Web where Web.action="blocked" by Web.src, Web.url, sourcetype
 ```
 
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Query", "Assumptions"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "query_matches": ["^\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "\\bby\\b[^\\n]*\\b(sourcetype|vendor_product)\\b"],
+  "query_not_matches": ["\\bsourcetype\\s*=\\s*\\S+[^\\n]*\\bOR\\b[^\\n]*\\bsourcetype\\s*="],
+  "indexes": [],
+  "sourcetypes": ["zscalernss-web", "cloudflare:json", "pan:threat"]
+}
+```
+
 ## 7. KQL to SPL translation with ambiguous dataset mapping
 
 Prompt:
@@ -174,6 +250,17 @@ Expected output:
 - Does not invent a Splunk index
 - Provides a `tstats` discovery query to identify endpoint process indexes and sourcetypes
 - States that `DeviceName`, `FileName`, and `InitiatingProcessFileName` need local field mappings
+
+Grader spec:
+
+```json
+{
+  "sections": ["Objective"],
+  "matches": ["\\|\\s*tstats\\b"],
+  "contains": ["DeviceName", "FileName", "InitiatingProcessFileName"],
+  "indexes": []
+}
+```
 
 ## 8. Multi-index enrichment hunt with GreyNoise
 
@@ -195,13 +282,32 @@ Expected output:
 - `Objective`
 - `Query`
 - `Assumptions`
-- Uses `index IN (firewall, proxy)` rather than an `OR` chain
+- Scopes both indexes in one base search: `index IN (firewall, proxy)` when the
+  fields line up, or `((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=bluecoat:proxysg:access:kv))`
+  when the schemas differ, which they do here. Never a bare
+  `index=firewall OR index=proxy` chain. The first run of this fixture asserted
+  only the `IN` form and failed a correct answer that had followed the skill's
+  own per-index rule; the two shapes are both documented in
+  multi-index-patterns.md
 - Pre-filters to IPv4 values before enrichment (`gnenrich ip_field=...` or a `greynoise_indicators` lookup join)
 - Filters on `classification` (the field the documented enrichment paths return),
   not on a `noise` column that `greynoise_indicators` does not carry
 - If it does compare a boolean-ish lookup field, quotes the value
   (`noise="true"`, never `noise=true`)
 - Does not invent sourcetypes beyond the two provided
+
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Query", "Assumptions"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "query_matches": ["index\\s+IN\\s*\\(\\s*firewall\\s*,\\s*proxy\\s*\\)|\\(\\s*index=firewall\\s+\\w+=cisco:asa\\s*\\)\\s+OR\\s+\\(\\s*index=proxy\\s+\\w+=bluecoat:proxysg:access:kv\\s*\\)", "(?i)gnenrich|greynoise_indicators", "classification"],
+  "query_not_matches": ["\\bindex=firewall\\s+OR\\s+index=proxy\\b", "(?s)greynoise_indicators.*\\bnoise\\b"],
+  "indexes": ["firewall", "proxy"],
+  "sourcetypes": ["cisco:asa", "bluecoat:proxysg:access:kv"]
+}
+```
 
 ## 9. Enrichment discovery mode with unknown sourcetypes
 
@@ -223,6 +329,19 @@ Expected output:
 - Instructs the user to run the query and re-invoke the skill with confirmed sourcetypes
 - Does not guess sourcetypes for the unfamiliar index names
 
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Discovery query", "Next step"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "query_matches": ["\\|\\s*tstats\\s+count\\s+where\\s+index\\s+IN\\s*\\(\\s*net_dmz\\s*,\\s*net_core\\s*\\)\\s+by\\s+index\\s*,\\s*sourcetype\\s*\\|\\s*sort\\s+-\\s*count"],
+  "matches": ["(?i)re-?invoke"],
+  "indexes": ["net_dmz", "net_core"],
+  "sourcetypes": []
+}
+```
+
 ## 10. Data dictionary build without pasted credentials
 
 Prompt:
@@ -237,3 +356,12 @@ Expected output:
 - Never asks the user to paste a token or password into chat
 - Reports permission gaps explicitly instead of treating missing data as absent
 - Output JSON includes `indexes`, `sourcetypes`, `cim_datamodels`, `cim_coverage`, `field_samples`, and `warnings`
+
+Grader spec:
+
+```json
+{
+  "contains": ["build_splunk_dictionary.py", "indexes", "sourcetypes", "cim_datamodels", "cim_coverage", "field_samples", "warnings"],
+  "matches": ["SPLUNK_TOKEN|SPLUNK_PASSWORD|\\$env:|--token|--password", "(?i)permission"]
+}
+```

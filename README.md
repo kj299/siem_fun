@@ -75,8 +75,11 @@ siem_fun/
 |-- scripts/
 |   |-- tests/
 |   |   |-- mutation-check.py
+|   |   |-- test_grade_golden_output.py
 |   |   `-- validate-skill-pack.tests.ps1
+|   |-- grade_golden_output.py
 |   |-- required-checks.txt
+|   |-- run_golden_prompts.py
 |   `-- validate-skill-pack.ps1
 |-- splunk-data-dictionary-builder/
 |   |-- agents/
@@ -199,6 +202,23 @@ it is caught; also runs in CI):
 python3 scripts/tests/mutation-check.py
 ```
 
+Run the golden-prompt grader's unit tests (stdlib only, also in CI):
+
+```bash
+python -m unittest discover -s scripts/tests -p "test_*.py"
+```
+
+Run the golden prompts against a model and grade the answers. This is the one
+check CI cannot run, because it needs a model credential. The SDK reads the
+key from the environment; the script never takes it as an argument.
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=...            # or `ant auth login`; never paste it into chat
+python3 scripts/run_golden_prompts.py   # answers land in out/golden/NN.md, gitignored
+python3 scripts/grade_golden_output.py --all out/golden
+```
+
 Tests tagged `REGRESSION` pin behavior that a shipped defect got wrong. Keep them
 passing rather than adjusting the expectation, and add a case whenever a bug is
 fixed in the builder.
@@ -244,6 +264,23 @@ under both CRLF and LF line endings, and the validator is asserted to fail
 indistinguishable from no check at all, and three checks in this repository's
 history were exactly that on the only operating system CI runs them on. The
 harness runs in CI on every pull request.
+
+What the golden prompts prove, when run: the checks above verify the documents
+agree with each other; only a model run verifies that a model reading them
+produces a good query. Each fixture in
+[examples/golden-prompts.md](examples/golden-prompts.md) carries a grader
+spec, [scripts/run_golden_prompts.py](scripts/run_golden_prompts.py) drives a
+model through all ten with the skill loaded exactly as a client would load
+it, and [scripts/grade_golden_output.py](scripts/grade_golden_output.py)
+grades each answer against its spec and against the same rules the validator
+holds the documents to: sections present and in order, no invented identifier
+in query position, time bound first, no unquoted `| where` boolean, and never
+a request to paste a credential. The grader's checks are mutation-tested like
+the validator's. The first run passed all ten fixtures and its one real
+finding was in a fixture, not a skill: it asserted `index IN (firewall,
+proxy)` and failed an answer that had correctly followed the skill's rule to
+filter per index when the sourcetypes' schemas differ. Details are in
+[QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md).
 
 What is deliberately **not** checked, and why, is recorded in
 [CLAUDE.md](CLAUDE.md): field names, because no exhaustive per-dataset
@@ -406,13 +443,16 @@ To get the best results with either model:
 ## Files to read
 
 - [CLAUDE.md](CLAUDE.md): conventions, enforced invariants, and language traps for anyone (human or agent) changing this repo
-- [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): the design record -- why each part was built, and the one item still open
+- [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): the design record -- why each part was built, and what the first model run found
 - [.claude/settings.json](.claude/settings.json): shared Claude Code defaults
 - [.env.example](.env.example): optional local helper environment variables
-- [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing
+- [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures, each with the grader spec that runs against a model's answer
+- [scripts/run_golden_prompts.py](scripts/run_golden_prompts.py): drives a model through every fixture with the skill loaded as a client would load it, then grades
+- [scripts/grade_golden_output.py](scripts/grade_golden_output.py): grades a model's answer against a fixture's spec and the validator's own rules
+- [scripts/tests/test_grade_golden_output.py](scripts/tests/test_grade_golden_output.py): unit tests for the grader and the runner's request shape, the model call stubbed
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
 - [scripts/tests/validate-skill-pack.tests.ps1](scripts/tests/validate-skill-pack.tests.ps1): unit tests for the validator's helper functions, including regression coverage for past defects
-- [scripts/tests/mutation-check.py](scripts/tests/mutation-check.py): reintroduces each bug the tests exist for and asserts it is caught, and proves every validator check fires
+- [scripts/tests/mutation-check.py](scripts/tests/mutation-check.py): reintroduces each bug the tests exist for and asserts it is caught, and proves every validator and grader check fires
 - [scripts/required-checks.txt](scripts/required-checks.txt): the inventory of checks the validator must perform, cross-checked against it in both directions
 - [splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py](splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py): the helper script the Local Setup section runs
 - [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
