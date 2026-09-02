@@ -562,6 +562,15 @@ check_mutation("Sentinel table named with the wrong casing",
                # catalogue shipped with the wrong casing in a prose mention.
                lambda: append(KDOC, f"\n{BT}kql\nSignInLogs\n| where ResultType == 0\n{BT}\n"),
                "never invent Sentinel identifiers")
+check_mutation("invented colon-free sourcetype in query position",
+               # Exactly the shape the token check never saw: WinEventLog,
+               # fgt_traffic and 12 more real sourcetypes share it, so an
+               # invented one passed. Verified passing before this check existed.
+               lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=made_up_source earliest=-24h\n| stats count\n{BT}\n"),
+               "not a catalogued sourcetype of any shape")
+check_mutation("invented hyphenated sourcetype in query position",
+               lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=also-invented-web earliest=-24h\n| stats count\n{BT}\n"),
+               "not a catalogued sourcetype of any shape")
 check_mutation("uncatalogued MIXED-CASE sourcetype",
                # The token pattern required a lowercase first letter, so the
                # catalogue's own OktaIM2:* family was never matched and an

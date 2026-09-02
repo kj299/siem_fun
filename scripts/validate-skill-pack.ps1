@@ -266,6 +266,63 @@ $script:sourcetypeRegistryFiles = @(
     "splunk-sentinel-query-builder/references/cim-vendor-alignment.md"
 )
 
+# The token check above reads sourcetypes by SHAPE, and only the colon-delimited
+# shape, so the catalogue's colon-free names -- WinEventLog, XmlWinEventLog,
+# fgt_traffic, the zscaler* family, 14 of 53 in all -- could never be checked and
+# an invented name in that shape passed. This reads them by POSITION instead:
+# every value written after 'sourcetype=' or inside 'sourcetype IN (...)' must
+# be catalogued, whatever its shape, which is how the Sentinel table check
+# already works. Probed first: the docs contain 8 distinct such values, all of
+# which resolve once the legacy Sysmon channel-path sourcetype is catalogued.
+$script:sourcetypeValueRegex = '(?i)\bsourcetype[ \t]*=[ \t]*"?([^\s"|),`\]]+)"?'
+$script:sourcetypeInRegex    = '(?i)\bsourcetype[ \t]+IN[ \t]*\(([^)]*)\)'
+# Catalogued names of ANY shape: the first backticked cell of every catalogue
+# table row (splitting "`a` / `b`" cells) plus the backticked name that opens
+# each vendor bullet in cim-vendor-alignment. Kept separate from
+# $knownSourcetypes on purpose: that set is colon tokens harvested from all
+# prose, and replacing it with this one would make the prose check report
+# WinEventLog:Security -- a SOURCE, correctly listed in a second column -- as an
+# uncatalogued sourcetype. The positional check accepts a value from either set.
+$script:knownSourcetypeNames = New-Object 'System.Collections.Generic.HashSet[string]'
+$script:catalogueFirstCellRegex = '(?m)^\|[ \t]*`([^`]+)`(?:[ \t]*/[ \t]*`([^`]+)`)*'
+$script:cimBulletNameRegex      = '(?m)^-[ \t]+[^`\r\n]*`([A-Za-z][A-Za-z0-9_:.*/-]*)`[^`\r\n]*->'
+
+# Every sourcetype value written in query position, placeholders removed.
+function Get-SourcetypeValues {
+    param([string]$Text)
+
+    $values = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($m in [regex]::Matches($Text, $script:sourcetypeValueRegex)) {
+        $null = $values.Add($m.Groups[1].Value)
+    }
+    foreach ($m in [regex]::Matches($Text, $script:sourcetypeInRegex)) {
+        foreach ($raw in ($m.Groups[1].Value -split ',')) {
+            $v = $raw.Trim().Trim('"')
+            if ($v.Length -gt 0) {
+                $null = $values.Add($v)
+            }
+        }
+    }
+    # A placeholder makes no claim: YOUR_SOURCETYPE, <name>, the ellipsis in an
+    # illustrative snippet, and any wildcard.
+    $real = @($values | Where-Object {
+        -not ($_.StartsWith("YOUR_") -or $_.StartsWith("<") -or $_ -eq "..." -or $_.Contains("*"))
+    })
+    # An empty array unrolls to nothing on return, so the caller would see $null.
+    return , $real
+}
+
+function Test-SourcetypeValues {
+    param([string]$File, [string]$Text)
+
+    foreach ($value in (Get-SourcetypeValues $Text)) {
+        if ($script:knownSourcetypeNames.Contains($value) -or $script:knownSourcetypes.Contains($value)) {
+            continue
+        }
+        Add-Issue "$File writes sourcetype=$value, which is not a catalogued sourcetype of any shape; never invent Splunk identifiers"
+    }
+}
+
 # "Never invent Splunk or Sentinel identifiers" is this repo's highest-stakes
 # content rule and had no mechanical enforcement at all. Every sourcetype named
 # anywhere in the docs must resolve to the catalogue.
@@ -745,6 +802,19 @@ foreach ($registryFile in $script:sourcetypeRegistryFiles) {
     foreach ($m in [regex]::Matches($registryText, $script:sourcetypeTokenRegex)) {
         $null = $script:knownSourcetypes.Add($m.Value)
     }
+    # Names of any shape, taken by position in the catalogue rather than by shape.
+    foreach ($m in [regex]::Matches($registryText, $script:catalogueFirstCellRegex)) {
+        foreach ($group in @($m.Groups[1], $m.Groups[2])) {
+            foreach ($cap in $group.Captures) {
+                if ($cap.Value.Trim().Length -gt 0) {
+                    $null = $script:knownSourcetypeNames.Add($cap.Value.Trim())
+                }
+            }
+        }
+    }
+    foreach ($m in [regex]::Matches($registryText, $script:cimBulletNameRegex)) {
+        $null = $script:knownSourcetypeNames.Add($m.Groups[1].Value)
+    }
 }
 
 # Populate the Sentinel table registry. Only the FIRST column of a catalogue
@@ -819,6 +889,7 @@ foreach ($file in $trackedFiles) {
         }
         Test-LookupOutputFields $file $text
         Test-SourcetypeProvenance $file $text
+        Test-SourcetypeValues $file $text
         Test-MarkdownTables $file $text
         foreach ($block in (Get-FencedBlocks $text)) {
             if ($block.Language -ceq "spl") {

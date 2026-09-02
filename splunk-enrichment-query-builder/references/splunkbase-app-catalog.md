@@ -66,6 +66,7 @@ Key EventCodes: 4624/4625 (logon/fail), 4648 (explicit logon), 4688 (process cre
 | Sourcetype | Source | CIM data model | Key fields |
 | --- | --- | --- | --- |
 | `XmlWinEventLog` | `XmlWinEventLog:Microsoft-Windows-Sysmon/Operational` | Endpoint (Processes, Filesystem, Registry); network-connect events (EventCode 3) normalize to Network_Traffic, not to an Endpoint dataset | EventCode, process, process_id, parent_process, dest, user, hash, TargetFilename, TargetObject |
+| `XmlWinEventLog:Microsoft-Windows-Sysmon/Operational` | (the channel path itself) | Endpoint | Legacy only: older community Sysmon TAs assigned the full channel path as the sourcetype. On the Splunk-supported add-on that string is the source, not the sourcetype; catalogued so legacy queries that filter on it are recognised as real rather than invented. |
 
 The Windows Event Collector variant uses sourcetype `XmlWinEventLog:WEC-Sysmon`.
 Older community Sysmon TAs assigned the full channel path as the sourcetype, so

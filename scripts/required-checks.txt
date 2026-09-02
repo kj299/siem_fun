@@ -21,6 +21,7 @@ $RelativePath is not valid YAML: $($_.Exception.Message)
 Helper drift: $Name is declared in neither file
 Helper drift: $Name is declared in only one of the two files
 Helper drift detected in $Name
+$File writes sourcetype=$value, which is not a catalogued sourcetype of any shape; never invent Splunk identifiers
 $File names sourcetype '$token', which is not catalogued in splunkbase-app-catalog.md or cim-vendor-alignment.md; never invent Splunk identifiers
 $File names Sentinel table '$name', which is not catalogued in sentinel-table-catalog.md; never invent Sentinel identifiers
 examples/golden-prompts.md asserts an output section '$section' that no SKILL.md declares

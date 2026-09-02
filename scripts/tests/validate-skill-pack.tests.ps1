@@ -585,6 +585,28 @@ try {
         Assert-NoIssues
     }
 
+    Test-Case "sourcetype values are read by position, unquoted and quoted" {
+        # REGRESSION: the shape-based token check only ever saw colon-delimited
+        # names, so 14 of the catalogue's 53 sourcetypes -- WinEventLog among
+        # them -- and any invented name in that shape were never checked.
+        Assert-Equal @("fgt_traffic") (Get-SourcetypeValues 'index=x sourcetype=fgt_traffic earliest=-24h')
+        Assert-Equal @("cisco:asa") (Get-SourcetypeValues 'sourcetype="cisco:asa" | stats count')
+    }
+
+    Test-Case "sourcetype IN lists yield every member" {
+        Assert-Equal @("cisco:asa", "pan:traffic") (Get-SourcetypeValues 'sourcetype IN (cisco:asa, "pan:traffic")')
+    }
+
+    Test-Case "sourcetype placeholders and wildcards are not values" {
+        Assert-Equal @() (Get-SourcetypeValues 'sourcetype=YOUR_SOURCETYPE | head 5')
+        Assert-Equal @() (Get-SourcetypeValues '(index=proxy sourcetype=...) OR (index=dns sourcetype=<name>)')
+        Assert-Equal @() (Get-SourcetypeValues 'sourcetype=pan:* earliest=-1h')
+    }
+
+    Test-Case "source= is not mistaken for sourcetype=" {
+        Assert-Equal @("XmlWinEventLog") (Get-SourcetypeValues 'sourcetype=XmlWinEventLog source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational')
+    }
+
     Test-Case "a query leading with a function is not a table reference" {
         # REGRESSION: Microsoft tells you to prefer _SentinelHealth() over the
         # SentinelHealth table, and the leading-identifier pattern reported that
