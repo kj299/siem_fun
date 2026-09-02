@@ -1,23 +1,55 @@
 # siem_fun
 
-`siem_fun` is a prompt and skill pack for building better SIEM queries with:
+`siem_fun` is a skill pack that makes a language model produce Splunk SPL and
+Microsoft Sentinel KQL that runs correctly in *your* environment -- and that
+refuses to guess when it cannot.
 
-- Splunk SPL
-- Microsoft Sentinel KQL
-- internal schema documentation such as data-dictionary URLs, wiki pages, and field references
+## The problem it exists to solve
 
-The main goal is simple: help the model generate queries that are fast, environment-aware, and useful in real operations instead of generic demo syntax.
+A model asked for a SIEM query will produce something plausible. The danger is
+that in SPL and KQL, plausible-but-wrong usually fails **silently**: a
+sourcetype that does not exist, a Sentinel table with the wrong casing
+(`SignInLogs` for `SigninLogs`), an unquoted boolean in `| where`, or a Cisco
+message ID mislabelled as an ACL deny all return an empty or wrong result set
+with no error. The analyst sees "no matches" and concludes the threat is absent.
+
+This pack is built around two commitments that address that directly:
+
+1. **Never invent an identifier.** Index names, sourcetypes, and table names in
+   every reference document are real, and each skill is instructed to emit a
+   *discovery query* -- something that enumerates what the environment actually
+   has -- rather than guess when the schema is unknown.
+2. **Verify the content mechanically.** Because a model reads these files at
+   runtime, a wrong fact here becomes a wrong query there. Every sourcetype in
+   the docs must resolve to the Splunkbase catalogue; every Sentinel table must
+   resolve to a catalogue that cites Microsoft's own documentation per table;
+   SPL patterns are linted for the silent-failure bugs above; and every one of
+   those checks is mutation-tested, so it is known to fire rather than assumed
+   to. See [How the content is kept correct](#how-the-content-is-kept-correct).
 
 ## What this repo gives you
 
-- a reusable skill for Splunk and Sentinel query generation
-- a Splunk data dictionary builder skill with a local helper script that discovers indexes, sourcetypes, fields, installed CIM data models, and live CIM coverage by sourcetype
-- a multi-index enrichment query builder skill with a Splunkbase add-on catalog covering 30+ add-ons, GreyNoise IP enrichment integration, and Splunk Cloud index management guidance
+Three skills that form a pipeline from "what is in this Splunk?" to "here is
+the query":
+
+- **`splunk-data-dictionary-builder`**: a local script that discovers accessible
+  indexes, sourcetypes, fields, installed CIM data models, and live CIM coverage
+  by sourcetype, and writes it as JSON. Run it first when the schema is unknown;
+  its output is the schema context the other two skills consume.
+- **`splunk-sentinel-query-builder`**: builds, optimizes, and translates SPL and
+  KQL against real schema context, and returns a discovery query instead of a
+  production query when that context is missing.
+- **`splunk-enrichment-query-builder`**: builds queries spanning multiple
+  user-provided indexes using a catalogue of 30+ Splunkbase add-ons and their
+  CIM mappings, with optional GreyNoise IP enrichment and Splunk Cloud index
+  guidance.
+
+Supporting all three:
+
 - Splunk Common Information Model (CIM) alignment for common vendor sources; see the coverage table below for the vendor list and depth
-- support for query building, query optimization, and SPL/KQL translation
 - support for internal data dictionaries that describe indexes, sourcetypes, tables, connectors, and fields
 - lower-token guidance optimized for Claude Opus 4.6 and Codex GPT-5.4
-- helper metadata for both Codex/OpenAI and Claude-style prompting, with parity of detail
+- helper metadata for both Codex/OpenAI and Claude-style prompting, with parity of detail enforced by the validator
 
 ## Repository layout
 
@@ -165,6 +197,44 @@ python3 scripts/tests/mutation-check.py
 Tests tagged `REGRESSION` pin behavior that a shipped defect got wrong. Keep them
 passing rather than adjusting the expectation, and add a case whenever a bug is
 fixed in the builder.
+
+## How the content is kept correct
+
+Roughly half of this repository is verification tooling, and that is
+deliberate. The reference documents are read by a model at query time, so an
+error in them is not a documentation bug -- it is a wrong query, and in SPL and
+KQL a wrong query usually returns nothing rather than an error. The tooling
+exists to make that class of mistake fail the build instead.
+
+What the validator enforces on every run:
+
+- **Identifier provenance.** Every sourcetype named in any document must be
+  catalogued in the Splunkbase catalogue or the CIM alignment reference. Every
+  Sentinel table named in table position in a KQL block must be catalogued in
+  the Sentinel table catalogue, where each entry cites Microsoft's own
+  documentation. The Sentinel comparison is case-sensitive, because the tables
+  are.
+- **SPL correctness.** Unquoted booleans in `| where`, bare `index=` chains
+  that should be `index IN (...)`, raw-event searches with no time bound, and
+  `| lookup ... OUTPUT` fields that the same document does not list.
+- **Structural integrity.** Helper YAML parity across the Claude and Codex
+  files, relative links that resolve, markdown tables whose rows match their
+  header, ASCII-only bytes on disk, and no conflict markers.
+- **Its own completeness.** Every check the validator performs is listed in
+  [scripts/required-checks.txt](scripts/required-checks.txt) and cross-checked
+  in both directions, so a check cannot be deleted quietly.
+
+What the mutation harness proves: each of those checks is broken on purpose,
+under both CRLF and LF line endings, and the validator is asserted to fail
+*and name the right reason*. A check that exists but never fires is
+indistinguishable from no check at all, and three checks in this repository's
+history were exactly that on the only operating system CI runs them on. The
+harness runs in CI on every pull request.
+
+What is deliberately **not** checked, and why, is recorded in
+[CLAUDE.md](CLAUDE.md): field names, because no exhaustive per-dataset
+registry exists; and lookup-null handling, because whether a filter *means* to
+keep unmatched rows cannot be read off the text.
 
 ## Security
 
@@ -322,7 +392,7 @@ To get the best results with either model:
 ## Files to read
 
 - [CLAUDE.md](CLAUDE.md): conventions, enforced invariants, and language traps for anyone (human or agent) changing this repo
-- [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): overall design and roadmap
+- [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md): the design record -- why each part was built, and the one item still open
 - [.claude/settings.json](.claude/settings.json): shared Claude Code defaults
 - [.env.example](.env.example): optional local helper environment variables
 - [examples/golden-prompts.md](examples/golden-prompts.md): golden prompt fixtures for review and testing

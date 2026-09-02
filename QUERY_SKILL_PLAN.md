@@ -1,5 +1,11 @@
 # Splunk + Microsoft Sentinel Query Skill Plan
 
+**Status: every phase below has shipped.** This file is kept as the design
+record -- the reasoning behind what was built, in the order it was decided --
+rather than as a roadmap. For what the pack does today, read
+[README.md](README.md); for the rules that keep it correct, read
+[CLAUDE.md](CLAUDE.md). The one item still genuinely open is listed at the end.
+
 ## Goal
 
 Create a reusable skill, for both Claude and Codex, that can:
@@ -203,12 +209,36 @@ siem_fun/
         `-- splunk-to-kql-mapping.md
 ```
 
-## Suggested next coding steps
+## What was built beyond this plan
 
-1. Use the skill for a few real prompts from your environment.
-2. Add local references for your actual Splunk indexes and Sentinel tables.
-3. Add environment-specific examples once schemas stabilize.
-4. Optionally add a script later that templates query skeletons from a JSON schema file.
+The phases above describe the skills. What they do not describe, because it
+was not foreseen, is the verification layer that now makes up roughly half the
+repository: a validator that checks every sourcetype and Sentinel table in the
+documents against a cited catalogue, lints SPL for the silent-failure patterns,
+and enforces parity across the helper files; a mutation harness that breaks
+each of those checks on purpose and asserts it fires; and a check inventory
+that makes deleting a check a build failure. That layer exists because the
+documents are read by a model at query time, so a factual error in them is a
+wrong query with no error message. README.md explains what it enforces;
+CLAUDE.md explains what it deliberately does not.
+
+## What is still open
+
+Executing the fixtures in [examples/golden-prompts.md](examples/golden-prompts.md)
+against a model and grading the output. The structural half is done -- every
+fixture asserts only output sections a skill declares, and the fixtures inherit
+every identifier and SPL check -- but the behavioral half needs a model call,
+which this repository's CI cannot make. It is the only remaining way to find
+the class of defect neither the checks nor a careful read can reach: guidance
+that is accurate and consistent and still produces a poor query.
+
+## For your own environment
+
+1. Run `splunk-data-dictionary-builder` against your instance and pass its JSON
+   to the query builder as the internal data dictionary.
+2. Add your own indexes, tables, and field aliases as a data-dictionary excerpt
+   rather than editing the reference files; the references describe vendor
+   defaults, and your deployment will differ.
 
 ## Source links
 
