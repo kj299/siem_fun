@@ -23,8 +23,9 @@ This pack is built around two commitments that address that directly:
    unknown, each skill is instructed to emit a *discovery query* -- something
    that enumerates what the environment actually has -- rather than guess.
 2. **Verify the content mechanically.** Because a model reads these files at
-   runtime, a wrong fact here becomes a wrong query there. Every sourcetype written in
-   the colon-delimited form most add-ons use (`cisco:asa`) must resolve to the
+   runtime, a wrong fact here becomes a wrong query there. Every sourcetype
+   written in query position (`sourcetype=...`, whatever its shape) and every
+   colon-delimited sourcetype named anywhere in prose must resolve to the
    Splunkbase catalogue; every Sentinel table must resolve to a catalogue that
    cites Microsoft's own documentation per table;
    SPL patterns are linted for the silent-failure bugs above; and every one of
@@ -212,14 +213,17 @@ exists to make that class of mistake fail the build instead.
 
 What the validator enforces on every run:
 
-- **Identifier provenance.** Every sourcetype written in the colon-delimited
-  form (`cisco:asa`) must be catalogued in the Splunkbase catalogue or the CIM
-  alignment reference. That covers most of them but not all: colon-free and
-  hyphenated names such as `WinEventLog`, `fgt_traffic` and `zscalernss-web`
-  are real, catalogued, and **not yet checked**, so an invented name in that
-  shape passes today. The intended fix is a positional check on `sourcetype=`
-  that does not depend on the name's shape, which is how the Sentinel check
-  below already works. Every
+- **Identifier provenance.** Sourcetypes are checked two ways. Every value
+  written in query position, after `sourcetype=` or inside
+  `sourcetype IN (...)`, must be catalogued in the Splunkbase catalogue or the
+  CIM alignment reference, whatever its shape: `WinEventLog`, `fgt_traffic`
+  and `zscalernss-web` are read by position, the same way the Sentinel check
+  below reads tables. Separately, every colon-delimited token (`cisco:asa`)
+  named anywhere in prose must be catalogued, which catches a sourcetype
+  mentioned in a sentence or a table cell rather than a query. The gap between
+  the two is a colon-free name mentioned in prose but never written in query
+  position; that one is still unread. Placeholders (`YOUR_SOURCETYPE`,
+  `<name>`, `...`, wildcards) make no claim and are skipped. Every
   Sentinel table named in table position in a KQL block must be catalogued in
   the Sentinel table catalogue, where each entry cites Microsoft's own
   documentation. The Sentinel comparison is case-sensitive, because the tables

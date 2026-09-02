@@ -213,9 +213,9 @@ siem_fun/
 
 The phases above describe the skills. What they do not describe, because it
 was not foreseen, is the verification layer that now makes up roughly half the
-repository: a validator that checks colon-delimited sourcetypes and every
-Sentinel table in the documents against a cited catalogue (colon-free
-sourcetypes are a known gap; README says so), lints SPL for the silent-failure patterns,
+repository: a validator that checks every sourcetype written in query position,
+every colon-delimited sourcetype named in prose, and every Sentinel table in
+the documents against a cited catalogue, lints SPL for the silent-failure patterns,
 and enforces parity across the helper files; a mutation harness that breaks
 each of those checks on purpose and asserts it fires; and a check inventory
 that makes deleting a check a build failure. That layer exists because the
