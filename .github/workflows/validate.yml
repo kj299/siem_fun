@@ -89,3 +89,10 @@ jobs:
       - name: Run unit tests
         if: ${{ !cancelled() }}
         run: python -m unittest discover -s splunk-data-dictionary-builder/tests -v
+
+      # The golden-prompt grader. Stdlib only, like everything else here; the
+      # runner that calls a model is exercised through a stub because CI holds
+      # no model credential.
+      - name: Run golden-prompt grader tests
+        if: ${{ !cancelled() }}
+        run: python -m unittest discover -s scripts/tests -p "test_*.py" -v
