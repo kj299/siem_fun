@@ -22,9 +22,34 @@ jobs:
         uses: actions/checkout@v4
 
       # The validator parses helper YAML with a real parser instead of regexes.
+      #
+      # Retried, because PSGallery lookups fail transiently: on 2026-09-02 this
+      # exact line returned "No match was found for ... 'powershell-yaml'" on the
+      # same runner image that had installed it three days earlier, and that one
+      # blip took down the whole job -- validator, unit suite, and mutation
+      # harness -- on a docs-only PR. The weekly schedule exists to surface real
+      # drift; it should not be indistinguishable from a bad five seconds at
+      # PSGallery. Three attempts, short backoff. A genuine failure still fails
+      # the job with the last error, and "installed but not importable" is
+      # treated as a failure rather than trusting Install-Module's return.
       - name: Install powershell-yaml
         shell: pwsh
-        run: Install-Module powershell-yaml -Scope CurrentUser -Force -AllowClobber
+        run: |
+          $attempts = 3
+          for ($i = 1; $i -le $attempts; $i++) {
+            try {
+              Install-Module powershell-yaml -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+              if (Get-Module -ListAvailable -Name powershell-yaml) {
+                Write-Host "powershell-yaml installed on attempt $i"
+                exit 0
+              }
+              throw "Install-Module returned but the module is not importable"
+            } catch {
+              Write-Host "Attempt $i of ${attempts} failed: $($_.Exception.Message)"
+              if ($i -eq $attempts) { throw }
+              Start-Sleep -Seconds (10 * $i)
+            }
+          }
 
       - name: Run validator unit tests
         shell: pwsh
