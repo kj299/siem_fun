@@ -65,6 +65,13 @@ in this repo's history reached CI only because a local run was skipped.
   - **Sourcetypes** must be catalogued in
     [splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md)
     or [cim-vendor-alignment.md](splunk-sentinel-query-builder/references/cim-vendor-alignment.md).
+    **Only the colon-delimited form is checked today.** The token pattern
+    requires at least one colon segment (`cisco:asa`), so colon-free and
+    hyphenated sourcetypes -- `WinEventLog`, `fgt_traffic`, `zscalernss-web`
+    -- are real, catalogued, and unverified, and an invented name in that shape
+    passes. A positional check on `sourcetype=`, shape-independent like the
+    Sentinel one, is the intended fix. Until it lands, this bullet overstates
+    the guarantee if read without this caveat.
   - **Sentinel tables** named in table position in a `kql` block must be
     catalogued in [sentinel-table-catalog.md](splunk-sentinel-query-builder/references/sentinel-table-catalog.md),
     which cites Microsoft's own documentation per table. **KQL table names are
