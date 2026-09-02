@@ -15,10 +15,13 @@ with no error. The analyst sees "no matches" and concludes the threat is absent.
 
 This pack is built around two commitments that address that directly:
 
-1. **Never invent an identifier.** Index names, sourcetypes, and table names in
-   every reference document are real, and each skill is instructed to emit a
-   *discovery query* -- something that enumerates what the environment actually
-   has -- rather than guess when the schema is unknown.
+1. **Never invent an identifier.** Every sourcetype and Sentinel table name in
+   the reference documents is real and vendor-defined. Index names are the
+   deliberate exception: they are customer-defined, so the `index=firewall` and
+   `index=proxy` in the examples are placeholders for whatever your deployment
+   calls them, never claims about a real system. And when the schema is
+   unknown, each skill is instructed to emit a *discovery query* -- something
+   that enumerates what the environment actually has -- rather than guess.
 2. **Verify the content mechanically.** Because a model reads these files at
    runtime, a wrong fact here becomes a wrong query there. Every sourcetype written in
    the colon-delimited form most add-ons use (`cisco:asa`) must resolve to the

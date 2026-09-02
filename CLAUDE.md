@@ -43,10 +43,14 @@ in this repo's history reached CI only because a local run was skipped.
   credentials gets switched off rather than fixed. A test that needs a literal
   credential shape must split it (`"AKIA" + "..."`) so the file does not trip
   the check it is testing.
-- **Never invent Splunk or Sentinel identifiers.** Index names, sourcetypes, and
-  table names in reference docs must be real. If a schema is uncertain, the
-  skills are supposed to emit a discovery query instead of guessing, and the
-  docs should model that.
+- **Never invent Splunk or Sentinel identifiers.** Sourcetypes and table names
+  in reference docs must be real: they are vendor-defined, so an invented one
+  names something that does not exist. Index names are the exception, and this
+  rule used to be worded as though they were not: indexes are customer-defined,
+  so `index=firewall` in an example is a placeholder for whatever a deployment
+  calls it, not a claim, and the validator deliberately does not register them
+  (see below). If a schema is uncertain, the skills are supposed to emit a
+  discovery query instead of guessing, and the docs should model that.
 
   **Field names are deliberately looser, and this file used to contradict the
   skills on it.** `splunk-sentinel-query-builder/SKILL.md` states the rule the
