@@ -414,6 +414,12 @@ GRADER_MUTS = [
     ("grader: a KQL table bound by let is a table reference",
      "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):",
      "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE):"),
+    ("grader: a parenthesized union operand is a table reference",
+     '    r"\\bunion\\b(?:[ \\t]+\\w+[ \\t]*=[ \\t]*\\S+)*[ \\t]+\\(?[ \\t]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*=)"',
+     '    r"\\bunion\\b(?:[ \\t]+\\w+[ \\t]*=[ \\t]*\\S+)*[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*=)"'),
+    ("grader: a union statement is not ended by a pipe inside its parentheses",
+     '        elif depth == 0 and ch in "|\\n":',
+     '        elif ch in "|\\n":'),
     ("grader: a KQL join operand on the next line is a table reference",
      '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)',
      '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t]*([A-Za-z_][A-Za-z0-9_]*)")'),
@@ -681,6 +687,12 @@ check_mutation("uncatalogued table in a union list or multiline join",
                "never invent Sentinel identifiers")
 check_mutation("uncatalogued table bound by let",
                lambda: append(KDOC, f"\n{BT}kql\nlet recent = InventedTable;\nrecent | take 5\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued table as a parenthesized union operand",
+               # KQL's commonest union form. The pattern accepted only a bare
+               # identifier after 'union', so an invented table inside the
+               # parentheses was read by nothing.
+               lambda: append(KDOC, f"\n{BT}kql\nunion (InventedTable | where TimeGenerated > ago(1d))\n{BT}\n"),
                "never invent Sentinel identifiers")
 check_mutation("uncatalogued table behind a let preamble",
                # The source was read from line 0 only. A 'let' there is a

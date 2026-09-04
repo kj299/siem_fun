@@ -173,11 +173,17 @@ PLACEHOLDER_TABLES = frozenset({"TableName", "YOUR_TABLE"})
 # backtracks and captures `withsource`; without the \b it captures `withsourc`,
 # which the lookahead then accepts because the next character is `e`.
 _KQL_UNION_REF_RE = re.compile(
-    r"\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)"
+    r"\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)"
 )
+# `union (A | take 5), (B | take 5)`: KQL allows a parenthesized subquery as an
+# operand, and each one names a table. The bare-identifier list pattern below
+# cannot reach them, because its scan stops at the first `|` and these have one
+# inside the parentheses. Applied to the union statement only, so a `(` in a
+# `project` or `summarize` elsewhere is not read as an operand.
+_KQL_UNION_PAREN_RE = re.compile(r"\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)")
 # union takes a comma-separated list, so operands after the first need their
 # own pass.
-_KQL_UNION_MORE_RE = re.compile(r",[ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])")
+_KQL_UNION_MORE_RE = re.compile(r",[ \t\r\n]*\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])")
 # re.DOTALL so `join (` followed by the table on the NEXT line is still seen.
 _KQL_JOIN_REF_RE = re.compile(r"\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)
 # `let recent = SigninLogs;` binds a table. The negative lookahead for `(`
@@ -361,6 +367,28 @@ def sourcetype_values(text: str) -> set[str]:
     return {v for v in values if not _placeholder(v)}
 
 
+def _union_statement(text: str) -> str:
+    """The union statement starting at `text`, operands and all.
+
+    It ends at the first `|` or newline whose parentheses are BALANCED. Depth is
+    what makes both halves work: `union (A | take 5), (B | take 5)` keeps its
+    inner pipes because they sit at depth 1, while `union A, B | summarize by
+    X, Y` still ends at the pipe so the summarize columns are not read as
+    operands. A trailing comma carries the list onto the next line.
+    """
+    depth = 0
+    for i, ch in enumerate(text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and ch in "|\n":
+            if ch == "\n" and text[:i].rstrip().endswith(","):
+                continue
+            return text[:i]
+    return text
+
+
 def kql_tables(body: str) -> set[str]:
     """Every table a kql block references: the leading source, plus `union` and
     `join` operands and any table bound by `let`. Function calls
@@ -389,14 +417,16 @@ def kql_tables(body: str) -> set[str]:
     # Trailing operands of a union list, taken only from the union statement
     # itself so commas elsewhere (project, summarize by) are not mistaken for
     # table references.
+    # Trailing operands of a union list, bare or parenthesized. Both are read
+    # from the union STATEMENT, scanned from the union KEYWORD: starting at the
+    # end of the match would begin the depth count inside a parenthesis the
+    # match had already consumed.
     for u in _KQL_UNION_REF_RE.finditer(body):
-        tail = body[u.end():]
-        stops = [i for i in (tail.find("|"), tail.find("\r"), tail.find("\n")) if i >= 0]
-        if stops:
-            tail = tail[:min(stops)]
-        for m in _KQL_UNION_MORE_RE.finditer(tail):
-            if m.group(1) not in KQL_KEYWORDS:
-                tables.add(m.group(1))
+        statement = _union_statement(body[u.start():])
+        for pattern in (_KQL_UNION_MORE_RE, _KQL_UNION_PAREN_RE):
+            for m in pattern.finditer(statement):
+                if m.group(1) not in KQL_KEYWORDS:
+                    tables.add(m.group(1))
     tables -= locals_
     return {t for t in tables if t not in PLACEHOLDER_TABLES and not t.startswith("YOUR_")}
 

@@ -131,9 +131,12 @@ Expected output:
 - Returns `discovery`, not a guessed production query
 - Uses `Usage` to identify candidate tables or `getschema` after a table is
   known. Either satisfies the spec, which is why they are one alternation and
-  not two `matches` entries: separate entries are ANDed, so requiring both
-  failed a correct answer that enumerated with `Usage` and told the user to
-  re-invoke with the table it found.
+  not two entries: separate entries are ANDed, so requiring both failed a
+  correct answer that enumerated with `Usage` and told the user to re-invoke
+  with the table it found. It is a `query_matches`, not a `matches`, because
+  `matches` searches the whole answer: prose promising to run `getschema`
+  later satisfied it while the Discovery query itself was a guessed production
+  query, which is the one thing this fixture exists to forbid.
 - Does not reach for an unconstrained `union *`. query-workflow.md tells the
   model to prefer `Usage` for pure enumeration and to use `union *` sparingly,
   so an answer that never proposes one has nothing to warn about. The spec
@@ -156,7 +159,7 @@ Grader spec:
 {
   "sections": ["Objective", "Discovery query", "Next step"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "matches": ["(?i)\\bUsage\\b|getschema"],
+  "query_matches": ["(?i)\\bUsage\\b|getschema"],
   "tables": ["Usage", "DeviceProcessEvents", "SecurityEvent", "Syslog", "CommonSecurityLog"]
 }
 ```

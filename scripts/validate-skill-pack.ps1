@@ -454,10 +454,14 @@ $script:kqlLeadingRefRegex = '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()'
 # lookahead then happily accepts because the next character is 'e', not '='.
 # Together they force the option group to consume the named option, after which
 # '*' is correctly seen as no table at all.
-$script:kqlUnionRefRegex   = '\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)'
+$script:kqlUnionRefRegex   = '\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)'
 # union takes a comma-separated list, so the operands after the first need their
 # own pass: 'union SigninLogs, InventedTable' hid everything past the comma.
-$script:kqlUnionMoreRegex  = ',[ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])'
+$script:kqlUnionMoreRegex  = ',[ \t\r\n]*\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])'
+# 'union (A | take 5), (B | take 5)': KQL allows a parenthesized subquery as an
+# operand, and each one names a table. The bare-identifier list pattern cannot
+# reach them, because a subquery contains a pipe.
+$script:kqlUnionParenRegex = '\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)'
 # (?s) so 'join (' followed by the table on the NEXT line is still seen. The
 # line-at-a-time version missed every multiline join.
 $script:kqlJoinRefRegex    = '(?s)\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)'
@@ -470,6 +474,32 @@ $script:kqlLetNameRegex    = '\blet[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*='
 $script:knownKqlTables = New-Object 'System.Collections.Generic.HashSet[string]'
 $script:kqlRegistryFile = "splunk-sentinel-query-builder/references/sentinel-table-catalog.md"
 $script:requiredChecksFile = "scripts/required-checks.txt"
+
+# The union statement starting at $Text, operands and all. It ends at the first
+# '|' or newline whose parentheses are BALANCED. Depth is what makes both halves
+# work: 'union (A | take 5), (B | take 5)' keeps its inner pipes because they
+# sit at depth 1, while 'union A, B | summarize by X, Y' still ends at the pipe
+# so the summarize columns are not read as operands. A trailing comma carries
+# the operand list onto the next line.
+function Get-KqlUnionStatement {
+    param([string]$Text)
+
+    $depth = 0
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        $ch = $Text[$i]
+        if ($ch -eq '(') {
+            $depth++
+        } elseif ($ch -eq ')') {
+            $depth = [Math]::Max(0, $depth - 1)
+        } elseif ($depth -eq 0 -and ($ch -eq '|' -or $ch -eq "`n")) {
+            if ($ch -eq "`n" -and $Text.Substring(0, $i).TrimEnd().EndsWith(",")) {
+                continue
+            }
+            return $Text.Substring(0, $i)
+        }
+    }
+    return $Text
+}
 
 # Table references in a KQL block: the leading source, plus union and join
 # operands. Returns names only; the caller decides what is registered.
@@ -515,15 +545,16 @@ function Get-KqlTableReferences {
     # itself so that commas elsewhere (project, summarize by) are not mistaken
     # for table references.
     foreach ($u in [regex]::Matches($Body, $script:kqlUnionRefRegex)) {
-        $tail = $Body.Substring($u.Index + $u.Length)
-        $stop = $tail.IndexOfAny([char[]]@("|", "`r", "`n"))
-        if ($stop -ge 0) {
-            $tail = $tail.Substring(0, $stop)
-        }
-        foreach ($m in [regex]::Matches($tail, $script:kqlUnionMoreRegex)) {
-            $name = $m.Groups[1].Value
-            if ($script:kqlKeywords -cnotcontains $name) {
-                $null = $refs.Add($name)
+        # From the union KEYWORD, not the end of the match: the match may have
+        # consumed an opening parenthesis, which would start the depth count
+        # inside it and end the statement at the first newline.
+        $statement = Get-KqlUnionStatement $Body.Substring($u.Index)
+        foreach ($pattern in @($script:kqlUnionMoreRegex, $script:kqlUnionParenRegex)) {
+            foreach ($m in [regex]::Matches($statement, $pattern)) {
+                $name = $m.Groups[1].Value
+                if ($script:kqlKeywords -cnotcontains $name) {
+                    $null = $refs.Add($name)
+                }
             }
         }
     }

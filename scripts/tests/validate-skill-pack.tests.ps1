@@ -694,6 +694,26 @@ try {
         Assert-Equal @() (Get-KqlTableReferences "let cutoff = ago(1d);`nlet x = 5;")
     }
 
+    Test-Case "a parenthesized union operand is a table reference" {
+        # REGRESSION: KQL allows a parenthesized subquery as a union operand,
+        # and the pattern accepted only a bare identifier after 'union', so an
+        # invented table in the commonest union form was reported by nothing.
+        $refs = [string[]](Get-KqlTableReferences "union (InventedTable | where TimeGenerated > ago(7d))")
+        Assert-True ($refs -ccontains "InventedTable") "a parenthesized operand must be read"
+        $refs = [string[]](Get-KqlTableReferences "union isfuzzy=true (InventedTable | take 5)")
+        Assert-True ($refs -ccontains "InventedTable") "options before a parenthesized operand must be skipped"
+    }
+
+    Test-Case "a union operand list may wrap or carry a subquery pipe" {
+        # The statement ends at the first '|' or newline whose parentheses are
+        # balanced: a subquery's inner pipe does not end it, a trailing comma
+        # carries the list on, and a downstream summarize is still excluded.
+        $refs = [string[]](Get-KqlTableReferences "union (SigninLogs | take 5),`n      (AuditLogs | take 5)")
+        Assert-True ($refs -ccontains "SigninLogs" -and $refs -ccontains "AuditLogs") "both wrapped operands must be read"
+        $refs = [string[]](Get-KqlTableReferences "SigninLogs`n| union AuditLogs`n| summarize count() by Alpha, Beta")
+        Assert-True (-not ($refs -ccontains "Beta")) "summarize columns must not be read as operands"
+    }
+
     Test-Case "union withsource=X * names no table" {
         # REGRESSION: the union pattern backtracks twice given this input. With
         # no trailing lookahead the option group matches zero times and

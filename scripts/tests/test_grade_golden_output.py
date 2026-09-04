@@ -202,6 +202,27 @@ class IdentifierTests(unittest.TestCase):
         self.assertEqual(g.kql_tables("let cutoff = ago(1d);\nSigninLogs\n| where TimeGenerated > cutoff"),
                          {"SigninLogs"})
 
+    def test_a_parenthesized_union_operand_is_a_table_reference(self):
+        # REGRESSION: KQL allows a parenthesized subquery as a union operand,
+        # and the ported pattern accepted only a bare identifier after `union`,
+        # so an invented table in the commonest union form satisfied a
+        # fixture's `tables` allowlist. The broad scan it replaced saw it.
+        self.assertEqual(g.kql_tables("union (GhostTable | where TimeGenerated > ago(7d))"),
+                         {"GhostTable"})
+        self.assertEqual(g.kql_tables("union isfuzzy=true (GhostTable | take 5)"), {"GhostTable"})
+        self.assertEqual(g.kql_tables("union (SigninLogs), (AuditLogs)"), {"SigninLogs", "AuditLogs"})
+
+    def test_a_union_operand_list_may_wrap(self):
+        # The statement ends at the first `|` or newline whose parentheses are
+        # balanced, so a subquery's inner pipe does not end it and a trailing
+        # comma carries the list onto the next line -- while a downstream
+        # `summarize by X, Y` is still excluded.
+        self.assertEqual(g.kql_tables("union (A | take 5),\n      (B | take 5)"), {"A", "B"})
+        self.assertEqual(g.kql_tables("union A,\n      B"), {"A", "B"})
+        self.assertEqual(g.kql_tables("union A, B | summarize by X, Y"), {"A", "B"})
+        self.assertEqual(g.kql_tables("SigninLogs\n| union AuditLogs\n| summarize count() by X, Y"),
+                         {"SigninLogs", "AuditLogs"})
+
     def test_a_join_operand_on_the_next_line_is_a_table_reference(self):
         # REGRESSION: the line-oriented scan could not see past the newline
         # after `join (`, which is how a model formats a wide join.
