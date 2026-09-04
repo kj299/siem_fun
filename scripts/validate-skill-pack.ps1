@@ -486,8 +486,15 @@ function Get-KqlTableReferences {
         $null = $locals.Add($m.Groups[1].Value)
     }
 
-    if ($lines.Count -gt 0) {
-        $lead = [regex]::Match($lines[0], $script:kqlLeadingRefRegex)
+    # The query's source is the first line that is not part of a 'let'
+    # preamble. Reading line 0 unconditionally meant that
+    # 'let cutoff = ago(1d);' followed by 'GhostTable | where ...' put the real
+    # table on line 2, where nothing read it: 'let' is a keyword so the lead was
+    # discarded, and the let-value pattern skips a function call, so an invented
+    # table behind a let preamble was reported by nothing.
+    $leadLine = @($lines | Where-Object { $_.Trim() -notmatch '^let\b' })
+    if ($leadLine.Count -gt 0) {
+        $lead = [regex]::Match($leadLine[0], $script:kqlLeadingRefRegex)
         if ($lead.Success -and $script:kqlKeywords -cnotcontains $lead.Groups[1].Value) {
             $null = $refs.Add($lead.Groups[1].Value)
         }

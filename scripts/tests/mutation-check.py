@@ -403,8 +403,23 @@ GRADER_MUTS = [
      r'_WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")',
      r'_WHERE_BOOLEAN_RE = re.compile(r"ZZZNEVERMATCHES")'),
     ("grader: raw-event spl block needs a time bound",
-     '        if lang == "spl" and first and not first.startswith("|"):',
+     '        if lang == "spl" and spl_is_raw_event_search(body):',
      "        if False:"),
+    ("grader: a leading-pipe '| search' is still a raw-event search",
+     '_SPL_NON_GENERATING_LEAD = frozenset({"search"})',
+     "_SPL_NON_GENERATING_LEAD = frozenset()"),
+    ("grader: _time mentioned but not compared is not a time bound",
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)"',
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time|\\b_time\\b)"'),
+    ("grader: a KQL table bound by let is a table reference",
+     "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):",
+     "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE):"),
+    ("grader: a KQL join operand on the next line is a table reference",
+     '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)',
+     '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t]*([A-Za-z_][A-Za-z0-9_]*)")'),
+    ("grader: the KQL source is read past a let preamble",
+     '    lead = next((ln.strip() for ln in lines if not re.match(r"^let\\b", ln.strip())), None)',
+     "    lead = lines[0].strip() if lines else None"),
     ("grader: placeholders and wildcards are not identifier claims",
      '    return value.startswith(("YOUR_", "<")) or value == "..." or "*" in value',
      "    return False"),
@@ -666,6 +681,12 @@ check_mutation("uncatalogued table in a union list or multiline join",
                "never invent Sentinel identifiers")
 check_mutation("uncatalogued table bound by let",
                lambda: append(KDOC, f"\n{BT}kql\nlet recent = InventedTable;\nrecent | take 5\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued table behind a let preamble",
+               # The source was read from line 0 only. A 'let' there is a
+               # keyword and was discarded, and the let-value pattern skips a
+               # function call, so the real table on line 2 was read by nothing.
+               lambda: append(KDOC, f"\n{BT}kql\nlet cutoff = ago(1d);\nInventedTable\n| where TimeGenerated > cutoff\n{BT}\n"),
                "never invent Sentinel identifiers")
 check_mutation("raw-event search whose only _time is an aggregation",
                lambda: append(MDOC, f"\n{BT}spl\nindex=firewall\n| stats latest(_time)\n{BT}\n"),

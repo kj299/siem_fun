@@ -277,7 +277,18 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   raw searches, KQL without `TimeGenerated`, invented identifiers read by
   position, and a request to paste a credential. Its checks are registered in
   `GRADER_MUTS` in the mutation script, so a grader check that stops firing
-  goes red the same way a validator check does. The model run itself is not
+  goes red the same way a validator check does.
+
+  **Port those rules from the validator, do not re-derive them.** The grader is
+  a second implementation of the same rules in a second language, and it drifted
+  behind on three of them at once: it exempted every leading pipe, so
+  `| search index=...` was graded by no rule at all; it accepted any mention of
+  `_time` as a time bound, so a query whose only `_time` sat inside
+  `stats latest(_time)` passed; and it read KQL tables a line at a time, so a
+  table bound by `let` or a join operand on the next line was invisible to a
+  fixture's `tables` allowlist. The validator caught all three and had mutations
+  for them. The grader's patterns are now copied from it with the reasoning
+  comments intact, so the next reader can see they are meant to match. The model run itself is not
   in CI because CI holds no credential: run it locally after changing a
   `SKILL.md` or a reference file, and record what it found in
   [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Both runs so far found a fixture
