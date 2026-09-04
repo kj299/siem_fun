@@ -1,0 +1,208 @@
+{
+  "_comment": [
+    "Cases for the rules the validator and the golden-prompt grader BOTH implement.",
+    "One file, two readers: validate-skill-pack.tests.ps1 and test_grade_golden_output.py.",
+    "",
+    "This exists because the two tools are one rule set written twice in two",
+    "languages, and they drifted on three rules at once without anything noticing:",
+    "the grader exempted every leading pipe, accepted any mention of _time as a",
+    "time bound, and read KQL tables a line at a time. CI was green, the mutation",
+    "harness was green, and a review bot found it. CLAUDE.md says to port these",
+    "rules rather than re-derive them, but that is a note to a human. This file is",
+    "the mechanical half: a rule that holds in one tool and not the other fails a",
+    "suite instead of surviving until someone reads both implementations.",
+    "",
+    "Add a case here rather than to one suite whenever the behaviour is shared.",
+    "Both readers are dependency-free: ConvertFrom-Json ships with PowerShell and",
+    "json ships with Python, which is the constraint that rules out anything",
+    "cleverer than a flat JSON file."
+  ],
+
+  "_kql_tables_comment": [
+    "Every table a kql block references: the leading source, plus union and join",
+    "operands and any table bound by let. The two implementations split at",
+    "different seams, so each reader normalises before comparing:",
+    "  - the grader's kql_tables() filters the placeholder names itself, because",
+    "    it has no registry to check them against",
+    "  - the validator's Get-KqlTableReferences returns them, and the catalogue",
+    "    then accepts them because it lists both as placeholder rows",
+    "Each reader subtracts 'placeholders' below, so the comparison is of the rule",
+    "and not of where each tool happens to draw the line."
+  ],
+  "placeholders": ["TableName", "YOUR_TABLE"],
+
+  "kql_tables": [
+    {
+      "name": "leading source",
+      "query": "SigninLogs\n| where TimeGenerated > ago(1d)",
+      "tables": ["SigninLogs"]
+    },
+    {
+      "name": "a leading function call is not a table",
+      "why": "Microsoft ships _SentinelHealth() and tells you to prefer it over the raw table.",
+      "query": "_SentinelHealth()\n| take 5",
+      "tables": []
+    },
+    {
+      "name": "union list",
+      "query": "SigninLogs\n| union AuditLogs, DeviceProcessEvents",
+      "tables": ["SigninLogs", "AuditLogs", "DeviceProcessEvents"]
+    },
+    {
+      "name": "union withsource wildcard names no table",
+      "why": "The option must be consumed or 'withsource' itself is captured as the operand.",
+      "query": "union withsource=Table_ *\n| where TimeGenerated > ago(1h)",
+      "tables": []
+    },
+    {
+      "name": "parenthesized union operand",
+      "why": "KQL's commonest union form. A pattern accepting only a bare identifier read no table here.",
+      "query": "union (DeviceProcessEvents | where TimeGenerated > ago(7d))",
+      "tables": ["DeviceProcessEvents"]
+    },
+    {
+      "name": "parenthesized union operand behind an option",
+      "query": "union isfuzzy=true (DeviceProcessEvents | take 5)",
+      "tables": ["DeviceProcessEvents"]
+    },
+    {
+      "name": "two parenthesized union operands",
+      "query": "union (SigninLogs), (AuditLogs)",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a union operand list wraps on a trailing comma",
+      "query": "union (SigninLogs | take 5),\n      (AuditLogs | take 5)",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a bare union operand list wraps on a trailing comma",
+      "query": "union SigninLogs,\n      AuditLogs",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a union statement ends at a pipe outside its parentheses",
+      "why": "Otherwise the summarize columns are read as operands.",
+      "query": "union SigninLogs, AuditLogs | summarize count() by Alpha, Beta",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "downstream summarize columns are not operands",
+      "query": "SigninLogs\n| summarize count() by Alpha, Beta\n| project Gamma, Delta",
+      "tables": ["SigninLogs"]
+    },
+    {
+      "name": "join operand on the same line",
+      "query": "SigninLogs\n| join kind=inner (AuditLogs) on Id",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "join operand on the next line",
+      "why": "How a model formats a wide join. The line-oriented scan could not see past the newline.",
+      "query": "SigninLogs\n| join (\n    AuditLogs\n    | take 5\n) on Id",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a table bound by let",
+      "why": "The name the let BINDS is a local, not a table, and must not be reported.",
+      "query": "let recent = DeviceProcessEvents;\nrecent | take 5",
+      "tables": ["DeviceProcessEvents"]
+    },
+    {
+      "name": "a let binding a function call contributes no table",
+      "query": "let cutoff = ago(1d);\nSigninLogs\n| where TimeGenerated > cutoff",
+      "tables": ["SigninLogs"]
+    },
+    {
+      "name": "the source is read past a let preamble",
+      "why": "Reading line 0 only hid the real table behind the let.",
+      "query": "let cutoff = ago(1d);\nDeviceProcessEvents\n| where TimeGenerated > cutoff",
+      "tables": ["DeviceProcessEvents"]
+    },
+    {
+      "name": "a comment line is not the source",
+      "query": "// which table holds process events\nDeviceProcessEvents\n| getschema",
+      "tables": ["DeviceProcessEvents"]
+    },
+    {
+      "name": "documented placeholders make no claim",
+      "query": "TableName | getschema;\nTableName | take 5",
+      "tables": []
+    }
+  ],
+
+  "_spl_time_bound_comment": [
+    "Whether a raw-event SPL block must be reported for having no time bound.",
+    "'reported' is the shared outcome, deliberately, because the two tools split",
+    "this differently: the validator returns early for a generating command while",
+    "the grader runs no check at all. Both agree on what counts as a violation,",
+    "which is the thing worth pinning.",
+    "",
+    "A bound is a time PREDICATE, not a mention of _time: 'index=x | stats",
+    "latest(_time)' scans all history but contains the string. '| head' is an",
+    "accepted alternative bound. A block leading with a GENERATING command runs",
+    "unbounded on purpose and is exempt -- but '| search' is a raw-event search",
+    "wearing that syntax and is not."
+  ],
+
+  "spl_time_bound": [
+    {
+      "name": "unbounded raw-event search",
+      "query": "index=windows\n| stats count by host",
+      "reported": true
+    },
+    {
+      "name": "earliest= bounds it",
+      "query": "index=windows earliest=-24h\n| stats count by host",
+      "reported": false
+    },
+    {
+      "name": "earliest= may sit on a later line",
+      "why": "A base search wraps in real model output even though the docs write it on one line.",
+      "query": "((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=bluecoat:proxysg:access:kv))\nearliest=-24h latest=now\n| stats count by src",
+      "reported": false
+    },
+    {
+      "name": "head bounds it",
+      "query": "index=windows\n| head 5",
+      "reported": false
+    },
+    {
+      "name": "a _time comparison is a bound",
+      "query": "index=windows\n| where _time > relative_time(now(), \"-1d\")",
+      "reported": false
+    },
+    {
+      "name": "bin(_time) is a bound",
+      "query": "index=windows\n| timechart span=1h count\n| bin(_time)",
+      "reported": false
+    },
+    {
+      "name": "_time inside an aggregation is not a bound",
+      "why": "Scans all history but contains the string '_time'. A substring test passed it.",
+      "query": "index=windows | stats latest(_time)",
+      "reported": true
+    },
+    {
+      "name": "_time inside an aggregation on its own line is not a bound",
+      "query": "index=windows\n| stats latest(_time)",
+      "reported": true
+    },
+    {
+      "name": "a generating command runs unbounded on purpose",
+      "query": "| tstats count where index=windows by index, sourcetype",
+      "reported": false
+    },
+    {
+      "name": "a leading-pipe search is still a raw-event search",
+      "why": "'| search index=...' wears a generating command's syntax. Exempting every leading pipe skipped the check entirely.",
+      "query": "| search index=windows\n| stats count",
+      "reported": true
+    },
+    {
+      "name": "a leading-pipe search with a bound is fine",
+      "query": "| search index=windows earliest=-24h\n| stats count",
+      "reported": false
+    }
+  ]
+}

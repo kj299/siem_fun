@@ -835,6 +835,10 @@ $requiredFiles = @(
     "scripts/tests/validate-skill-pack.tests.ps1",
     "scripts/tests/mutation-check.py",
     "scripts/tests/test_grade_golden_output.py",
+    # The cases both this validator and the grader are checked against. Losing
+    # it would leave two implementations of one rule set with nothing comparing
+    # them, which is the state that let three rules drift at once.
+    "scripts/tests/shared-rule-cases.json",
     "scripts/grade_golden_output.py",
     "scripts/run_golden_prompts.py",
     "scripts/required-checks.txt",
