@@ -280,9 +280,10 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   goes red the same way a validator check does. The model run itself is not
   in CI because CI holds no credential: run it locally after changing a
   `SKILL.md` or a reference file, and record what it found in
-  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). The first run's finding was a
-  fixture that contradicted the skill, not a skill that was wrong, and only a
-  model run could have shown that.
+  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Both runs so far found a fixture
+  that contradicted the skill rather than a skill that was wrong -- fixture 8,
+  then fixture 4 -- and only a model run could have shown that. When a fixture
+  fails, read the skill before assuming the answer is at fault.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
   tests a different thing on each platform: a Linux run only ever exercises LF,

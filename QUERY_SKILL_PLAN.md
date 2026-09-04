@@ -4,8 +4,9 @@
 record -- the reasoning behind what was built, in the order it was decided --
 rather than as a roadmap. For what the pack does today, read
 [README.md](README.md); for the rules that keep it correct, read
-[CLAUDE.md](CLAUDE.md). What the first model run found, and the one decision
-still open, are at the end.
+[CLAUDE.md](CLAUDE.md). What the model runs found, what checking the
+catalogues against the vendors found, and the one decision still open, are at
+the end.
 
 ## Goal
 
@@ -262,6 +263,34 @@ runner hands them over. Result after correction: 10 of 10.
   identifiers, and never asked for a credential. Answer 10's claims about the
   dictionary builder's flags and environment-variable defaults were checked
   against the script and are true.
+
+## What the second model run found
+
+Second run, 2026-09-04, same method: each fixture executed by an agent handed
+`SKILL.md` and every file under `references/` exactly as
+[scripts/run_golden_prompts.py](scripts/run_golden_prompts.py) assembles them,
+then graded by [scripts/grade_golden_output.py](scripts/grade_golden_output.py).
+Result after correction: 10 of 10.
+
+- **A second fixture contradicted the skill, and again no skill was wrong.**
+  Fixture 4 asks for a Sentinel hunt when the table is unknown. Its spec
+  required the answer to contain a `union` wildcard. But query-workflow.md
+  tells the model to use `union *` *sparingly* and to prefer `Usage` for pure
+  enumeration, which is exactly what this prompt is. The answer used `Usage`
+  and `getschema`, named the candidate tables, and never proposed a union, so
+  it had nothing to warn about. The spec failed it for following the skill.
+  Note that the fixture's own prose bullet said the answer "warns against
+  broad `union *`" -- the spec had turned a warning into a requirement, and
+  the two sat next to each other unread. The union match is gone; `Usage`,
+  `getschema` and the table allowlist still pin the shape.
+- **Same root cause as run 1's fixture 8**, one run apart: a fixture and a
+  skill that are each internally consistent and disagree with each other.
+  Nothing but a model run finds these. Two of ten fixtures have now been
+  wrong; the skills have been right both times.
+- **The other nine passed unchanged**, including every generic rule: time
+  bounded first, assumptions named, discovery returned rather than a guessed
+  production query, only supplied or catalogued identifiers, and no request
+  for a credential.
 
 ## What checking the catalogues against the vendors found
 

@@ -130,7 +130,12 @@ Expected output:
 
 - Returns `discovery`, not a guessed production query
 - Uses `Usage` to identify candidate tables or `getschema` after a table is known
-- Warns against broad `union *` unless constrained
+- Does not reach for an unconstrained `union *`. query-workflow.md tells the
+  model to prefer `Usage` for pure enumeration and to use `union *` sparingly,
+  so an answer that never proposes one has nothing to warn about. The spec
+  used to *require* a union wildcard here, which failed a correct answer for
+  following the skill: the second fixture found to contradict the skill it
+  exercises, after fixture 8.
 
 Example starter:
 
@@ -147,7 +152,7 @@ Grader spec:
 {
   "sections": ["Objective", "Discovery query", "Next step"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "matches": ["\\bUsage\\b", "getschema", "(?i)\\bunion\\b[^\\n]*\\*"],
+  "matches": ["\\bUsage\\b", "getschema"],
   "tables": ["Usage", "DeviceProcessEvents", "SecurityEvent", "Syslog", "CommonSecurityLog"]
 }
 ```
