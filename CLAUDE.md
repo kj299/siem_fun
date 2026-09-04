@@ -92,17 +92,27 @@ in this repo's history reached CI only because a local run was skipped.
     real or invented, nothing reads it.
 
     The positional registry is deliberately tighter than the shape one: it is
-    the first backticked cell of each catalogue row plus the opening name of
-    each CIM alignment bullet, kept in its own set, and the positional check
-    accepts nothing else. The shape set must not be used as a fallback: it
-    holds every colon token in the registry files, which includes *sources*
-    the catalogue lists next to their sourcetype (`okta:im2` is the source
-    whose sourcetype is `OktaIM2:log`), and the first version of the check
-    accepted it, so a query naming `okta:im2` as its sourcetype passed and
-    would return nothing. That sentence cannot write the offending query
-    literally: this file is scanned too. The shape check keeps
-    its wider set on purpose, because `WinEventLog:Security` in a second
-    catalogue column must still be accepted from prose.
+    every backticked name in the column the catalogue *labels* `Sourcetype`,
+    plus the opening name of each CIM alignment bullet, kept in its own set,
+    and the positional check accepts nothing else. **Read the column by its
+    header, never by its position.** The catalogue's tables do not agree on
+    column order: most lead with the sourcetype, the CrowdStrike and Carbon
+    Black tables lead with the add-on name as plain prose, and the
+    index-naming table leads with index globs. Taking the first cell of each
+    row therefore registered 11 index globs as sourcetypes and left out 9 real
+    ones, so a documented sourcetype written in query position was reported as
+    invented. A table with no `Sourcetype` header contributes nothing, which
+    is what cim-vendor-alignment.md's one table should contribute.
+
+    The shape set must not be used as a fallback: it holds every colon token
+    in the registry files, which includes *sources* the catalogue lists next
+    to their sourcetype (`okta:im2` is the source whose sourcetype is
+    `OktaIM2:log`), and the first version of the check accepted it, so a query
+    naming that source as its sourcetype passed and would return nothing. That
+    sentence cannot write the offending query literally: this file is scanned
+    too. The shape check keeps its wider set on purpose, because
+    `WinEventLog:Security` in a second catalogue column must still be accepted
+    from prose.
   - **Sentinel tables** named in table position in a `kql` block must be
     catalogued in [sentinel-table-catalog.md](splunk-sentinel-query-builder/references/sentinel-table-catalog.md),
     which cites Microsoft's own documentation per table. **KQL table names are
@@ -267,12 +277,24 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   raw searches, KQL without `TimeGenerated`, invented identifiers read by
   position, and a request to paste a credential. Its checks are registered in
   `GRADER_MUTS` in the mutation script, so a grader check that stops firing
-  goes red the same way a validator check does. The model run itself is not
+  goes red the same way a validator check does.
+
+  **Port those rules from the validator, do not re-derive them.** The grader is
+  a second implementation of the same rules in a second language, and it drifted
+  behind on three of them at once: it exempted every leading pipe, so
+  `| search index=...` was graded by no rule at all; it accepted any mention of
+  `_time` as a time bound, so a query whose only `_time` sat inside
+  `stats latest(_time)` passed; and it read KQL tables a line at a time, so a
+  table bound by `let` or a join operand on the next line was invisible to a
+  fixture's `tables` allowlist. The validator caught all three and had mutations
+  for them. The grader's patterns are now copied from it with the reasoning
+  comments intact, so the next reader can see they are meant to match. The model run itself is not
   in CI because CI holds no credential: run it locally after changing a
   `SKILL.md` or a reference file, and record what it found in
-  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). The first run's finding was a
-  fixture that contradicted the skill, not a skill that was wrong, and only a
-  model run could have shown that.
+  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Both runs so far found a fixture
+  that contradicted the skill rather than a skill that was wrong -- fixture 8,
+  then fixture 4 -- and only a model run could have shown that. When a fixture
+  fails, read the skill before assuming the answer is at fault.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
   tests a different thing on each platform: a Linux run only ever exercises LF,

@@ -242,7 +242,10 @@ What the validator enforces on every run:
   named anywhere in prose must be catalogued, which catches a sourcetype
   mentioned in a sentence or a table cell rather than a query. The gap between
   the two is a colon-free name mentioned in prose but never written in query
-  position; that one is still unread. Placeholders (`YOUR_SOURCETYPE`,
+  position; that one is still unread. The registry the positional check reads
+  is built from the column the catalogue labels `Sourcetype`, found by its
+  header rather than by its position, because the catalogue's tables do not
+  agree on column order. Placeholders (`YOUR_SOURCETYPE`,
   `<name>`, `...`, wildcards) make no claim and are skipped. Every
   Sentinel table named in table position in a KQL block must be catalogued in
   the Sentinel table catalogue, where each entry cites Microsoft's own

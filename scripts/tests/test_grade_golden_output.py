@@ -180,7 +180,11 @@ class IdentifierTests(unittest.TestCase):
     def test_kql_tables_leading_union_join_and_let(self):
         self.assertEqual(g.kql_tables("SigninLogs\n| union AuditLogs, Ghost\n| join kind=inner (SecurityEvent) on x"),
                          {"SigninLogs", "AuditLogs", "Ghost", "SecurityEvent"})
-        self.assertEqual(g.kql_tables("let recent = toscalar(1);\nUsage\n| where TimeGenerated > ago(7d)"), set())
+        # The let binds a FUNCTION CALL, so it contributes no table -- but
+        # `Usage` on the next line is the query's source and is reported. This
+        # asserted set() while the leading table was read from line 0 only,
+        # which contradicted the `Usage`-leads case asserted directly below.
+        self.assertEqual(g.kql_tables("let recent = toscalar(1);\nUsage\n| where TimeGenerated > ago(7d)"), {"Usage"})
         self.assertEqual(g.kql_tables("Usage\n| summarize by DataType"), {"Usage"})
         self.assertEqual(g.kql_tables("// comment\nDeviceProcessEvents\n| getschema"), {"DeviceProcessEvents"})
 
@@ -188,6 +192,42 @@ class IdentifierTests(unittest.TestCase):
         self.assertEqual(g.kql_tables("TableName | getschema;\nTableName | take 5"), set())
         self.assertEqual(g.kql_tables("union withsource=Table_ *\n| where TimeGenerated > ago(1h)"), set())
         self.assertEqual(g.kql_tables("SigninLogs\n| join kind=inner (AuditLogs) on Id"), {"SigninLogs", "AuditLogs"})
+
+    def test_a_table_bound_by_let_is_a_table_reference(self):
+        # REGRESSION: the scan only read `union`/`join` lines and the leading
+        # identifier, so a table introduced by `let` was invisible and an
+        # invented one satisfied a fixture's `tables` allowlist. The name the
+        # let BINDS is a local, not a table, and must not be reported.
+        self.assertEqual(g.kql_tables("let recent = GhostTable;\nrecent | take 5"), {"GhostTable"})
+        self.assertEqual(g.kql_tables("let cutoff = ago(1d);\nSigninLogs\n| where TimeGenerated > cutoff"),
+                         {"SigninLogs"})
+
+    def test_a_parenthesized_union_operand_is_a_table_reference(self):
+        # REGRESSION: KQL allows a parenthesized subquery as a union operand,
+        # and the ported pattern accepted only a bare identifier after `union`,
+        # so an invented table in the commonest union form satisfied a
+        # fixture's `tables` allowlist. The broad scan it replaced saw it.
+        self.assertEqual(g.kql_tables("union (GhostTable | where TimeGenerated > ago(7d))"),
+                         {"GhostTable"})
+        self.assertEqual(g.kql_tables("union isfuzzy=true (GhostTable | take 5)"), {"GhostTable"})
+        self.assertEqual(g.kql_tables("union (SigninLogs), (AuditLogs)"), {"SigninLogs", "AuditLogs"})
+
+    def test_a_union_operand_list_may_wrap(self):
+        # The statement ends at the first `|` or newline whose parentheses are
+        # balanced, so a subquery's inner pipe does not end it and a trailing
+        # comma carries the list onto the next line -- while a downstream
+        # `summarize by X, Y` is still excluded.
+        self.assertEqual(g.kql_tables("union (A | take 5),\n      (B | take 5)"), {"A", "B"})
+        self.assertEqual(g.kql_tables("union A,\n      B"), {"A", "B"})
+        self.assertEqual(g.kql_tables("union A, B | summarize by X, Y"), {"A", "B"})
+        self.assertEqual(g.kql_tables("SigninLogs\n| union AuditLogs\n| summarize count() by X, Y"),
+                         {"SigninLogs", "AuditLogs"})
+
+    def test_a_join_operand_on_the_next_line_is_a_table_reference(self):
+        # REGRESSION: the line-oriented scan could not see past the newline
+        # after `join (`, which is how a model formats a wide join.
+        self.assertEqual(g.kql_tables("SigninLogs\n| join (\n    GhostTable\n    | take 5\n) on Id"),
+                         {"SigninLogs", "GhostTable"})
 
 
 class GenericRuleTests(unittest.TestCase):
@@ -211,7 +251,32 @@ class GenericRuleTests(unittest.TestCase):
         r = g.grade(fx(), "## Query\n```kql\nSigninLogs\n| getschema\n```\n", DECLARED)
         self.assertTrue(r.success, r.failed)
 
-    def test_time_bound_may_sit_on_the_second_line_of_the_base_search(self):
+    def test_leading_pipe_search_is_still_a_raw_event_search(self):
+        # REGRESSION: the check skipped every block whose first line began with
+        # a pipe, on the assumption that a leading pipe means a generating
+        # command. '| search index=windows' is a raw-event search wearing that
+        # syntax and scanned all history while the grader ran no check at all.
+        r = g.grade(fx(), "## Query\n```spl\n| search index=windows\n| stats count\n```\n", DECLARED)
+        self.assertTrue(any("time-bound" in m for m in r.failed), r.failed)
+
+    def test_a_generating_command_is_still_exempt(self):
+        r = g.grade(fx(), "## Query\n```spl\n| tstats count where index=x by sourcetype\n```\n", DECLARED)
+        self.assertFalse(any("time-bound" in m for m in r.failed), r.failed)
+
+    def test_time_mentioned_in_an_aggregation_is_not_a_time_bound(self):
+        # REGRESSION: the pattern accepted any occurrence of '_time', so
+        # 'index=windows | stats latest(_time)' graded as bounded while
+        # scanning all history. A bound needs an actual predicate.
+        r = g.grade(fx(), "## Query\n```spl\nindex=windows | stats latest(_time)\n```\n", DECLARED)
+        self.assertTrue(any("time-bound" in m for m in r.failed), r.failed)
+        r = g.grade(fx(), '## Query\n```spl\nindex=windows\n| where _time > relative_time(now(), "-1d")\n```\n', DECLARED)
+        self.assertFalse(any("time-bound" in m for m in r.failed), r.failed)
+
+    def test_head_still_bounds_a_raw_search(self):
+        r = g.grade(fx(), "## Query\n```spl\nindex=windows\n| head 5\n```\n", DECLARED)
+        self.assertFalse(any("time-bound" in m for m in r.failed), r.failed)
+
+    def test_time_bound_may_sit_on_the_second_line_of_the_search(self):
         text = ("## Query\n```spl\n((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=bluecoat:proxysg:access:kv))\n"
                 "earliest=-24h latest=now\n| stats count by src\n```\n")
         r = g.grade(fx(), text, DECLARED)

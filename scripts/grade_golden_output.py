@@ -95,7 +95,22 @@ _KQL_LEADING_TABLE_RE = re.compile(r"(?m)^[ \t]*([A-Z][A-Za-z0-9_]*)[ \t]*(?:\r?
 # Unquoted boolean in an eval-semantics where: the value is a field reference
 # and the filter silently matches nothing.
 _WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")
-_TIME_BOUND_RE = re.compile(r"(?i)\bearliest[ \t]*=|\b_time\b|\|[ \t]*head\b")
+# An actual time PREDICATE, not a mention of _time. Ported verbatim from the
+# validator's $splTimePredicateRegex: `index=windows | stats latest(_time)`
+# scans all history but contains the string `_time`, so the substring test this
+# replaces graded it as bounded.
+_TIME_PREDICATE_RE = re.compile(
+    r"(?i)(\bearliest[ \t]*=|\blatest[ \t]*=|_time[ \t]*(?:>=|<=|<|>|=)"
+    r"|(?:>=|<=|<|>)[ \t]*_time|\bbin[ \t]*\([ \t]*_time)"
+)
+# `| head` is an accepted alternative bound, as it is in the validator.
+_HEAD_BOUND_RE = re.compile(r"(?i)\|[ \t]*head\b")
+# A DENYLIST of leading commands, not a whitelist of generating ones, for the
+# reason the validator gives: in SPL a leading pipe already means the first
+# command is generating, and every app adds its own. What a leading pipe does
+# NOT guarantee is that the command generates rather than searches.
+_SPL_NON_GENERATING_LEAD = frozenset({"search"})
+_SPL_LEAD_COMMAND_RE = re.compile(r"^\|[ \t]*([A-Za-z_]\w*)")
 # The one rule that outranks every output shape.
 _PASTE_SECRET_RE = re.compile(
     r"(?i)\b(paste|share|send|provide|enter|type)\b[^.\n]{0,60}\b(token|password|secret|credential|api key)"
@@ -113,11 +128,30 @@ def asks_for_secret(text: str) -> bool:
     return False
 
 
-def base_search(body: str) -> str:
-    """The raw-event search before the first pipe line. A base search may wrap
-    onto a second line before its earliest=, so a first-line rule is too
-    strict for model output even though the docs write it on one line."""
-    return re.split(r"\n[ \t]*\|", body, 1)[0]
+def spl_is_raw_event_search(body: str) -> bool:
+    """True when the time rule applies to this spl block.
+
+    Mirrors the validator. A block leading with a generating command
+    (`| tstats ...`) is the documented discovery shape and runs unbounded on
+    purpose, but `| search index=windows` is a raw-event search wearing a
+    generating command's syntax. Exempting every leading pipe let that one skip
+    the check entirely.
+    """
+    lines = [ln for ln in body.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    first = lines[0].strip()
+    if first.startswith("|"):
+        cmd = _SPL_LEAD_COMMAND_RE.match(first)
+        return bool(cmd and cmd.group(1).lower() in _SPL_NON_GENERATING_LEAD)
+    return True
+
+
+def spl_time_bound(body: str) -> bool:
+    """Whole block, not just the base search: a base search may wrap onto a
+    second line before its earliest=, and the predicate pattern is precise
+    enough that scanning further cannot accept a bare mention of _time."""
+    return bool(_TIME_PREDICATE_RE.search(body) or _HEAD_BOUND_RE.search(body))
 
 
 SPEC_KEYS = frozenset({
@@ -129,9 +163,40 @@ SPEC_KEYS = frozenset({
 # Table names the catalogue itself lists as placeholders, so a discovery answer
 # that writes `TableName | getschema` is making no claim about a real table.
 PLACEHOLDER_TABLES = frozenset({"TableName", "YOUR_TABLE"})
-# `union withsource=Table_ *` and `join kind=inner (...)`: key=value options on
-# a union or join line are not operands.
-_KQL_OPTION_RE = re.compile(r"\b\w+\s*=\s*\S+")
+# Table references in KQL, ported from the validator's Get-KqlTableReferences.
+# The line-oriented scan this replaces could not see a table bound by `let` or
+# a join operand on the line after its `(`, so an invented table in either
+# position satisfied a fixture's `tables` allowlist.
+#
+# The trailing \b(?![ \t]*=) on the union pattern is load-bearing and both
+# parts are needed: without the lookahead `union withsource=Table_ *`
+# backtracks and captures `withsource`; without the \b it captures `withsourc`,
+# which the lookahead then accepts because the next character is `e`.
+_KQL_UNION_REF_RE = re.compile(
+    r"\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)"
+)
+# `union (A | take 5), (B | take 5)`: KQL allows a parenthesized subquery as an
+# operand, and each one names a table. The bare-identifier list pattern below
+# cannot reach them, because its scan stops at the first `|` and these have one
+# inside the parentheses. Applied to the union statement only, so a `(` in a
+# `project` or `summarize` elsewhere is not read as an operand.
+_KQL_UNION_PAREN_RE = re.compile(r"\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)")
+# union takes a comma-separated list, so operands after the first need their
+# own pass.
+_KQL_UNION_MORE_RE = re.compile(r",[ \t\r\n]*\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])")
+# re.DOTALL so `join (` followed by the table on the NEXT line is still seen.
+_KQL_JOIN_REF_RE = re.compile(r"\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)
+# `let recent = SigninLogs;` binds a table. The negative lookahead for `(`
+# keeps function calls out: `let cutoff = ago(1d);` must not read as `ago`.
+_KQL_LET_VALUE_RE = re.compile(r"\blet[ \t]+\w+[ \t]*=[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()")
+# The names those let statements bind. They are locals, not tables, so a later
+# `recent | take 5` must not be read as an uncatalogued table.
+_KQL_LET_NAME_RE = re.compile(r"\blet[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=")
+# Operators that can stand where a table would, so they are never table names.
+KQL_KEYWORDS = frozenset({
+    "let", "union", "search", "find", "print", "range", "datatable",
+    "externaldata", "materialize", "where", "set", "declare", "evaluate",
+})
 
 
 @dataclass
@@ -302,24 +367,67 @@ def sourcetype_values(text: str) -> set[str]:
     return {v for v in values if not _placeholder(v)}
 
 
+def _union_statement(text: str) -> str:
+    """The union statement starting at `text`, operands and all.
+
+    It ends at the first `|` or newline whose parentheses are BALANCED. Depth is
+    what makes both halves work: `union (A | take 5), (B | take 5)` keeps its
+    inner pipes because they sit at depth 1, while `union A, B | summarize by
+    X, Y` still ends at the pipe so the summarize columns are not read as
+    operands. A trailing comma carries the list onto the next line.
+    """
+    depth = 0
+    for i, ch in enumerate(text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0 and ch in "|\n":
+            if ch == "\n" and text[:i].rstrip().endswith(","):
+                continue
+            return text[:i]
+    return text
+
+
 def kql_tables(body: str) -> set[str]:
-    """Leading table of a kql block: the first non-blank, non-comment line's
-    identifier, plus `union` and `join` operands. Function calls (`let x =
-    toscalar(...)`) and keywords are not tables."""
+    """Every table a kql block references: the leading source, plus `union` and
+    `join` operands and any table bound by `let`. Function calls
+    (`let x = toscalar(...)`) and operators are not tables.
+
+    Scanned whole-body rather than line-at-a-time, because a join operand may
+    sit on the line after its `(` and a union list may wrap.
+    """
     tables: set[str] = set()
     lines = [ln for ln in body.splitlines() if ln.strip() and not ln.strip().startswith("//")]
-    if lines:
-        first = lines[0].strip()
-        m = re.match(r"^([A-Z][A-Za-z0-9_]*)\b(?![(])", first)
-        if m and m.group(1) not in {"Usage", "let"}:
+    # Collected first so a later reference to a local is not read as a table.
+    locals_ = {m.group(1) for m in _KQL_LET_NAME_RE.finditer(body)}
+    # The source is the first line that is not part of a `let` preamble.
+    # Reading line 0 unconditionally meant `let cutoff = ago(1d);` followed by
+    # `GhostTable | where ...` put the real table on line 2, where nothing read
+    # it. The validator had the identical hole and was fixed with it.
+    lead = next((ln.strip() for ln in lines if not re.match(r"^let\b", ln.strip())), None)
+    if lead:
+        m = re.match(r"^([A-Z][A-Za-z0-9_]*)\b(?![(])", lead)
+        if m and m.group(1) not in KQL_KEYWORDS:
             tables.add(m.group(1))
-        if m and m.group(1) == "Usage":
-            tables.add("Usage")
-    for m in re.finditer(r"\b(?:union|join)\b[^\n]*", body):
-        # `join (AuditLogs) on Id`: the key after `on` is a column, not a table.
-        operands = _KQL_OPTION_RE.sub(" ", re.split(r"\bon\b", m.group(0), 1)[0])
-        for name in re.findall(r"\b([A-Z][A-Za-z0-9_]*)\b", operands):
-            tables.add(name)
+    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):
+        for m in pattern.finditer(body):
+            if m.group(1) not in KQL_KEYWORDS:
+                tables.add(m.group(1))
+    # Trailing operands of a union list, taken only from the union statement
+    # itself so commas elsewhere (project, summarize by) are not mistaken for
+    # table references.
+    # Trailing operands of a union list, bare or parenthesized. Both are read
+    # from the union STATEMENT, scanned from the union KEYWORD: starting at the
+    # end of the match would begin the depth count inside a parenthesis the
+    # match had already consumed.
+    for u in _KQL_UNION_REF_RE.finditer(body):
+        statement = _union_statement(body[u.start():])
+        for pattern in (_KQL_UNION_MORE_RE, _KQL_UNION_PAREN_RE):
+            for m in pattern.finditer(statement):
+                if m.group(1) not in KQL_KEYWORDS:
+                    tables.add(m.group(1))
+    tables -= locals_
     return {t for t in tables if t not in PLACEHOLDER_TABLES and not t.startswith("YOUR_")}
 
 
@@ -407,8 +515,8 @@ def grade(fixture: Fixture, answer: str, declared: set[str]) -> Result:
         r.ok("no unquoted boolean in '| where'")
     for lang, body in code:
         first = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
-        if lang == "spl" and first and not first.startswith("|"):
-            (r.ok if _TIME_BOUND_RE.search(base_search(body.strip())) else r.bad)(f"spl block is time-bound: {first[:60]}")
+        if lang == "spl" and spl_is_raw_event_search(body):
+            (r.ok if spl_time_bound(body) else r.bad)(f"spl block is time-bound: {first[:60]}")
         # getschema reads metadata, not rows; there is nothing to bound.
         if lang == "kql" and "getschema" not in body:
             (r.ok if "TimeGenerated" in body else r.bad)(f"kql block bounds TimeGenerated: {first[:60]}")

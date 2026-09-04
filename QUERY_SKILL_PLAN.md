@@ -4,8 +4,9 @@
 record -- the reasoning behind what was built, in the order it was decided --
 rather than as a roadmap. For what the pack does today, read
 [README.md](README.md); for the rules that keep it correct, read
-[CLAUDE.md](CLAUDE.md). What the first model run found, and the one decision
-still open, are at the end.
+[CLAUDE.md](CLAUDE.md). What the model runs found, what checking the
+catalogues against the vendors found, and the one decision still open, are at
+the end.
 
 ## Goal
 
@@ -262,6 +263,66 @@ runner hands them over. Result after correction: 10 of 10.
   identifiers, and never asked for a credential. Answer 10's claims about the
   dictionary builder's flags and environment-variable defaults were checked
   against the script and are true.
+
+## What the second model run found
+
+Second run, 2026-09-04, same method: each fixture executed by an agent handed
+`SKILL.md` and every file under `references/` exactly as
+[scripts/run_golden_prompts.py](scripts/run_golden_prompts.py) assembles them,
+then graded by [scripts/grade_golden_output.py](scripts/grade_golden_output.py).
+Result after correction: 10 of 10.
+
+- **A second fixture contradicted the skill, and again no skill was wrong.**
+  Fixture 4 asks for a Sentinel hunt when the table is unknown. Its spec
+  required the answer to contain a `union` wildcard. But query-workflow.md
+  tells the model to use `union *` *sparingly* and to prefer `Usage` for pure
+  enumeration, which is exactly what this prompt is. The answer used `Usage`
+  and `getschema`, named the candidate tables, and never proposed a union, so
+  it had nothing to warn about. The spec failed it for following the skill.
+  Note that the fixture's own prose bullet said the answer "warns against
+  broad `union *`" -- the spec had turned a warning into a requirement, and
+  the two sat next to each other unread. The union match is gone; `Usage`,
+  `getschema` and the table allowlist still pin the shape.
+- **Same root cause as run 1's fixture 8**, one run apart: a fixture and a
+  skill that are each internally consistent and disagree with each other.
+  Nothing but a model run finds these. Two of ten fixtures have now been
+  wrong; the skills have been right both times.
+- **The other nine passed unchanged**, including every generic rule: time
+  bounded first, assumptions named, discovery returned rather than a guessed
+  production query, only supplied or catalogued identifiers, and no request
+  for a credential.
+
+## What checking the catalogues against the vendors found
+
+The validator checks the documents against the catalogues. Nothing checked the
+catalogues against the vendors, so a sourcetype or table that was renamed,
+deprecated or never existed would pass every run. First pass, 2026-09-04.
+
+- **All 20 Sentinel tables verified** against the Microsoft page each row
+  cites. Every name exists with the exact casing the catalogue uses, every
+  cited page still resolves, and the anchors still name a real heading. The
+  descriptive claims hold too: `Usage` really does carry `DataType`,
+  `Quantity` in Mbytes, `IsBillable` and `Solution`, and the `Operation` row's
+  data-allowance records are documented on the page cited, with a sample
+  query. Nothing needed correcting.
+- **11 of the 67 Splunk sourcetypes spot-checked**, chosen as the likeliest to
+  have drifted: the CrowdStrike, Carbon Black, Defender, Zscaler NSS, Okta,
+  Qualys and Microsoft Cloud Services names. All are current, including the
+  awkward ones (`qualys:hostDetection` really is camel-cased, and the Carbon
+  Black caveat about `vmware:cb:edr:json` is right). The other 56 are unread.
+- **The two catalogues are asymmetric, and only one says so.** Every Sentinel
+  row cites Microsoft per table, and the file requires a citation before a
+  table may be added. The Splunkbase catalogue carries no per-row citation at
+  all, so re-verifying it means finding the vendor documentation again from
+  scratch each time. Adding a Reference column to it is the obvious fix and is
+  a larger content change than this pass took on.
+- The Okta rows list `OktaIM2:log` only; the add-on also ships `OktaIM2:user`,
+  `:group`, `:app`, `:groupUser` and `:appUser`. Not an error, an omission.
+
+Direct fetches of vendor documentation are blocked by this environment's
+network policy, so the Splunk half was checked through search rather than by
+reading the pages. That is weaker evidence than the Sentinel half, where
+Microsoft's documentation was read directly.
 
 ## What is still open
 

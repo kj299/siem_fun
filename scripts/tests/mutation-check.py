@@ -403,8 +403,29 @@ GRADER_MUTS = [
      r'_WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")',
      r'_WHERE_BOOLEAN_RE = re.compile(r"ZZZNEVERMATCHES")'),
     ("grader: raw-event spl block needs a time bound",
-     '        if lang == "spl" and first and not first.startswith("|"):',
+     '        if lang == "spl" and spl_is_raw_event_search(body):',
      "        if False:"),
+    ("grader: a leading-pipe '| search' is still a raw-event search",
+     '_SPL_NON_GENERATING_LEAD = frozenset({"search"})',
+     "_SPL_NON_GENERATING_LEAD = frozenset()"),
+    ("grader: _time mentioned but not compared is not a time bound",
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)"',
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time|\\b_time\\b)"'),
+    ("grader: a KQL table bound by let is a table reference",
+     "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):",
+     "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE):"),
+    ("grader: a parenthesized union operand is a table reference",
+     '    r"\\bunion\\b(?:[ \\t]+\\w+[ \\t]*=[ \\t]*\\S+)*[ \\t]+\\(?[ \\t]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*=)"',
+     '    r"\\bunion\\b(?:[ \\t]+\\w+[ \\t]*=[ \\t]*\\S+)*[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*=)"'),
+    ("grader: a union statement is not ended by a pipe inside its parentheses",
+     '        elif depth == 0 and ch in "|\\n":',
+     '        elif ch in "|\\n":'),
+    ("grader: a KQL join operand on the next line is a table reference",
+     '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)',
+     '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t]*([A-Za-z_][A-Za-z0-9_]*)")'),
+    ("grader: the KQL source is read past a let preamble",
+     '    lead = next((ln.strip() for ln in lines if not re.match(r"^let\\b", ln.strip())), None)',
+     "    lead = lines[0].strip() if lines else None"),
     ("grader: placeholders and wildcards are not identifier claims",
      '    return value.startswith(("YOUR_", "<")) or value == "..." or "*" in value',
      "    return False"),
@@ -625,6 +646,36 @@ check_mutation("a catalogued SOURCE written as a sourcetype",
                # this through; reviewed as a P1 after it merged.
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=okta:im2 earliest=-24h\n| stats count\n{BT}\n"),
                "not a catalogued sourcetype of any shape")
+CATALOG = "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md"
+
+
+def _swap_catalogue_sourcetype_column() -> None:
+    """Relabel the catalogue's Sourcetype column as Source, and vice versa.
+
+    The positional registry reads the column the catalogue LABELS Sourcetype,
+    so this moves XmlWinEventLog out of it and the golden-prompt fixture that
+    filters on that sourcetype stops resolving.
+
+    Verified to be MISSED by the read this replaced: taking the first
+    backticked cell of a row ignores headers entirely, so it kept registering
+    the same names and reported nothing. That read also put 11 index globs in
+    the registry and left out 9 real sourcetypes, the CrowdStrike and Carbon
+    Black families among them, so writing one of those in query position was
+    reported as invented.
+
+    newline='' preserves a CRLF checkout's endings; the anchor is a single
+    line, so the swap lands under either.
+    """
+    path = os.path.join(WORK, CATALOG)
+    text = open(path, newline="").read()
+    open(path, "w", newline="").write(text.replace(
+        "| Sourcetype | Source | CIM data model | Key fields |",
+        "| Source | Sourcetype | CIM data model | Key fields |"))
+
+
+check_mutation("catalogue Sourcetype column relabelled as Source",
+               _swap_catalogue_sourcetype_column,
+               "not a catalogued sourcetype of any shape")
 check_mutation("uncatalogued MIXED-CASE sourcetype",
                # The token pattern required a lowercase first letter, so the
                # catalogue's own OktaIM2:* family was never matched and an
@@ -636,6 +687,18 @@ check_mutation("uncatalogued table in a union list or multiline join",
                "never invent Sentinel identifiers")
 check_mutation("uncatalogued table bound by let",
                lambda: append(KDOC, f"\n{BT}kql\nlet recent = InventedTable;\nrecent | take 5\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued table as a parenthesized union operand",
+               # KQL's commonest union form. The pattern accepted only a bare
+               # identifier after 'union', so an invented table inside the
+               # parentheses was read by nothing.
+               lambda: append(KDOC, f"\n{BT}kql\nunion (InventedTable | where TimeGenerated > ago(1d))\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued table behind a let preamble",
+               # The source was read from line 0 only. A 'let' there is a
+               # keyword and was discarded, and the let-value pattern skips a
+               # function call, so the real table on line 2 was read by nothing.
+               lambda: append(KDOC, f"\n{BT}kql\nlet cutoff = ago(1d);\nInventedTable\n| where TimeGenerated > cutoff\n{BT}\n"),
                "never invent Sentinel identifiers")
 check_mutation("raw-event search whose only _time is an aggregation",
                lambda: append(MDOC, f"\n{BT}spl\nindex=firewall\n| stats latest(_time)\n{BT}\n"),

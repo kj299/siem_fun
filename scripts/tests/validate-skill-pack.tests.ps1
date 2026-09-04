@@ -607,6 +607,82 @@ try {
         Assert-Equal @("XmlWinEventLog") (Get-SourcetypeValues 'sourcetype=XmlWinEventLog source=XmlWinEventLog:Microsoft-Windows-Sysmon/Operational')
     }
 
+    Write-Host "Add-CatalogueSourcetypeNames" -ForegroundColor Cyan
+
+    Test-Case "the Sourcetype column is read wherever it sits" {
+        # REGRESSION: the registry used to take the first backticked cell of
+        # every row, and the catalogue's tables do not agree on column order.
+        # Two of them lead with the add-on name, so five real sourcetypes
+        # (the CrowdStrike and Carbon Black families) were absent from the
+        # registry and writing one after sourcetype= was reported as invented.
+        $names = New-Object 'System.Collections.Generic.HashSet[string]'
+        Add-CatalogueSourcetypeNames (
+            "| Add-on | Sourcetype | CIM data model |`n" +
+            "| --- | --- | --- |`n" +
+            "| Splunk Add-on for CrowdStrike FDR (app 5579) | ``crowdstrike:events:sensor`` | Endpoint |`n"
+        ) $names
+        Assert-True $names.Contains("crowdstrike:events:sensor") "second-column sourcetype must be registered"
+        Assert-Equal 1 $names.Count
+    }
+
+    Test-Case "a column that is not the Sourcetype column is not registered" {
+        # REGRESSION: the same first-cell read registered 11 index globs
+        # (*auth*, *firewall*) from the index-naming table, and the Source
+        # column next to a sourcetype. Registering a SOURCE is the P1 that
+        # let a query name one as its sourcetype and return nothing.
+        $names = New-Object 'System.Collections.Generic.HashSet[string]'
+        Add-CatalogueSourcetypeNames (
+            "| Sourcetype | Source | CIM data model |`n" +
+            "| --- | --- | --- |`n" +
+            "| ``WinEventLog`` | ``WinEventLog:Security`` | Authentication |`n`n" +
+            "| Index name pattern | Likely sourcetypes | First step |`n" +
+            "| --- | --- | --- |`n" +
+            "| ``*auth*``, ``*iam*`` | ``OktaIM2:log`` | same |`n"
+        ) $names
+        Assert-True $names.Contains("WinEventLog") "the Sourcetype column must be registered"
+        Assert-True (-not $names.Contains("WinEventLog:Security")) "a Source must not be registered"
+        Assert-True (-not $names.Contains("*auth*")) "an index glob must not be registered"
+        Assert-Equal 1 $names.Count
+    }
+
+    Test-Case "a table with no Sourcetype column contributes nothing" {
+        # cim-vendor-alignment.md's one table is 'Data model | Root dataset |
+        # Core fields'. Reading its first cell would have registered CIM data
+        # model names as sourcetypes.
+        $names = New-Object 'System.Collections.Generic.HashSet[string]'
+        Add-CatalogueSourcetypeNames (
+            "| Data model | Root dataset | Core fields |`n" +
+            "| --- | --- | --- |`n" +
+            "| ``Authentication`` | ``Authentication`` | user, src |`n"
+        ) $names
+        Assert-Equal 0 $names.Count
+    }
+
+    Test-Case "a row before any separator is not read as data" {
+        # The header is the row above the separator, so a stray table-shaped
+        # line with no separator under it has no known column and is skipped.
+        $names = New-Object 'System.Collections.Generic.HashSet[string]'
+        Add-CatalogueSourcetypeNames "| ``not:a:table`` | x |`n" $names
+        Assert-Equal 0 $names.Count
+    }
+
+    Test-Case "every sourcetype the docs write in query position is catalogued" {
+        # A guard, not a REGRESSION: it pins no shipped defect, it proves the
+        # registry rebuild did not quietly drop a name the documents rely on.
+        # These are the values the reference files actually write in query
+        # position, so losing one turns a correct document into a reported
+        # error.
+        $names = New-Object 'System.Collections.Generic.HashSet[string]'
+        foreach ($registryFile in $script:sourcetypeRegistryFiles) {
+            Add-CatalogueSourcetypeNames (Get-Content -Raw (Join-Path $PSScriptRoot "../../$registryFile")) $names
+        }
+        foreach ($used in @("cisco:asa", "pan:traffic", "cisco:umbrella:dns",
+                            "bluecoat:proxysg:access:kv", "XmlWinEventLog",
+                            "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational")) {
+            Assert-True $names.Contains($used) "$used is written in query position and must stay catalogued"
+        }
+    }
+
     Test-Case "a query leading with a function is not a table reference" {
         # REGRESSION: Microsoft tells you to prefer _SentinelHealth() over the
         # SentinelHealth table, and the leading-identifier pattern reported that
@@ -616,6 +692,26 @@ try {
 
     Test-Case "a function call on the right of a let is not a table" {
         Assert-Equal @() (Get-KqlTableReferences "let cutoff = ago(1d);`nlet x = 5;")
+    }
+
+    Test-Case "a parenthesized union operand is a table reference" {
+        # REGRESSION: KQL allows a parenthesized subquery as a union operand,
+        # and the pattern accepted only a bare identifier after 'union', so an
+        # invented table in the commonest union form was reported by nothing.
+        $refs = [string[]](Get-KqlTableReferences "union (InventedTable | where TimeGenerated > ago(7d))")
+        Assert-True ($refs -ccontains "InventedTable") "a parenthesized operand must be read"
+        $refs = [string[]](Get-KqlTableReferences "union isfuzzy=true (InventedTable | take 5)")
+        Assert-True ($refs -ccontains "InventedTable") "options before a parenthesized operand must be skipped"
+    }
+
+    Test-Case "a union operand list may wrap or carry a subquery pipe" {
+        # The statement ends at the first '|' or newline whose parentheses are
+        # balanced: a subquery's inner pipe does not end it, a trailing comma
+        # carries the list on, and a downstream summarize is still excluded.
+        $refs = [string[]](Get-KqlTableReferences "union (SigninLogs | take 5),`n      (AuditLogs | take 5)")
+        Assert-True ($refs -ccontains "SigninLogs" -and $refs -ccontains "AuditLogs") "both wrapped operands must be read"
+        $refs = [string[]](Get-KqlTableReferences "SigninLogs`n| union AuditLogs`n| summarize count() by Alpha, Beta")
+        Assert-True (-not ($refs -ccontains "Beta")) "summarize columns must not be read as operands"
     }
 
     Test-Case "union withsource=X * names no table" {
