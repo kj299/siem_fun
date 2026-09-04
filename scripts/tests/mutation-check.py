@@ -625,6 +625,36 @@ check_mutation("a catalogued SOURCE written as a sourcetype",
                # this through; reviewed as a P1 after it merged.
                lambda: append(MDOC, f"\n{BT}spl\nindex=foo sourcetype=okta:im2 earliest=-24h\n| stats count\n{BT}\n"),
                "not a catalogued sourcetype of any shape")
+CATALOG = "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md"
+
+
+def _swap_catalogue_sourcetype_column() -> None:
+    """Relabel the catalogue's Sourcetype column as Source, and vice versa.
+
+    The positional registry reads the column the catalogue LABELS Sourcetype,
+    so this moves XmlWinEventLog out of it and the golden-prompt fixture that
+    filters on that sourcetype stops resolving.
+
+    Verified to be MISSED by the read this replaced: taking the first
+    backticked cell of a row ignores headers entirely, so it kept registering
+    the same names and reported nothing. That read also put 11 index globs in
+    the registry and left out 9 real sourcetypes, the CrowdStrike and Carbon
+    Black families among them, so writing one of those in query position was
+    reported as invented.
+
+    newline='' preserves a CRLF checkout's endings; the anchor is a single
+    line, so the swap lands under either.
+    """
+    path = os.path.join(WORK, CATALOG)
+    text = open(path, newline="").read()
+    open(path, "w", newline="").write(text.replace(
+        "| Sourcetype | Source | CIM data model | Key fields |",
+        "| Source | Sourcetype | CIM data model | Key fields |"))
+
+
+check_mutation("catalogue Sourcetype column relabelled as Source",
+               _swap_catalogue_sourcetype_column,
+               "not a catalogued sourcetype of any shape")
 check_mutation("uncatalogued MIXED-CASE sourcetype",
                # The token pattern required a lowercase first letter, so the
                # catalogue's own OktaIM2:* family was never matched and an

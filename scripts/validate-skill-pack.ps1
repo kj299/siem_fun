@@ -276,18 +276,88 @@ $script:sourcetypeRegistryFiles = @(
 # which resolve once the legacy Sysmon channel-path sourcetype is catalogued.
 $script:sourcetypeValueRegex = '(?i)\bsourcetype[ \t]*=[ \t]*"?([^\s"|),`\]]+)"?'
 $script:sourcetypeInRegex    = '(?i)\bsourcetype[ \t]+IN[ \t]*\(([^)]*)\)'
-# Catalogued names of ANY shape: the first backticked cell of every catalogue
-# table row (splitting "`a` / `b`" cells) plus the backticked name that opens
-# each vendor bullet in cim-vendor-alignment. Kept separate from
-# $knownSourcetypes on purpose: that set is colon tokens harvested from all
-# prose, and replacing it with this one would make the prose check report
-# WinEventLog:Security -- a SOURCE, correctly listed in a second column -- as an
-# uncatalogued sourcetype. The positional check accepts ONLY this set: the
-# colon-token set contains those same sources, and accepting it as a fallback
-# let sourcetype=okta:im2 pass.
+# Catalogued names of ANY shape: every backticked name in the column the
+# catalogue itself labels "Sourcetype", plus the backticked name that opens each
+# vendor bullet in cim-vendor-alignment.
+#
+# Read by COLUMN NAME rather than from the first cell of the row, because the
+# catalogue's tables are not uniform and never were. Most lead with the
+# sourcetype, two lead with the add-on name written as plain prose
+# ("Splunk Add-on for CrowdStrike FDR (app 5579)"), and the index-naming table
+# leads with index globs. Taking the first cell therefore registered 11 index
+# globs as sourcetypes and missed 9 real ones -- the CrowdStrike and Carbon
+# Black families, both Perfmon names, and the two netflow names -- so a
+# documented sourcetype written in query position was reported as invented.
+#
+# Kept separate from $knownSourcetypes on purpose: that set is colon tokens
+# harvested from all prose, and replacing it with this one would make the prose
+# check report WinEventLog:Security -- a SOURCE, correctly listed in the Source
+# column -- as an uncatalogued sourcetype. The positional check accepts ONLY
+# this set: the colon-token set contains those same sources, and accepting it as
+# a fallback let a catalogued source pass as a sourcetype.
 $script:knownSourcetypeNames = New-Object 'System.Collections.Generic.HashSet[string]'
-$script:catalogueFirstCellRegex = '(?m)^\|[ \t]*`([^`]+)`(?:[ \t]*/[ \t]*`([^`]+)`)*'
-$script:cimBulletNameRegex      = '(?m)^-[ \t]+[^`\r\n]*`([A-Za-z][A-Za-z0-9_:.*/-]*)`[^`\r\n]*->'
+$script:cimBulletNameRegex     = '(?m)^-[ \t]+[^`\r\n]*`([A-Za-z][A-Za-z0-9_:.*/-]*)`[^`\r\n]*->'
+$script:tableSeparatorRegex    = '^:?-{3,}:?$'
+$script:backtickedNameRegex    = '`([^`]+)`'
+
+# One markdown table row, split into trimmed cells.
+function Get-TableCells {
+    param([string]$Line)
+
+    $inner = $Line.Trim()
+    if ($inner.StartsWith("|")) { $inner = $inner.Substring(1) }
+    if ($inner.EndsWith("|"))   { $inner = $inner.Substring(0, [Math]::Max(0, $inner.Length - 1)) }
+    $cells = @(($inner -split '\|') | ForEach-Object { $_.Trim() })
+    # An empty array unrolls to nothing on return, so the caller would see $null.
+    return , $cells
+}
+
+# Add every backticked name in the "Sourcetype" column of each catalogue table
+# to $Names. In markdown the header is the row ABOVE the "| --- |" separator, so
+# the separator is what identifies it; until one has been seen there is no known
+# column and rows are skipped rather than guessed at. A table with no Sourcetype
+# column contributes nothing, which is what the CIM alignment file's one table
+# ("Data model | Root dataset | Core fields") should contribute.
+function Add-CatalogueSourcetypeNames {
+    param([string]$Text, [System.Collections.Generic.HashSet[string]]$Names)
+
+    $column = -1
+    $previous = $null
+    foreach ($line in ($Text -split "\r?\n")) {
+        if (-not $line.TrimStart().StartsWith("|")) {
+            $column = -1
+            $previous = $null
+            continue
+        }
+        $cells = Get-TableCells $line
+        $notSeparator = @($cells | Where-Object { $_ -notmatch $script:tableSeparatorRegex })
+        if ($cells.Count -gt 0 -and $notSeparator.Count -eq 0) {
+            $column = -1
+            if ($null -ne $previous) {
+                for ($i = 0; $i -lt $previous.Count; $i++) {
+                    if ($previous[$i] -eq "Sourcetype" -or $previous[$i] -eq "Sourcetypes") {
+                        $column = $i
+                        break
+                    }
+                }
+            }
+            $previous = $null
+            continue
+        }
+        if ($column -ge 0) {
+            if ($column -lt $cells.Count) {
+                foreach ($m in [regex]::Matches($cells[$column], $script:backtickedNameRegex)) {
+                    $name = $m.Groups[1].Value.Trim()
+                    if ($name.Length -gt 0) {
+                        $null = $Names.Add($name)
+                    }
+                }
+            }
+            continue
+        }
+        $previous = $cells
+    }
+}
 
 # Every sourcetype value written in query position, placeholders removed.
 function Get-SourcetypeValues {
@@ -813,16 +883,9 @@ foreach ($registryFile in $script:sourcetypeRegistryFiles) {
     foreach ($m in [regex]::Matches($registryText, $script:sourcetypeTokenRegex)) {
         $null = $script:knownSourcetypes.Add($m.Value)
     }
-    # Names of any shape, taken by position in the catalogue rather than by shape.
-    foreach ($m in [regex]::Matches($registryText, $script:catalogueFirstCellRegex)) {
-        foreach ($group in @($m.Groups[1], $m.Groups[2])) {
-            foreach ($cap in $group.Captures) {
-                if ($cap.Value.Trim().Length -gt 0) {
-                    $null = $script:knownSourcetypeNames.Add($cap.Value.Trim())
-                }
-            }
-        }
-    }
+    # Names of any shape, taken from the catalogue's Sourcetype column rather
+    # than by shape.
+    Add-CatalogueSourcetypeNames $registryText $script:knownSourcetypeNames
     foreach ($m in [regex]::Matches($registryText, $script:cimBulletNameRegex)) {
         $null = $script:knownSourcetypeNames.Add($m.Groups[1].Value)
     }
