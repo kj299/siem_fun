@@ -947,6 +947,29 @@ try {
         Assert-IssueMatching "not valid JSON or lacks a files map"
     }
 
+    Test-Case "REGRESSION: a files entry that is not a map is an issue, not a notice" {
+        # Review finding. The first version accepted any files value that was
+        # present and non-null, so valid JSON carrying an array, a string or a
+        # number passed the guard. Enumerating the members of such a value
+        # yields a recorded set nothing can match, which downgrades a marker
+        # the invariant calls malformed into an ordinary freshness notice --
+        # the same quiet failure the guard exists to prevent.
+        foreach ($bad in @('[]', '["a"]', '"x"', '3', 'true')) {
+            Set-Content -LiteralPath (Join-Path $fixtureRoot "examples/golden-run.json") -Value ('{ "date": "x", "files": ' + $bad + ' }') -NoNewline
+            Reset-ValidatorState
+            Test-GoldenRunFreshness @($gs)
+            Assert-IssueMatching "not valid JSON or lacks a files map"
+            Assert-Equal 0 $script:notices.Count "a malformed marker must not be downgraded to a notice: files was $bad"
+        }
+        # And an empty object is a map: it records nothing, so every watched
+        # file is named in a notice rather than reported as an issue.
+        Set-Content -LiteralPath (Join-Path $fixtureRoot "examples/golden-run.json") -Value '{ "date": "x", "files": {} }' -NoNewline
+        Reset-ValidatorState
+        Test-GoldenRunFreshness @($gs)
+        Assert-NoIssues
+        Assert-Equal 1 $script:notices.Count "an empty files map is a valid marker that records nothing"
+    }
+
     Write-Host "Shared rule corpus" -ForegroundColor Cyan
 
     # The half of shared-rule-cases.json this tool is responsible for. The

@@ -23,7 +23,7 @@ import sys
 import tempfile
 import types
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -231,6 +231,42 @@ class RunnerRecordingTests(unittest.TestCase):
         self.assertEqual(self.recorded, [("api", f"{n} of {n}")])
 
 
+class FullPassTests(unittest.TestCase):
+    """REGRESSION: only a run of every fixture, all passing, may be recorded.
+
+    Review finding. The CLI wrote a marker for any non-empty --result, so
+    "9 of 10" or "2 of 2" from a partial or failing run silenced the
+    validator's freshness notice while the behavioral baseline was unproven --
+    on the very path a run by subagents has to take, since the API runner
+    guards itself.
+    """
+
+    def test_a_full_pass_of_every_fixture_is_accepted(self):
+        n = len(grader.load_fixtures())
+        self.assertTrue(rec.full_pass(f"{n} of {n}"))
+        self.assertTrue(rec.full_pass(f"  {n}  of  {n}  "))
+
+    def test_a_trailing_newline_does_not_smuggle_anything_past_the_match(self):
+        # `$` in a Python regex also matches before a trailing newline, so an
+        # anchored search would accept "10 of 10\nand 3 failed". fullmatch
+        # with no anchors is what makes the whole string the subject.
+        n = len(grader.load_fixtures())
+        self.assertTrue(rec.full_pass(f"{n} of {n}\n"))
+        self.assertFalse(rec.full_pass(f"{n} of {n}\nand 3 failed"))
+
+    def test_a_partial_or_failing_run_is_rejected(self):
+        n = len(grader.load_fixtures())
+        self.assertFalse(rec.full_pass(f"{n - 1} of {n}"))
+        self.assertFalse(rec.full_pass("2 of 2"))          # a partial run, all passing
+        self.assertFalse(rec.full_pass(f"{n} of {n + 1}"))
+        self.assertFalse(rec.full_pass("all passed"))
+        self.assertFalse(rec.full_pass(""))
+
+    def test_the_total_is_the_fixture_count_not_a_constant(self):
+        self.assertTrue(rec.full_pass("3 of 3", total=3))
+        self.assertFalse(rec.full_pass("3 of 3", total=4))
+
+
 class CliTests(unittest.TestCase):
     def test_check_reports_fresh_or_stale(self):
         root = _scratch_repo()
@@ -252,6 +288,30 @@ class CliTests(unittest.TestCase):
         finally:
             rec.grader.REPO = saved
             shutil.rmtree(root)
+
+    def test_recording_a_partial_run_is_refused(self):
+        # write_marker is patched, so a regression here cannot touch the real
+        # marker: the test proves the CLI never reaches it.
+        saved = rec.write_marker
+        calls: list[tuple[str, str]] = []
+        rec.write_marker = lambda method, result, **kw: calls.append((method, result)) or "x"
+        try:
+            n = len(grader.load_fixtures())
+            # An empty --result is refused one step earlier, by the
+            # required-arguments check, so it is not in this list.
+            for bad in [f"{n - 1} of {n}", "2 of 2", "green"]:
+                err = io.StringIO()
+                with redirect_stderr(err):
+                    with self.assertRaises(SystemExit) as cm:
+                        rec.main(["--method", "agents", "--result", bad])
+                self.assertEqual(cm.exception.code, 2)
+                self.assertIn("every fixture passing", err.getvalue())
+            self.assertEqual(calls, [])
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(rec.main(["--method", "agents", "--result", f"{n} of {n}"]), 0)
+            self.assertEqual(calls, [("agents", f"{n} of {n}")])
+        finally:
+            rec.write_marker = saved
 
 
 if __name__ == "__main__":

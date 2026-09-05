@@ -440,6 +440,14 @@ PS_MUTS = [
      "        return"),
     ("Assert-Contains is case-sensitive",
      "    if ($text -cnotmatch $Pattern) {", "    if ($text -notmatch $Pattern) {"),
+    ("golden-run marker: files must BE a map, not merely present",
+     # Review finding on the shipped check. The first version accepted any
+     # files value that existed and was non-null, so valid JSON carrying an
+     # array, a string or a number passed the guard; enumerating its members
+     # then yields a recorded set nothing matches, which turns a malformed
+     # marker into an ordinary freshness notice.
+     '    if ($null -eq $marker -or $marker.files -isnot [System.Management.Automation.PSCustomObject]) {',
+     '    if ($null -eq $marker -or -not ($marker.PSObject.Properties.Name -contains "files") -or $null -eq $marker.files) {'),
     ("invalid YAML is reported as an issue",
      '            Add-Issue "$RelativePath is not valid YAML: $($_.Exception.Message)"',
      "            $null = $_"),
@@ -506,6 +514,29 @@ GRADER_MUTS = [
 ]
 for label, old, new in GRADER_MUTS:
     unit_mutation(label, GRADER, old, new, grader_suite)
+
+# The recorder is the path a run by subagents must take, and it is the only
+# writer of the marker the freshness notice reads. A check that stopped firing
+# here would let a partial or failing run silence the notice, which is worse
+# than no notice: the tree would claim a behavioral baseline it never had.
+RECORDER = "scripts/record_golden_run.py"
+
+RECORDER_MUTS = [
+    ("recorder: a partial or failing run is refused",
+     "    if not full_pass(args.result):",
+     "    if False:"),
+    ("recorder: the result must cover EVERY fixture, not just agree with itself",
+     "    return passed == graded == total",
+     "    return passed == graded"),
+    ("recorder: the whole result string is the subject, not a prefix of it",
+     # `$` in a Python regex also matches before a trailing newline, so an
+     # anchored search accepts more than it looks like it does; a prefix match
+     # accepts "10 of 10" followed by anything at all.
+     '    m = re.fullmatch(r"\\s*(\\d+)\\s+of\\s+(\\d+)\\s*", result)',
+     '    m = re.match(r"\\s*(\\d+)\\s+of\\s+(\\d+)", result)'),
+]
+for label, old, new in RECORDER_MUTS:
+    unit_mutation(label, RECORDER, old, new, grader_suite)
 
 # The shared rule corpus, and the two readers that consume it. Kept separate
 # from the lists above because these mutations target the TEST files and the
@@ -1195,7 +1226,7 @@ if fails:
         print(f"  - {f}")
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
-      f"{len(GRADER_MUTS)} grader unit + 2 shared corpus, "
+      f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
       f"{run_counts['environment']} environment)")
 sys.exit(0)

@@ -950,8 +950,15 @@ function Test-GoldenRunFreshness {
         $marker = $null
     }
     # ConvertFrom-Json returns a PSCustomObject, not an IDictionary, so read
-    # the property directly rather than through Get-MapValue.
-    if ($null -eq $marker -or -not ($marker.PSObject.Properties.Name -contains "files") -or $null -eq $marker.files) {
+    # the property directly rather than through Get-MapValue. The value has to
+    # BE a map: valid JSON whose files entry is an array, a string or a number
+    # has the property and is not null, and enumerating its members would then
+    # yield a recorded set that no file can ever match, downgrading a malformed
+    # marker to a freshness notice when the invariant says it is an issue.
+    # Only a JSON object parses to PSCustomObject; an array is Object[], a
+    # string is String, a number is Int64, and an absent property is $null,
+    # all of which fail this test.
+    if ($null -eq $marker -or $marker.files -isnot [System.Management.Automation.PSCustomObject]) {
         Add-Issue "$script:goldenRunMarker is not valid JSON or lacks a files map; run scripts/record_golden_run.py"
         return
     }

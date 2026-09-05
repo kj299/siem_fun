@@ -34,6 +34,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -106,6 +107,27 @@ def write_marker(method: str, result: str, repo: str | None = None,
     return path
 
 
+def full_pass(result: str, total: int | None = None) -> bool:
+    """True when `result` says every fixture was graded and every one passed.
+
+    A marker exists to say "the behavioral baseline held for this content", and
+    the validator's notice stays quiet while it holds. Recording a partial or
+    failing run would silence the notice on a baseline that is neither, so the
+    recorder refuses one: the API runner already records only a full passing
+    run, and this is the same rule on the path a run by subagents must take.
+
+    `fullmatch` with no anchors on purpose: `$` in a Python regex also matches
+    before a trailing newline, so "10 of 10\n" would pass an anchored match.
+    """
+    m = re.fullmatch(r"\s*(\d+)\s+of\s+(\d+)\s*", result)
+    if not m:
+        return False
+    passed, graded = int(m.group(1)), int(m.group(2))
+    if total is None:
+        total = len(grader.load_fixtures())
+    return passed == graded == total
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--method", choices=["agents", "api"],
@@ -126,6 +148,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if not (args.method and args.result):
         ap.error("--method and --result are required unless --check is given")
+    n = len(grader.load_fixtures())
+    if not full_pass(args.result):
+        ap.error(f'--result must record every fixture passing, written as "{n} of {n}"; '
+                 f'got "{args.result}". A partial or failing run is not a baseline, and '
+                 f'recording it would silence the validator\'s freshness notice while the '
+                 f'behavioral half is unproven. Fix what failed, re-run, then record.')
     path = write_marker(args.method, args.result)
     print(f"recorded {len(watched_files())} files in {os.path.relpath(path, grader.REPO)}")
     return 0
