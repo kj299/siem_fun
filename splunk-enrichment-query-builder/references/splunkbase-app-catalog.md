@@ -277,14 +277,23 @@ Field availability depends on Logpush field selection; treat as partial until ve
 
 ### Proofpoint Protection Server (PPS)
 
-The Proofpoint Email Security Add-On using Remote Syslog (app 3080) covers the
-on-premises Proofpoint Protection Server. It collects on `pps_log` and re-types
-into the two sourcetypes below.
+Splunk Connect for Syslog parses the on-premises Proofpoint Protection Server's
+remote syslog and assigns the two sourcetypes below, under the keys
+`proofpoint_pps_filter` and `proofpoint_pps_sendmail`, into an `email` index.
+Its page links Splunkbase app 4327 as the add-on, and the Proofpoint on Demand
+section below cites that same listing for the hosted product; no page read for
+this catalogue settles which product the listing covers, so treat the add-on
+number as unconfirmed. The two sourcetype names, which are what a search needs,
+are confirmed by the page itself.
 
 | Sourcetype | CIM data model | Key fields | Reference |
 | --- | --- | --- | --- |
 | `pps_filter_log` | Email | sender, recipients, subject, action, disposition | [SC4S Proofpoint Protection Server](https://splunk.github.io/splunk-connect-for-syslog/main/sources/vendor/Proofpoint/) |
-| `pps_mail_log` | Email | sendmail-style delivery records; SC4S notes the name collides with a host's own sendmail syslog | [SC4S Proofpoint Protection Server](https://splunk.github.io/splunk-connect-for-syslog/main/sources/vendor/Proofpoint/) |
+| `pps_mail_log` | Email | not named by the cited page; sendmail-style delivery records | [SC4S Proofpoint Protection Server](https://splunk.github.io/splunk-connect-for-syslog/main/sources/vendor/Proofpoint/) |
+
+SC4S warns that `pps_mail_log` collides with a host's own sendmail syslog: if
+you want that sourcetype for PPS, the server has to send on a dedicated port or
+be identifiable by a hostname glob or CIDR block.
 
 ### Proofpoint on Demand (PoD)
 
@@ -295,8 +304,7 @@ service and assigns different names. Earlier versions of this catalogue listed
 | Sourcetype | CIM data model | Key fields | Reference |
 | --- | --- | --- | --- |
 | `pps_messagelog` | Email | sender, recipients, subject, action, disposition | [CCX Extensions for Proofpoint Products listing](https://splunkbase.splunk.com/app/6339) (third-party listing; the add-on's own listing describes "message and mail logs" without naming the sourcetypes) |
-
-The same add-on also assigns the companion sourcetype `pps_maillog`.
+| `pps_maillog` | Email | not named by the cited listing; the message log's delivery companion | [CCX Extensions for Proofpoint Products listing](https://splunkbase.splunk.com/app/6339) (same third-party listing; same caveat) |
 
 ## Identity and access add-ons
 

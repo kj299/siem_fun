@@ -296,11 +296,13 @@ Expected output:
 - `Assumptions`
 - Scopes both indexes in one base search: `index IN (firewall, proxy)` when the
   fields line up, or `((index=firewall sourcetype=cisco:asa) OR (index=proxy sourcetype=bluecoat:proxysg:access:kv))`
-  when the schemas differ, which they do here. Never a bare
+  when the schemas differ, which they do here, with or without further
+  per-index filter terms inside each group. Never a bare
   `index=firewall OR index=proxy` chain. The first run of this fixture asserted
   only the `IN` form and failed a correct answer that had followed the skill's
-  own per-index rule; the two shapes are both documented in
-  multi-index-patterns.md
+  own per-index rule; the fifth run failed another for adding `action=permitted`
+  inside the firewall group, which the per-index shape exists to allow. Both
+  shapes are documented in multi-index-patterns.md
 - Pre-filters to IPv4 values before enrichment (`gnenrich ip_field=...` or a `greynoise_indicators` lookup join)
 - Filters on `classification` (the field the documented enrichment paths return),
   not on a `noise` column that `greynoise_indicators` does not carry
@@ -314,7 +316,7 @@ Grader spec:
 {
   "sections": ["Objective", "Query", "Assumptions"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "query_matches": ["index\\s+IN\\s*\\(\\s*firewall\\s*,\\s*proxy\\s*\\)|\\(\\s*index=firewall\\s+\\w+=cisco:asa\\s*\\)\\s+OR\\s+\\(\\s*index=proxy\\s+\\w+=bluecoat:proxysg:access:kv\\s*\\)", "(?i)gnenrich|greynoise_indicators", "classification"],
+  "query_matches": ["index\\s+IN\\s*\\(\\s*firewall\\s*,\\s*proxy\\s*\\)|\\(\\s*index=firewall\\s[^)]*\\w+=cisco:asa[^)]*\\)\\s+OR\\s+\\(\\s*index=proxy\\s[^)]*\\w+=bluecoat:proxysg:access:kv[^)]*\\)", "(?i)gnenrich|greynoise_indicators", "classification"],
   "query_not_matches": ["\\bindex=firewall\\s+OR\\s+index=proxy\\b", "(?s)greynoise_indicators.*\\bnoise\\b"],
   "indexes": ["firewall", "proxy"],
   "sourcetypes": ["cisco:asa", "bluecoat:proxysg:access:kv"]
@@ -337,7 +339,7 @@ Output style: full
 Expected output:
 
 - Returns discovery mode, not a production detection
-- Provides `| tstats count where index IN (net_dmz, net_core) by index, sourcetype | sort - count`
+- Provides `| tstats count where index IN (net_dmz, net_core) by index, sourcetype | sort - count`, optionally bounded by the prompt's `earliest=-7d`
 - Instructs the user to run the query and re-invoke the skill with confirmed sourcetypes
 - Does not guess sourcetypes for the unfamiliar index names
 
@@ -347,7 +349,7 @@ Grader spec:
 {
   "sections": ["Objective", "Discovery query", "Next step"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "query_matches": ["\\|\\s*tstats\\s+count\\s+where\\s+index\\s+IN\\s*\\(\\s*net_dmz\\s*,\\s*net_core\\s*\\)\\s+by\\s+index\\s*,\\s*sourcetype\\s*\\|\\s*sort\\s+-\\s*count"],
+  "query_matches": ["\\|\\s*tstats\\s+count\\s+where\\s+index\\s+IN\\s*\\(\\s*net_dmz\\s*,\\s*net_core\\s*\\)(?:\\s+(?:earliest|latest)=\\S+)*\\s+by\\s+index\\s*,\\s*sourcetype\\s*\\|\\s*sort\\s+-\\s*count"],
   "matches": ["(?i)re-?invoke"],
   "indexes": ["net_dmz", "net_core"],
   "sourcetypes": []

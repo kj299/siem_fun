@@ -305,6 +305,34 @@ skill was wrong. The marker in [examples/golden-run.json](examples/golden-run.js
 records the content this run saw; the validator will name whichever of those
 files changes next.
 
+## What the fourth and fifth model runs found
+
+Fourth run, 2026-09-05, against the content the catalogue-citation work
+(PR #47) had just merged: 9 of 10. Fixture 9 failed a correct answer. The
+prompt gives "Time range: last 7d", the answer bounded the discovery pass with
+`earliest=-7d`, and the fixture's regular expression demanded the bare shape
+`SKILL.md` prints, with nothing between the index list and `by`. Reading the
+skill first, as the rule in CLAUDE.md says to, showed the skill neither
+requires nor forbids the bound; the fixture was over-specified, so its regular
+expression now tolerates an `earliest=` or `latest=` term.
+
+Fifth run, same day and same method, re-ran only the two enrichment fixtures,
+because the correction below changed splunkbase-app-catalog.md and left every
+other fixture's prompt bytes identical to the fourth run's. It failed fixture 8
+for the same reason in a different place: the answer wrote
+`(index=firewall sourcetype=cisco:asa action=permitted) OR (index=proxy ...)`
+and the fixture's alternative shape closed the parenthesis right after the
+sourcetype, so a per-index filter term -- the whole point of the per-index
+shape -- failed it. The expression now allows further terms inside each group.
+
+Three fixture defects in the first three runs, two more here, and still no
+skill defect found by a run. The pattern is consistent enough to state plainly:
+these fixtures fail by pinning one string where the skill licenses a family, so
+read the skill before touching the answer. Both corrections are fixture-side;
+neither skill changed, and the marker in
+[examples/golden-run.json](examples/golden-run.json) now records 10 of 10
+against this tree.
+
 ## What checking the catalogues against the vendors found
 
 The validator checks the documents against the catalogues. Nothing checked the
@@ -404,6 +432,39 @@ Sentinel catalogue's "Adding a table", and the validator fails any row of a
 Sourcetype-headed table in a registry file whose `Reference` cell is empty,
 and any such table with no `Reference` column. Both checks have a mutation
 and a unit test. The asymmetry the first pass reported is closed.
+
+### Third pass, 2026-09-05: the Proofpoint rows
+
+A review comment on the merged citation work pointed at the two Proofpoint
+Protection Server rows, and reading them against Splunk Connect for Syslog's
+own vendor page found three things wrong with the surrounding claims rather
+than with the names.
+
+- The sourcetypes are right. SC4S's Proofpoint Protection Server page names
+  `pps_filter_log` and `pps_mail_log` in its own sourcetype table, under the
+  keys `proofpoint_pps_filter` and `proofpoint_pps_sendmail` into an `email`
+  index. That page was read again for this pass.
+- The add-on attribution was not. The catalogue said the two names come from
+  "the Proofpoint Email Security Add-On using Remote Syslog (app 3080)" and
+  that it "collects on `pps_log`" -- an add-on number and a third sourcetype
+  that no cited page in this repository supports, and SC4S's own page links
+  Splunkbase app 4327, the number the catalogue gives the hosted Proofpoint on
+  Demand product below. The uncited add-on number and the uncited `pps_log`
+  are gone; the section now says what the cited page says and marks the
+  listing number as unresolved.
+- `pps_maillog` was named in prose, with no `Reference` cell, because prose
+  escapes the validator's row check. It is a table row now, carrying the same
+  third-party listing and the same caveat as `pps_messagelog`.
+
+`pps_mail_log`'s `Key fields` cell held a prose note instead of fields, so a
+reader looking for fields got none; the cell now says the cited page names
+none, and SC4S's warning that the name collides with a host's own sendmail
+syslog sits in prose under the table where it belongs.
+
+Splunkbase itself is unreachable from the trusted-network environment, so the
+two add-on listing numbers stay unverified here; cim-vendor-alignment.md still
+names the PPS add-on in prose. Re-checking both is work for the open-network
+environment.
 
 ## Whether the model half was re-run
 
