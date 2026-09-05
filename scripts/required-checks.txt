@@ -65,3 +65,4 @@ Invocation prompt drift in ${skill}: openai default_prompt and helper preferred_
 build_splunk_dictionary.py is missing the CIM_SOURCETYPE_HINTS dictionary
 CIM hint sourcetype '$sourcetype' is not documented in cim-vendor-alignment.md
 $file has broken local link: $target
+$script:goldenRunMarker is not valid JSON or lacks a files map; run scripts/record_golden_run.py

@@ -30,6 +30,15 @@ function Add-Issue {
     $issues.Add($Message) | Out-Null
 }
 
+# A notice is printed and does NOT fail the run. It exists for exactly one
+# kind of finding: something a model run would settle and CI cannot perform.
+# Everything else stays an issue; a check that cannot fail is not a check.
+$script:notices = New-Object System.Collections.Generic.List[string]
+function Add-Notice {
+    param([string]$Message)
+    $script:notices.Add($Message) | Out-Null
+}
+
 function Get-RepoFile {
     param([string]$RelativePath)
     return Join-Path $Root $RelativePath
@@ -867,6 +876,110 @@ function Test-LookupOutputFields {
     }
 }
 
+# --- golden-prompt run freshness --------------------------------------------
+# The behavioral half of the golden prompts (a model driven through every
+# fixture, then graded) cannot run in CI. examples/golden-run.json records a
+# content hash of every file that run depends on, written by
+# scripts/record_golden_run.py at the moment of the run; this compares those
+# hashes to the tree. A mismatch is a NOTICE, not an issue: the fix is a model
+# run that CI cannot perform, and a check that blocks every content edit until
+# someone remembers a credential gets routed around rather than obeyed.
+#
+# Hashes are of LF-normalised bytes. windows-latest checks out CRLF, and a hash
+# of raw bytes would report every file as changed there while agreeing with
+# itself on Linux. record_golden_run.py normalises the same way; the unit
+# suite pins the two to each other by hashing identical fixture bytes.
+$script:goldenRunMarker = "examples/golden-run.json"
+
+function Get-NormalisedFileHash {
+    param([string]$Path)
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    # Fold CRLF to LF on the byte level, without decoding: the ASCII rule
+    # means decoding would work today, but the hash must not depend on it.
+    $out = New-Object System.Collections.Generic.List[byte]($bytes.Length)
+    for ($i = 0; $i -lt $bytes.Length; $i++) {
+        if ($bytes[$i] -eq 13 -and $i + 1 -lt $bytes.Length -and $bytes[$i + 1] -eq 10) {
+            continue
+        }
+        $out.Add($bytes[$i])
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha.ComputeHash($out.ToArray())
+    } finally {
+        $sha.Dispose()
+    }
+    return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
+}
+
+# The watched set is a RULE shared with record_golden_run.py, not a list:
+# every skill's SKILL.md, every markdown file under its references/, and the
+# fixture file. A new reference file is watched the moment it exists.
+function Get-GoldenWatchedFiles {
+    param([string[]]$Skills)
+
+    $paths = New-Object System.Collections.Generic.List[string]
+    foreach ($skill in $Skills) {
+        $paths.Add("$skill/SKILL.md")
+        $refDir = Get-RepoFile "$skill/references"
+        if (Test-Path -LiteralPath $refDir -PathType Container) {
+            foreach ($f in Get-ChildItem -LiteralPath $refDir -Filter *.md -File) {
+                $paths.Add("$skill/references/$($f.Name)")
+            }
+        }
+    }
+    $paths.Add("examples/golden-prompts.md")
+    $present = @($paths | Where-Object { Test-RepoFile $_ } | Sort-Object -Unique)
+    # An empty array unrolls to nothing on return, so the caller would see $null.
+    return , $present
+}
+
+function Test-GoldenRunFreshness {
+    param([string[]]$Skills)
+
+    $text = Read-Text $script:goldenRunMarker
+    if ($text.Length -eq 0) {
+        # Absent is reported by Assert-Exists as a missing required file.
+        return
+    }
+    $marker = $null
+    try {
+        $marker = ConvertFrom-Json $text
+    } catch {
+        $marker = $null
+    }
+    # ConvertFrom-Json returns a PSCustomObject, not an IDictionary, so read
+    # the property directly rather than through Get-MapValue.
+    if ($null -eq $marker -or -not ($marker.PSObject.Properties.Name -contains "files") -or $null -eq $marker.files) {
+        Add-Issue "$script:goldenRunMarker is not valid JSON or lacks a files map; run scripts/record_golden_run.py"
+        return
+    }
+    $recorded = $marker.files
+    $recordedNames = @($recorded.PSObject.Properties.Name)
+    $changed = New-Object System.Collections.Generic.List[string]
+    $watched = Get-GoldenWatchedFiles $Skills
+    foreach ($rel in $watched) {
+        $now = Get-NormalisedFileHash (Get-RepoFile $rel)
+        $was = if ($recordedNames -ccontains $rel) { [string]$recorded.$rel } else { "" }
+        if ($was -cne $now) {
+            $changed.Add($rel)
+        }
+    }
+    foreach ($rel in $recordedNames) {
+        if ($watched -cnotcontains $rel) {
+            $changed.Add($rel)
+        }
+    }
+    if ($changed.Count -gt 0) {
+        $when = if ($marker.PSObject.Properties.Name -contains "date") { $marker.date } else { "an unrecorded date" }
+        $result = if ($marker.PSObject.Properties.Name -contains "result") { $marker.result } else { "unknown" }
+        Add-Notice ("golden prompts were last run on $when ($result) against content that has since changed; " +
+                    "re-run the model half and record it with scripts/record_golden_run.py. Changed: " +
+                    (($changed | Sort-Object -Unique) -join ", "))
+    }
+}
+
 if ($FunctionsOnly) {
     return
 }
@@ -904,6 +1017,12 @@ $requiredFiles = @(
     "scripts/tests/shared-rule-cases.json",
     "scripts/grade_golden_output.py",
     "scripts/run_golden_prompts.py",
+    # The record of which content the golden prompts were last run against,
+    # and the script that writes it. Without the marker the freshness check
+    # has nothing to compare and the honour-system rule is back.
+    "scripts/record_golden_run.py",
+    "scripts/tests/test_record_golden_run.py",
+    "examples/golden-run.json",
     "scripts/required-checks.txt",
     "examples/golden-prompts.md",
     "splunk-enrichment-query-builder/SKILL.md",
@@ -1099,6 +1218,10 @@ $skills = @(
     "splunk-data-dictionary-builder",
     "splunk-enrichment-query-builder"
 )
+
+# Freshness of the last model run against the content it depends on. A
+# notice, never an issue: see Test-GoldenRunFreshness.
+Test-GoldenRunFreshness $skills
 
 # $skills is hand-maintained, so cross-check it against the filesystem in BOTH
 # directions. A skill directory that exists on disk but is registered nowhere
@@ -1345,6 +1468,13 @@ foreach ($file in $markdownFiles) {
         if (-not (Test-Path -LiteralPath $resolved)) {
             Add-Issue "$file has broken local link: $target"
         }
+    }
+}
+
+if ($script:notices.Count -gt 0) {
+    Write-Host "NOTICE (does not fail validation):" -ForegroundColor Yellow
+    foreach ($notice in $script:notices) {
+        Write-Host " - $notice" -ForegroundColor Yellow
     }
 }
 

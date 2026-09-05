@@ -162,7 +162,8 @@ siem_fun/
 |       `-- validate.yml
 |-- .gitignore
 |-- examples/
-|   `-- golden-prompts.md
+|   |-- golden-prompts.md
+|   `-- golden-run.json
 |-- CLAUDE.md
 |-- QUERY_SKILL_PLAN.md
 |-- README.md
@@ -171,8 +172,10 @@ siem_fun/
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
 |   |   |-- test_grade_golden_output.py
+|   |   |-- test_record_golden_run.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
+|   |-- record_golden_run.py
 |   |-- required-checks.txt
 |   |-- run_golden_prompts.py
 |   `-- validate-skill-pack.ps1
@@ -293,6 +296,47 @@ Result after correction: 10 of 10.
   production query, only supplied or catalogued identifiers, and no request
   for a credential.
 
+## What the third model run found
+
+Third run, 2026-09-05, same method as the first two, executed to give the new
+freshness marker a real result to record rather than a placeholder. 10 of 10
+with no correction needed: the first run in which neither a fixture nor a
+skill was wrong. The marker in [examples/golden-run.json](examples/golden-run.json)
+records the content this run saw; the validator will name whichever of those
+files changes next.
+
+## What the fourth and fifth model runs found
+
+Fourth run, 2026-09-05, against the content the catalogue-citation work
+(PR #47) had just merged: 9 of 10. Fixture 9 failed a correct answer. The
+prompt gives "Time range: last 7d", the answer bounded the discovery pass with
+`earliest=-7d`, and the fixture's regular expression demanded the bare shape
+`SKILL.md` prints, with nothing between the index list and `by`. Reading the
+skill first, as the rule in CLAUDE.md says to, showed the skill neither
+requires nor forbids the bound; the fixture was over-specified, so its regular
+expression now tolerates an `earliest=` or `latest=` term.
+
+Fifth run, same day and same method, re-ran only the two enrichment fixtures,
+because the correction below changed splunkbase-app-catalog.md and left every
+other fixture's prompt bytes identical to the fourth run's. It failed fixture 8
+for the same reason in a different place: the answer wrote
+`(index=firewall sourcetype=cisco:asa action=permitted) OR (index=proxy ...)`
+and the fixture's alternative shape closed the parenthesis right after the
+sourcetype, so a per-index filter term -- the whole point of the per-index
+shape -- failed it. The expression now allows further terms inside each group.
+
+A sixth run, two fixtures again, followed a further prose edit to the same
+catalogue section so the recorded marker would match the tree that shipped:
+10 of 10, no correction.
+
+Three fixture defects in the first three runs, two more here, and still no
+skill defect found by a run. The pattern is consistent enough to state plainly:
+these fixtures fail by pinning one string where the skill licenses a family, so
+read the skill before touching the answer. Both corrections are fixture-side;
+neither skill changed, and the marker in
+[examples/golden-run.json](examples/golden-run.json) now records 10 of 10
+against this tree.
+
 ## What checking the catalogues against the vendors found
 
 The validator checks the documents against the catalogues. Nothing checked the
@@ -393,12 +437,66 @@ Sourcetype-headed table in a registry file whose `Reference` cell is empty,
 and any such table with no `Reference` column. Both checks have a mutation
 and a unit test. The asymmetry the first pass reported is closed.
 
+### Third pass, 2026-09-05: the Proofpoint rows
+
+A review comment on the merged citation work pointed at the two Proofpoint
+Protection Server rows, and reading them against Splunk Connect for Syslog's
+own vendor page found three things wrong with the surrounding claims rather
+than with the names.
+
+- The sourcetypes are right. SC4S's Proofpoint Protection Server page names
+  `pps_filter_log` and `pps_mail_log` in its own sourcetype table, under the
+  keys `proofpoint_pps_filter` and `proofpoint_pps_sendmail` into an `email`
+  index. That page was read again for this pass.
+- The add-on attribution was not. The catalogue said the two names come from
+  "the Proofpoint Email Security Add-On using Remote Syslog (app 3080)" and
+  that it "collects on `pps_log`" -- an add-on number and a third sourcetype
+  that no cited page in this repository supports, and SC4S's own page links
+  Splunkbase app 4327, the number the catalogue gives the hosted Proofpoint on
+  Demand product below. The uncited add-on number and the uncited `pps_log`
+  are gone; the section now says what the cited page says and marks the
+  listing number as unresolved.
+- `pps_maillog` was named in prose, with no `Reference` cell, because prose
+  escapes the validator's row check. It is a table row now, carrying the same
+  third-party listing and the same caveat as `pps_messagelog`.
+
+`pps_mail_log`'s `Key fields` cell held a prose note instead of fields, so a
+reader looking for fields got none; the cell now says the cited page names
+none, and SC4S's warning that the name collides with a host's own sendmail
+syslog sits in prose under the table where it belongs.
+
+Splunkbase itself is unreachable from the trusted-network environment, so the
+two add-on listing numbers stay unverified here; cim-vendor-alignment.md still
+names the PPS add-on in prose. Re-checking both is work for the open-network
+environment.
+
+## Whether the model half was re-run
+
+Three fixture defects have been found only by a model run, and CI cannot
+perform one, so whether the run was repeated after a `SKILL.md` or reference
+change was an honour-system rule. It is now a recorded fact:
+[examples/golden-run.json](examples/golden-run.json) holds a content hash of
+every file the run depends on -- each skill's `SKILL.md`, every markdown file
+under its `references/`, and the fixture file -- written by
+[scripts/record_golden_run.py](scripts/record_golden_run.py) at the moment of
+the run (the API runner records automatically after a full passing run). The
+validator compares those hashes to the tree on every run and prints a NOTICE
+naming any file changed since. A notice, not a failure, on purpose: the fix is
+a model run CI cannot perform, and a check that blocks every content edit
+until someone finds a credential gets routed around rather than obeyed.
+
+Hashes are of LF-normalised bytes, because the validator runs on a CRLF
+checkout; without that every file would read as changed on the only platform
+that runs it.
+
 ## What is still open
 
-Running the model half on a schedule. CI holds no model credential, so the
-weekly run covers everything except the one check that needs a model. Adding
-a repository secret for the API key would close that, and it is the repository
-owner's decision, not this plan's.
+Running the model half on a schedule against a credential. A weekly Routine
+now runs it with subagents instead, which needs no secret, and reports only
+when something fails; what it cannot do is push the refreshed marker, so a
+stale NOTICE after a content change still waits on a person to re-run and
+record. Adding a repository secret so the API runner could do both in CI
+remains the repository owner's decision, not this plan's.
 
 ## For your own environment
 

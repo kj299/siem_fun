@@ -183,7 +183,7 @@ def _tree_fingerprint() -> str:
 # Counts for the summary line. Derived, not hand-maintained: a literal here goes
 # stale the moment a check is added, and the summary is the only line a reader
 # skims to see how much ran.
-run_counts = {"validator": 0, "environment": 0}
+run_counts = {"validator": 0, "environment": 0, "notice": 0}
 
 # Every expect_text passed to check_mutation, used by section [E] to prove that
 # no validator check shipped without a mutation behind it.
@@ -275,6 +275,39 @@ def check_mutation(label: str, breaker, expect_text: str) -> None:
         fails.append(f"{label} [{' '.join(missed)}]")
     else:
         print(f"  CAUGHT  {label}")
+
+
+def check_notice(label: str, breaker, expect_text: str) -> None:
+    """Break the repo in a way the validator must NOTICE but must not FAIL.
+
+    The golden-run freshness check is the one finding that is deliberately a
+    notice: the fix is a model run CI cannot perform. So the assertion is the
+    inverse of check_mutation's on the verdict -- "validation passed" must
+    still appear -- while the reason must still be named, under both line
+    endings like every other validator mutation.
+    """
+    run_counts["notice"] += 1
+    ran_labels.append(label)
+    fresh()
+    before = _tree_fingerprint()
+    breaker()
+    if _tree_fingerprint() == before:
+        print(f"  SETUP-FAIL     {label}  (breaker changed nothing)")
+        fails.append(f"setup: {label}")
+        return
+    missed = []
+    for ending, to_crlf in (("LF", False), ("CRLF", True)):
+        convert_line_endings(to_crlf)
+        out = validator_output()
+        passed = "validation passed" in out
+        named = expect_text.lower() in out.lower()
+        if not (passed and named):
+            missed.append(f"{ending}(passed={passed} named={named})")
+    if missed:
+        print(f"  *** MISSED *** {label}  {' '.join(missed)}")
+        fails.append(f"{label} [{' '.join(missed)}]")
+    else:
+        print(f"  NOTICED {label}")
 
 
 print("=" * 74)
@@ -813,6 +846,48 @@ check_mutation("raw-event search whose only _time is an aggregation",
 check_mutation("unbounded '| search' wearing a leading pipe",
                lambda: append(MDOC, f"\n{BT}spl\n| search index=firewall sourcetype=cisco:asa\n| stats count\n{BT}\n"),
                "no time bound")
+GOLDEN_MARKER = "examples/golden-run.json"
+
+
+def _corrupt_golden_marker() -> None:
+    """A marker that no longer parses must be an issue, not a quiet 'nothing
+    recorded': otherwise the whole freshness check goes silent."""
+    write(GOLDEN_MARKER, b"{ not json\n")
+
+
+def _record_a_file_that_no_longer_exists() -> None:
+    """Make the marker claim the run saw a reference file that is not in the
+    tree. The notice must name it: a run that saw a file which no longer
+    exists is not a fresh run. Done by editing the marker rather than deleting
+    a real reference file, because every real one is also a required file and
+    deleting it would fail validation for that reason instead."""
+    import json as _json
+    path = os.path.join(WORK, GOLDEN_MARKER)
+    marker = _json.load(open(path))
+    marker["files"]["splunk-enrichment-query-builder/references/never-existed.md"] = "0" * 64
+    _json.dump(marker, open(path, "w"), indent=2)
+
+
+# Freshness of the last model run. These are NOTICES: the validator keeps
+# passing and says why. Every file class the watched-set rule covers gets a
+# case, so a rule that silently stopped watching one of them would show here.
+check_notice("a SKILL.md edited after the recorded model run",
+             lambda: append("splunk-sentinel-query-builder/SKILL.md", "\nAn edit the last model run never saw.\n"),
+             "splunk-sentinel-query-builder/SKILL.md")
+check_notice("a reference file edited after the recorded model run",
+             lambda: append("splunk-enrichment-query-builder/references/multi-index-patterns.md", "\nAn edit.\n"),
+             "references/multi-index-patterns.md")
+check_notice("the fixture file edited after the recorded model run",
+             lambda: append("examples/golden-prompts.md", "\nAn edit.\n"),
+             "examples/golden-prompts.md")
+check_notice("a watched file the recorded run saw no longer exists",
+             _record_a_file_that_no_longer_exists,
+             "references/never-existed.md")
+check_mutation("golden-run marker that does not parse",
+               _corrupt_golden_marker,
+               "not valid JSON or lacks a files map")
+
+
 def _delete_a_check(fragment: str) -> None:
     """Delete one Add-Issue call outright, as a bad merge would.
 
@@ -1121,5 +1196,6 @@ if fails:
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
       f"{len(GRADER_MUTS)} grader unit + 2 shared corpus, "
-      f"{run_counts['validator']} validator checks, {run_counts['environment']} environment)")
+      f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
+      f"{run_counts['environment']} environment)")
 sys.exit(0)

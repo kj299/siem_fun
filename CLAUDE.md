@@ -30,6 +30,12 @@ python3 scripts/tests/mutation-check.py
 # command line (pip install anthropic; export ANTHROPIC_API_KEY=...).
 python3 scripts/run_golden_prompts.py
 python3 scripts/grade_golden_output.py --all out/golden
+
+# After a model run by any other means (subagents, the weekly Routine), record
+# which content it saw. The validator then prints a NOTICE, not a failure,
+# naming any SKILL.md, reference file or fixture changed since.
+python3 scripts/record_golden_run.py --method agents --result "10 of 10"
+python3 scripts/record_golden_run.py --check
 ```
 
 CI runs everything except the model run on every pull request and on pushes
@@ -312,8 +318,14 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 
   The model run itself is not in CI because CI holds no credential: run it
   locally after changing a `SKILL.md` or a reference file, and record what it
-  found in
-  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Both runs so far found a fixture
+  found in [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Whether that re-run
+  happened is no longer trusted: `examples/golden-run.json` holds a hash of
+  every file the run depends on, and the validator prints a NOTICE naming any
+  that changed since. The API runner writes the marker after a full passing
+  run; after a run by subagents, write it with `scripts/record_golden_run.py`.
+  The hash folds CRLF to LF, so the marker written on Linux agrees with the
+  CRLF checkout on windows-latest; a raw-bytes hash would have made the notice
+  fire on every CI run. Both runs so far found a fixture
   that contradicted the skill rather than a skill that was wrong -- fixture 8,
   then fixture 4 -- and only a model run could have shown that. When a fixture
   fails, read the skill before assuming the answer is at fault.
