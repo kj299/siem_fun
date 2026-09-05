@@ -308,9 +308,11 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   - `spl_time_bound` expects `reported`, meaning "this block is a violation".
     The validator returns early for a generating command while the grader runs
     no check at all; both agree on what counts as a violation, which is the
-    part worth pinning. The model run itself is not
-  in CI because CI holds no credential: run it locally after changing a
-  `SKILL.md` or a reference file, and record what it found in
+    part worth pinning.
+
+  The model run itself is not in CI because CI holds no credential: run it
+  locally after changing a `SKILL.md` or a reference file, and record what it
+  found in
   [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Both runs so far found a fixture
   that contradicted the skill rather than a skill that was wrong -- fixture 8,
   then fixture 4 -- and only a model run could have shown that. When a fixture
