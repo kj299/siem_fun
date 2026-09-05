@@ -325,6 +325,10 @@ and the fixture's alternative shape closed the parenthesis right after the
 sourcetype, so a per-index filter term -- the whole point of the per-index
 shape -- failed it. The expression now allows further terms inside each group.
 
+A sixth run, two fixtures again, followed a further prose edit to the same
+catalogue section so the recorded marker would match the tree that shipped:
+10 of 10, no correction.
+
 Three fixture defects in the first three runs, two more here, and still no
 skill defect found by a run. The pattern is consistent enough to state plainly:
 these fixtures fail by pinning one string where the skill licenses a family, so

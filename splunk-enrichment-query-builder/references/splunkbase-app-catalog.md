@@ -297,8 +297,10 @@ be identifiable by a hostname glob or CIDR block.
 
 ### Proofpoint on Demand (PoD)
 
-The Proofpoint On Demand Email Security Add-on (app 4327) covers the hosted
-service and assigns different names. Earlier versions of this catalogue listed
+The Proofpoint On Demand Email Security Add-on, listed on Splunkbase as app
+4327, covers the hosted service and assigns different names. Splunk Connect for
+Syslog links that same listing number from its on-premises page, so the number
+alone does not tell the two products apart; the sourcetype names do. Earlier versions of this catalogue listed
 `pps_messagelog` under the PPS heading; it belongs here.
 
 | Sourcetype | CIM data model | Key fields | Reference |
