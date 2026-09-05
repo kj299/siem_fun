@@ -117,7 +117,8 @@ Sourcetypes below are the typical names produced by the standard Splunkbase add-
 ### Proofpoint
 
 - TAP via the Proofpoint TAP modular input: `proofpoint_tap_siem` (underscores; message and click events) -> Email and Malware: src_user, recipient, subject, url, file_name, file_hash, action.
-- Proofpoint email gateway (PPS): `pps_messagelog` -> Email: src_user, recipient, subject, action, message_id.
+- Proofpoint on Demand (PoD, the hosted service) via the Proofpoint On Demand Email Security Add-on: `pps_messagelog` -> Email: src_user, recipient, subject, action, message_id.
+- Proofpoint Protection Server (PPS, on-premises) via the Proofpoint Email Security Add-On using Remote Syslog: `pps_filter_log` -> Email: src_user, recipient, subject, action. An earlier version of this file filed `pps_messagelog` under PPS; the two add-ons assign different names.
 
 ### Web proxy infrastructure (generic)
 
