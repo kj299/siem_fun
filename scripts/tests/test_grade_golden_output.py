@@ -16,6 +16,7 @@ when adding a check here.
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import tempfile
@@ -446,6 +447,44 @@ class RunnerTests(unittest.TestCase):
                 sys.modules["anthropic"] = saved_mod
         self.assertEqual(code, 1)
         self.assertIn("refused", out.getvalue())
+
+
+class SharedRuleCorpusTests(unittest.TestCase):
+    """The half of shared-rule-cases.json this tool is responsible for.
+
+    The PowerShell suite reads the same file and asserts the same outcomes
+    against the validator. That is the point: the two tools are one rule set
+    written twice, and they drifted on three rules at once without anything
+    noticing. A case that holds here and not there now fails a suite.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(Path(__file__).parent / "shared-rule-cases.json", encoding="ascii") as fh:
+            cls.corpus = json.load(fh)
+        cls.placeholders = set(cls.corpus["placeholders"])
+
+    def test_corpus_is_not_silently_empty(self):
+        # A reader pointed at a renamed or truncated file would otherwise pass
+        # every case vacuously, which is the failure this whole file exists to
+        # prevent in the tools it checks.
+        self.assertGreaterEqual(len(self.corpus["kql_tables"]), 15)
+        self.assertGreaterEqual(len(self.corpus["spl_time_bound"]), 10)
+
+    def test_kql_table_references(self):
+        for case in self.corpus["kql_tables"]:
+            with self.subTest(case=case["name"]):
+                # The grader filters placeholders itself; the validator returns
+                # them and lets the catalogue accept them. Subtracting here
+                # compares the rule rather than where each tool draws the line.
+                got = g.kql_tables(case["query"]) - self.placeholders
+                self.assertEqual(got, set(case["tables"]))
+
+    def test_spl_time_bound(self):
+        for case in self.corpus["spl_time_bound"]:
+            with self.subTest(case=case["name"]):
+                reported = g.spl_is_raw_event_search(case["query"]) and not g.spl_time_bound(case["query"])
+                self.assertEqual(reported, case["reported"])
 
 
 if __name__ == "__main__":

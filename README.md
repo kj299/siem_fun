@@ -75,6 +75,7 @@ siem_fun/
 |-- scripts/
 |   |-- tests/
 |   |   |-- mutation-check.py
+|   |   |-- shared-rule-cases.json
 |   |   |-- test_grade_golden_output.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
@@ -457,6 +458,7 @@ To get the best results with either model:
 - [scripts/tests/validate-skill-pack.tests.ps1](scripts/tests/validate-skill-pack.tests.ps1): unit tests for the validator's helper functions, including regression coverage for past defects
 - [scripts/tests/mutation-check.py](scripts/tests/mutation-check.py): reintroduces each bug the tests exist for and asserts it is caught, and proves every validator and grader check fires
 - [scripts/required-checks.txt](scripts/required-checks.txt): the inventory of checks the validator must perform, cross-checked against it in both directions
+- [scripts/tests/shared-rule-cases.json](scripts/tests/shared-rule-cases.json): the cases for the rules the validator and the grader both implement, read by both suites so a rule that drifts between the two tools fails one of them
 - [splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py](splunk-data-dictionary-builder/scripts/build_splunk_dictionary.py): the helper script the Local Setup section runs
 - [splunk-data-dictionary-builder/SKILL.md](splunk-data-dictionary-builder/SKILL.md): skill for building Splunk data dictionaries, including the JSON output shape
 - [splunk-data-dictionary-builder/references/workflow.md](splunk-data-dictionary-builder/references/workflow.md): discovery strategy, CIM coverage, and query-builder handoff

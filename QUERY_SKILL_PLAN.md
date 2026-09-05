@@ -169,6 +169,7 @@ siem_fun/
 |-- scripts/
 |   |-- tests/
 |   |   |-- mutation-check.py
+|   |   |-- shared-rule-cases.json
 |   |   |-- test_grade_golden_output.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py

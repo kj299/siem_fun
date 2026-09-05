@@ -53,6 +53,12 @@ NOT_MUTATABLE = {
     "returns null for a non-dictionary value":
         "the IDictionary guard can be removed without any current caller passing a "
         "non-dictionary, so no mutation makes it fail (kept as documentation)",
+    "a reader of shared-rule-cases.json that asserts nothing":
+        "deleting an assertion makes a suite PASS, and every mutation here asserts "
+        "a suite goes RED, so no mutation can catch a reader that parses the corpus "
+        "and then compares nothing. The corpus is instead proved load-bearing by "
+        "gutting its case lists, which the readers' non-empty guards catch, and the "
+        "RULES it covers are proved by mutating the two tools themselves",
 }
 
 
@@ -356,6 +362,20 @@ for label, old, new in PY_MUTS:
     unit_mutation(label, SRC, old, new, py_suite)
 
 PS_MUTS = [
+    ("binning re-admitted as a time bound",
+     # bin(_time, "1h") groups events without restricting the window, so a
+     # search carrying it still scans all retained history. Both tools listed
+     # it as a predicate until a review caught it; shared-rule-cases.json holds
+     # the case, and the grader has the mirror mutation.
+     "$script:splTimePredicateRegex = '(?i)(\\bearliest[ \\t]*=|\\blatest[ \\t]*=|_time[ \\t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \\t]*_time)'",
+     "$script:splTimePredicateRegex = '(?i)(\\bearliest[ \\t]*=|\\blatest[ \\t]*=|_time[ \\t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)'"),
+    ("union statement depth guard",
+     # Without the depth test the statement ends at the first pipe, including
+     # one INSIDE a parenthesized subquery operand, so
+     # 'union (A | take 5), (B | take 5)' loses B. The grader has the mirror
+     # mutation; shared-rule-cases.json holds the case both are checked against.
+     '        } elseif ($depth -eq 0 -and ($ch -eq \'|\' -or $ch -eq "`n")) {',
+     '        } elseif ($ch -eq \'|\' -or $ch -eq "`n") {'),
     ("conflict-marker regex CRLF anchor",
      r"""$script:conflictMarkerRegex = '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))'""",
      r"""$script:conflictMarkerRegex = '(?m)^(<{7}( |$)|={7}$|>{7}( |$))'"""),
@@ -399,6 +419,9 @@ for label, old, new in PS_MUTS:
 # behavioral half while the structural half still reported green. Each entry
 # disables one check; the grader suite must go red.
 GRADER_MUTS = [
+    ("grader: binning re-admitted as a time bound",
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time)"',
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)"'),
     ("grader: unquoted where-boolean check",
      r'_WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")',
      r'_WHERE_BOOLEAN_RE = re.compile(r"ZZZNEVERMATCHES")'),
@@ -409,8 +432,8 @@ GRADER_MUTS = [
      '_SPL_NON_GENERATING_LEAD = frozenset({"search"})',
      "_SPL_NON_GENERATING_LEAD = frozenset()"),
     ("grader: _time mentioned but not compared is not a time bound",
-     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)"',
-     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time|\\b_time\\b)"'),
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time)"',
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\b_time\\b)"'),
     ("grader: a KQL table bound by let is a table reference",
      "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):",
      "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE):"),
@@ -450,6 +473,53 @@ GRADER_MUTS = [
 ]
 for label, old, new in GRADER_MUTS:
     unit_mutation(label, GRADER, old, new, grader_suite)
+
+# The shared rule corpus, and the two readers that consume it. Kept separate
+# from the lists above because these mutations target the TEST files and the
+# corpus itself rather than one tool's source, so each carries its own path and
+# its own suite.
+#
+# What they prove is that the corpus is load-bearing. A reader that parses the
+# file and then compares nothing, or a corpus emptied of its cases, would leave
+# both suites green while the two implementations were free to diverge again --
+# which is the exact state this file was added to end.
+PS_TESTS = "scripts/tests/validate-skill-pack.tests.ps1"
+GRADER_TESTS = "scripts/tests/test_grade_golden_output.py"
+CORPUS = "scripts/tests/shared-rule-cases.json"
+
+# The corpus's own cases are proved load-bearing by GUTTING the data, not by
+# weakening a reader: a mutation that deletes an assertion makes a suite pass,
+# and every mutation here asserts a suite goes red. See NOT_MUTATABLE for that
+# gap, which is a property of mutation testing rather than of this corpus.
+PS_TESTS = "scripts/tests/validate-skill-pack.tests.ps1"
+GRADER_TESTS = "scripts/tests/test_grade_golden_output.py"
+CORPUS = "scripts/tests/shared-rule-cases.json"
+
+
+def _empty_the_corpus() -> None:
+    """Strip the corpus to one case each and assert both readers notice.
+
+    Emptied rather than deleted: a missing file is already a $requiredFiles
+    failure, while a file that still parses and simply asserts almost nothing
+    is the quiet version of the same loss.
+    """
+    import json as _json
+    path = os.path.join(WORK, CORPUS)
+    data = _json.load(open(path))
+    data["kql_tables"] = data["kql_tables"][:1]
+    data["spl_time_bound"] = data["spl_time_bound"][:1]
+    _json.dump(data, open(path, "w"), indent=2)
+
+
+for label, suite in (("corpus: gutted case lists fail the python reader", grader_suite),
+                     ("corpus: gutted case lists fail the powershell reader", ps_suite)):
+    fresh()
+    _empty_the_corpus()
+    res = suite()
+    caught = res == "FAILED" or (res != "<none>" and "passed," in res and not res.endswith(", 0 failed"))
+    print(f"  {'CAUGHT ' if caught else '*** MISSED ***'} {label}")
+    if not caught:
+        fails.append(label)
 
 for name, why in NOT_MUTATABLE.items():
     print(f"  (skipped)      {name}\n                 reason: {why}")
@@ -1013,6 +1083,6 @@ if fails:
         print(f"  - {f}")
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
-      f"{len(GRADER_MUTS)} grader unit, "
+      f"{len(GRADER_MUTS)} grader unit + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['environment']} environment)")
 sys.exit(0)

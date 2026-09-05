@@ -787,6 +787,54 @@ try {
         Assert-Contains "present.md" "HELLO" "uppercase greeting"
         Assert-IssueMatching "is missing uppercase greeting"
     }
+
+    Write-Host "Shared rule corpus" -ForegroundColor Cyan
+
+    # The half of shared-rule-cases.json this tool is responsible for. The
+    # Python suite reads the same file and asserts the same outcomes against
+    # the grader. That is the point: the two tools are one rule set written
+    # twice, and they drifted on three rules at once without anything noticing.
+    # A case that holds there and not here now fails a suite.
+    $corpusPath = Join-Path $PSScriptRoot "shared-rule-cases.json"
+    $corpus = Get-Content -Raw -LiteralPath $corpusPath | ConvertFrom-Json
+    $placeholders = [string[]]$corpus.placeholders
+
+    Test-Case "the shared corpus is not silently empty" {
+        # A reader pointed at a renamed or truncated file would otherwise pass
+        # every case vacuously, which is the failure this file exists to
+        # prevent in the tools it checks.
+        Assert-True (@($corpus.kql_tables).Count -ge 15) "expected at least 15 kql cases"
+        Assert-True (@($corpus.spl_time_bound).Count -ge 10) "expected at least 10 spl cases"
+    }
+
+    foreach ($case in $corpus.kql_tables) {
+        # $case is captured by the scriptblock, so bind it per iteration.
+        $c = $case
+        Test-Case "kql tables: $($c.name)" {
+            # The validator returns the documented placeholders and lets the
+            # catalogue accept them; the grader filters them itself. Subtracting
+            # here compares the rule rather than where each tool draws the line.
+            # Assign BEFORE piping. Get-KqlTableReferences returns ', $items',
+            # so the array arrives as one pipeline object and a Where-Object
+            # applied directly would filter the wrapper, not its elements --
+            # the trap CLAUDE.md names. The assignment unrolls it first.
+            $refs = Get-KqlTableReferences $c.query
+            $got = [string[]]@($refs | Where-Object { $placeholders -cnotcontains $_ })
+            [array]::Sort($got)
+            $want = [string[]]@($c.tables)
+            [array]::Sort($want)
+            Assert-Equal ($want -join ", ") ($got -join ", ") "table references for: $($c.query)"
+        }
+    }
+
+    foreach ($case in $corpus.spl_time_bound) {
+        $c = $case
+        Test-Case "spl time bound: $($c.name)" {
+            Test-SplBlock "corpus.md" $c.query
+            $reported = @($issues | Where-Object { $_ -match "no time bound" }).Count -gt 0
+            Assert-Equal $c.reported $reported "time-bound outcome for: $($c.query)"
+        }
+    }
 }
 finally {
     Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue

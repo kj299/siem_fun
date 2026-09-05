@@ -16,7 +16,9 @@ pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1
 # Dictionary builder unit tests
 python -m unittest discover -s splunk-data-dictionary-builder/tests
 
-# Golden-prompt grader unit tests
+# Golden-prompt grader unit tests. These also read
+# scripts/tests/shared-rule-cases.json, the cases the validator's suite checks
+# against too, so a rule that drifts between the two tools fails here.
 python -m unittest discover -s scripts/tests -p "test_*.py"
 
 # Mutation-check every suite (proves the REGRESSION tests and the grader's
@@ -279,18 +281,38 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   `GRADER_MUTS` in the mutation script, so a grader check that stops firing
   goes red the same way a validator check does.
 
-  **Port those rules from the validator, do not re-derive them.** The grader is
-  a second implementation of the same rules in a second language, and it drifted
-  behind on three of them at once: it exempted every leading pipe, so
-  `| search index=...` was graded by no rule at all; it accepted any mention of
-  `_time` as a time bound, so a query whose only `_time` sat inside
+  **Port those rules from the validator, do not re-derive them, and add a case
+  to [scripts/tests/shared-rule-cases.json](scripts/tests/shared-rule-cases.json).**
+  The grader is a second implementation of the same rules in a second language,
+  and it drifted behind on three of them at once: it exempted every leading
+  pipe, so `| search index=...` was graded by no rule at all; it accepted any
+  mention of `_time` as a time bound, so a query whose only `_time` sat inside
   `stats latest(_time)` passed; and it read KQL tables a line at a time, so a
   table bound by `let` or a join operand on the next line was invisible to a
   fixture's `tables` allowlist. The validator caught all three and had mutations
-  for them. The grader's patterns are now copied from it with the reasoning
-  comments intact, so the next reader can see they are meant to match. The model run itself is not
-  in CI because CI holds no credential: run it locally after changing a
-  `SKILL.md` or a reference file, and record what it found in
+  for them; CI was green, the mutation harness was green, and a review bot found
+  it.
+
+  That is why the instruction above is no longer only an instruction. The
+  shared corpus is one JSON file read by BOTH suites -- `ConvertFrom-Json` in
+  the PowerShell tests, `json` in the Python ones, so neither suite gains a
+  dependency. A rule that holds in one tool and not the other now fails a suite
+  instead of surviving until somebody reads both implementations.
+
+  The two tools split at different seams, and the corpus is deliberately
+  written at the level of the RULE rather than of either function:
+  - `kql_tables` expects a set of table names. The grader filters the
+    documented placeholders itself because it has no registry; the validator
+    returns them and lets the catalogue accept them. Each reader subtracts the
+    corpus's own `placeholders` list before comparing.
+  - `spl_time_bound` expects `reported`, meaning "this block is a violation".
+    The validator returns early for a generating command while the grader runs
+    no check at all; both agree on what counts as a violation, which is the
+    part worth pinning.
+
+  The model run itself is not in CI because CI holds no credential: run it
+  locally after changing a `SKILL.md` or a reference file, and record what it
+  found in
   [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Both runs so far found a fixture
   that contradicted the skill rather than a skill that was wrong -- fixture 8,
   then fixture 4 -- and only a model run could have shown that. When a fixture
