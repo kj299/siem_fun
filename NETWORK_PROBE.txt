@@ -1,0 +1,21 @@
+env_01LsZCXfDmr92MhNqmEXfjQt 2026-09-05T14:39:31Z
+help.splunk.com              302
+docs.splunk.com              403
+splunk.github.io             200
+splunkbase.splunk.com        200
+lantern.splunk.com           200
+developer.crowdstrike.com    200
+help.zscaler.com             200
+docs.tenable.com             200
+raw.githubusercontent.com    301
+web.archive.org              200
+proxy: http://127.0.0.1:38007
+{
+  "enabled": true,
+  "port": 38007,
+  "caBundlePath": "/root/.ccr/ca-bundle.crt",
+  "hasSystemCa": true,
+  "noProxy": "localhost,127.0.0.1,::1,127.0.0.0/8,0.0.0.0/8,::,169.254.0.0/16,api.anthropic.com,api-staging.anthropic.com,api-pr-preview.anthropic.com,mcp-proxy.anthropic.com,mcp-proxy-staging.anthropic.com,registry.npmjs.org,jsr.io,npm.jsr.io,pypi.org,files.pythonhosted.org,index.crates.io,proxy.golang.org,host.docker.internal,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,.svc.cluster.local,*.svc.cluster.local",
+  "selective": false,
+  "standalone": false,
+  "toolScoped": false,
