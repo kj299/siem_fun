@@ -26,7 +26,8 @@ This pack is built around two commitments that address that directly:
    runtime, a wrong fact here becomes a wrong query there. Every sourcetype
    written in query position (`sourcetype=...`, whatever its shape) and every
    colon-delimited sourcetype named anywhere in prose must resolve to the
-   Splunkbase catalogue; every Sentinel table must resolve to a catalogue that
+   Splunkbase catalogue, where every row cites the vendor or Splunk page that
+   names the sourcetype; every Sentinel table must resolve to a catalogue that
    cites Microsoft's own documentation per table;
    SPL patterns are linted for the silent-failure bugs above; and every one of
    those checks is mutation-tested, so it is known to fire rather than assumed
@@ -250,7 +251,9 @@ What the validator enforces on every run:
   is built from the column the catalogue labels `Sourcetype`, found by its
   header rather than by its position, because the catalogue's tables do not
   agree on column order. Placeholders (`YOUR_SOURCETYPE`,
-  `<name>`, `...`, wildcards) make no claim and are skipped. Every
+  `<name>`, `...`, wildcards) make no claim and are skipped. Every row of
+  that catalogue must carry a `Reference` link to the documentation that
+  names the sourcetype, and the validator fails a row whose cell is empty. Every
   Sentinel table named in table position in a KQL block must be catalogued in
   the Sentinel table catalogue, where each entry cites Microsoft's own
   documentation. The Sentinel comparison is case-sensitive, because the tables

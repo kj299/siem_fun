@@ -39,6 +39,8 @@ $($script:requiredChecksFile) is missing or empty, so the validator's own check 
 required-checks.txt lists a check the validator no longer performs: '$declared'
 the validator performs a check that is not listed in required-checks.txt: '$message'
 $registryFile is missing or empty, so sourcetype provenance cannot be checked
+$File has a Sourcetype table at line $($i + 1) with no Reference column; every catalogued sourcetype must cite the documentation that names it
+$File has a catalogue row at line $($i + 1) with an empty Reference cell; cite the documentation that names the sourcetype, or emit a discovery query instead
 $($script:kqlRegistryFile) is missing or empty, so Sentinel table provenance cannot be checked
 $file contains a non-ASCII or control byte 0x$($b.ToString('X2'))
 $file contains a conflict marker

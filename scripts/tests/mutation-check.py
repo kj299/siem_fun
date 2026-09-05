@@ -779,6 +779,43 @@ def _swap_catalogue_sourcetype_column() -> None:
 check_mutation("catalogue Sourcetype column relabelled as Source",
                _swap_catalogue_sourcetype_column,
                "not a catalogued sourcetype of any shape")
+
+
+def _blank_one_catalogue_reference() -> None:
+    """Empty the Reference cell of one catalogue row, leaving the row's shape.
+
+    The row keeps its cell count, so the malformed-table check stays quiet and
+    only the citation check can notice. The aidmaster row is unique in the
+    file, which is what makes the edit deterministic.
+    """
+    path = os.path.join(WORK, CATALOG)
+    text = open(path, newline="").read()
+    marker = "| `crowdstrike:inventory:aidmaster` |"
+    assert text.count(marker) == 1, "aidmaster row is no longer unique"
+    start = text.index(marker)
+    line_end = text.index("\n", start)
+    row = text[start:line_end]
+    # newline='' preserves a CRLF checkout's endings, so the CR is part of the
+    # row here and has to be put back.
+    cr = "\r" if row.endswith("\r") else ""
+    cells = row.rstrip("\r").split("|")
+    # Cells: '', Add-on, Sourcetype, CIM, Key fields, Reference, ''.
+    cells[-2] = " "
+    open(path, "w", newline="").write(text[:start] + "|".join(cells) + cr + text[line_end:])
+
+
+check_mutation("catalogue row with an empty Reference cell",
+               # The Splunkbase catalogue shipped with no citations at all for
+               # a year while the Sentinel catalogue required one per table.
+               _blank_one_catalogue_reference,
+               "empty Reference cell")
+check_mutation("catalogue table with its Reference column renamed",
+               # Only the first table loses its column; every row of it keeps
+               # its cells, so this is the header check alone firing.
+               lambda: edit(CATALOG,
+                            "| Sourcetype | Source | CIM data model | Key fields | Reference |\n| --- | --- | --- | --- | --- |\n| `WinEventLog` | `WinEventLog:Security` |",
+                            "| Sourcetype | Source | CIM data model | Key fields | Citation |\n| --- | --- | --- | --- | --- |\n| `WinEventLog` | `WinEventLog:Security` |"),
+               "no Reference column")
 check_mutation("uncatalogued MIXED-CASE sourcetype",
                # The token pattern required a lowercase first letter, so the
                # catalogue's own OktaIM2:* family was never matched and an
