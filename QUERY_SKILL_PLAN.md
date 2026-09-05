@@ -489,6 +489,18 @@ Hashes are of LF-normalised bytes, because the validator runs on a CRLF
 checkout; without that every file would read as changed on the only platform
 that runs it.
 
+Two review findings on the shipped version, both about a check that accepted
+too much. The recorder wrote a marker for any non-empty `--result`, so a
+partial or failing run ("9 of 10", or "2 of 2" from re-running two fixtures)
+silenced the notice while the behavioral baseline was unproven -- on exactly
+the path a run by subagents has to take, since the API runner guards itself.
+It now requires a result naming every fixture, all passing. The validator
+accepted any `files` value that existed and was non-null, so valid JSON
+carrying an array, a string or a number reached the enumeration and produced a
+recorded set nothing could match, downgrading a malformed marker to an
+ordinary freshness notice; the value now has to be a map. Both have
+mutations.
+
 ## What is still open
 
 Running the model half on a schedule against a credential. A weekly Routine

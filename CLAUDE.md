@@ -36,6 +36,8 @@ python3 scripts/grade_golden_output.py --all out/golden
 # naming any SKILL.md, reference file or fixture changed since.
 python3 scripts/record_golden_run.py --method agents --result "10 of 10"
 python3 scripts/record_golden_run.py --check
+# --result must say every fixture passed ("10 of 10"); a partial or failing
+# run is refused, because recording one silences the notice on no baseline.
 ```
 
 CI runs everything except the model run on every pull request and on pushes
