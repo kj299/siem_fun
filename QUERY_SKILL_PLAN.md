@@ -320,10 +320,78 @@ deprecated or never existed would pass every run. First pass, 2026-09-04.
 - The Okta rows list `OktaIM2:log` only; the add-on also ships `OktaIM2:user`,
   `:group`, `:app`, `:groupUser` and `:appUser`. Not an error, an omission.
 
-Direct fetches of vendor documentation are blocked by this environment's
+Direct fetches of vendor documentation were blocked by that environment's
 network policy, so the Splunk half was checked through search rather than by
 reading the pages. That is weaker evidence than the Sentinel half, where
 Microsoft's documentation was read directly.
+
+### Second pass, 2026-09-05: every Splunk sourcetype read on a page
+
+Run from an environment with open outbound access, so every citation below
+was read from the page itself rather than from a search snippet. The two
+environments are the whole reason there were two passes: the first could
+reach Microsoft's documentation and nothing of Splunk's or the vendors', so
+it verified the Sentinel catalogue at page-read quality and the Splunkbase
+catalogue only by search. Two Splunk hosts still refused this pass:
+docs.splunk.com returns a 403 from its load balancer to non-browser clients,
+and help.splunk.com's per-add-on pages are landing pages that link back to
+docs.splunk.com. The four names that live only on docs.splunk.com (Squid,
+Blue Coat, Carbon Black EDR, the retired NetFlow add-on) were read from the
+Internet Archive's copy of the docs.splunk.com page and cite the
+docs.splunk.com URL.
+
+Method: extract the sourcetypes the way the validator does (every backticked
+name in the column headed `Sourcetype`, 67 names), find a page that names
+each one, read it, and record the URL in a new `Reference` column, last in
+every catalogue table. Preference order, strongest first: the add-on's own
+sourcetype page (splunk.github.io, help.splunk.com, docs.splunk.com, or the
+vendor's own documentation for a vendor-published add-on); a Splunk
+repository that defines the sourcetype (Splunk Connect for Syslog vendor
+pages, the Threat Research data-source objects, an add-on's `props.conf`);
+a Splunkbase listing or Splunk blog; nothing.
+
+| Evidence tier | Sourcetypes | Names |
+| --- | --- | --- |
+| Add-on or vendor documentation | 55 | the Windows (4, the two Perfmon names included), Sysmon, CrowdStrike FDR, Microsoft Security, Palo Alto, Cisco ASA, Cisco ISE, Check Point, Juniper, F5, Okta, Infoblox, AWS, Microsoft Cloud Services (2 of 3), Google Cloud families; Carbon Black EDR and Cloud; eStreamer; Umbrella; Zscaler; Blue Coat; Cloudflare; Akamai; Squid; Tenable; Qualys; NetFlow; Stream; the legacy Sysmon channel-path sourcetype (a help.splunk.com tutorial filters on it) |
+| Splunk repository defining the sourcetype | 8 | `fgt_traffic`, `fgt_utm`, `fgt_event`, `imperva:waf` (SC4S); `CrowdStrike:Event:Streams:JSON` (Threat Research data source); `azure:aad:signin`, `azure:aad:audit` (TA-MS-AAD `props.conf`); the `Perfmon:*` wildcard, which no page writes as such and the Windows page's individual Perfmon names back |
+| Splunkbase listing or Splunk blog | 3 | `proofpoint_tap_siem` and `pps_messagelog` (named only by a third-party CIM extension's listing; Proofpoint's own documentation is behind a login and the add-ons' listings describe the logs without naming them); `mscs:nsg:flow` (a Splunk blog; the add-on's source type page does not list it) |
+| Unconfirmed | 1 | `duo`: Duo's connector documentation and release notes, the Splunkbase listing and its release API, Duo's GitHub, and Splunk Lantern were read and none names the connector's sourcetype. Left in place with its Reference cell marked `unconfirmed`. |
+
+Corrections made, each with the evidence in the row:
+
+- **`pps_messagelog` was filed under the wrong add-on.** The catalogue listed
+  it as the Proofpoint Protection Server sourcetype. SC4S's Proofpoint page
+  names the PPS add-on's sourcetypes as `pps_filter_log` and `pps_mail_log`;
+  `pps_messagelog` (with `pps_maillog`) belongs to the Proofpoint On Demand
+  add-on, which is a different product and a different Splunkbase listing.
+  The catalogue now has a PPS table with the two SC4S names and a PoD table
+  with `pps_messagelog`; cim-vendor-alignment.md's bullet says PoD too. No
+  name was removed, so no existing query breaks.
+- **The Okta family was incomplete.** Only `OktaIM2:log` was catalogued; the
+  add-on's source type page lists `OktaIM2:user`, `OktaIM2:group`,
+  `OktaIM2:app`, `OktaIM2:groupUser` and `OktaIM2:appUser` too, with their
+  event types and CIM models. All five are now rows, with the page's own
+  caveat that `OktaIM2:app` is "not recommended until really needed".
+- **The Duo successor was missing.** The connector's EOL note pointed at
+  Cisco Security Cloud without saying what it assigns; the Threat Research
+  data sources name `cisco:duo:activity` and `cisco:duo:administrator`, now a
+  row next to the unconfirmed `duo`.
+- **Two sourcetypes are named by weaker evidence than the row implied.** The
+  Sysmon legacy channel-path row is backed by a Splunk tutorial that filters
+  on it, not by the add-on (whose page names it as the source, which the row
+  already said). The Carbon Black Cloud row cites the Endpoint Standard app's
+  own README, and now says that app is unsupported and names its successor.
+
+Nothing else needed correcting: every other name exists with the exact casing
+the catalogue uses, on a page that describes the same add-on the catalogue
+attributes it to.
+
+The rule is now enforced, not just stated: the catalogue's new "Adding a
+sourcetype" paragraph requires a citation or a discovery query, mirroring the
+Sentinel catalogue's "Adding a table", and the validator fails any row of a
+Sourcetype-headed table in a registry file whose `Reference` cell is empty,
+and any such table with no `Reference` column. Both checks have a mutation
+and a unit test. The asymmetry the first pass reported is closed.
 
 ## What is still open
 

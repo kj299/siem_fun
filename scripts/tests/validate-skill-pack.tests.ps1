@@ -683,6 +683,70 @@ try {
         }
     }
 
+    Write-Host "Test-CatalogueReferences" -ForegroundColor Cyan
+
+    Test-Case "a catalogue row with an empty Reference cell is reported" {
+        # The Splunkbase catalogue carried no citations for a year while the
+        # Sentinel catalogue required one per table; this is the check that
+        # keeps the two symmetric now that both cite.
+        Test-CatalogueReferences "c.md" (
+            "| Sourcetype | CIM data model | Reference |`n" +
+            "| --- | --- | --- |`n" +
+            "| ``cisco:asa`` | Network_Traffic | [ASA](https://example.invalid/asa) |`n" +
+            "| ``pan:traffic`` | Network_Traffic | |`n"
+        )
+        Assert-IssueMatching "row at line 4 with an empty Reference cell"
+    }
+
+    Test-Case "a Sourcetype table with no Reference column is reported once" {
+        Test-CatalogueReferences "c.md" (
+            "| Add-on | Sourcetype | CIM data model |`n" +
+            "| --- | --- | --- |`n" +
+            "| FDR | ``crowdstrike:events:sensor`` | Endpoint |`n" +
+            "| FDR | ``crowdstrike:inventory:aidmaster`` | -- |`n"
+        )
+        Assert-IssueMatching "table at line 2 with no Reference column"
+        Assert-Equal 1 $issues.Count "the header issue covers every row; rows must not be reported again"
+    }
+
+    Test-Case "a short row with no Reference cell at all is reported" {
+        # A row that stops before the Reference column is as uncited as an
+        # empty cell, and indexing past the end must not throw.
+        Test-CatalogueReferences "c.md" (
+            "| Sourcetype | Reference |`n" +
+            "| --- | --- |`n" +
+            "| ``cisco:asa`` |`n"
+        )
+        Assert-IssueMatching "row at line 3 with an empty Reference cell"
+    }
+
+    Test-Case "a catalogue table citing every row is silent, wherever the column sits" {
+        Test-CatalogueReferences "c.md" (
+            "| Add-on | Sourcetype | Reference | Key fields |`n" +
+            "| --- | --- | --- | --- |`n" +
+            "| FDR | ``crowdstrike:events:sensor`` | [FDR](https://example.invalid/fdr) | aid |`n"
+        )
+        Assert-NoIssues
+    }
+
+    Test-Case "a table with no Sourcetype column needs no Reference" {
+        # The index-inference table ('Likely sourcetypes') and the metadata
+        # table are not registries and must not be asked for citations.
+        Test-CatalogueReferences "c.md" (
+            "| Index name pattern | Likely sourcetypes | First step |`n" +
+            "| --- | --- | --- |`n" +
+            "| ``*dns*`` | ``infoblox:dns`` | same |`n"
+        )
+        Assert-NoIssues
+    }
+
+    Test-Case "the shipped catalogue cites every row" {
+        foreach ($registryFile in $script:sourcetypeRegistryFiles) {
+            Test-CatalogueReferences $registryFile (Get-Content -Raw (Join-Path $PSScriptRoot "../../$registryFile"))
+        }
+        Assert-NoIssues
+    }
+
     Test-Case "a query leading with a function is not a table reference" {
         # REGRESSION: Microsoft tells you to prefer _SentinelHealth() over the
         # SentinelHealth table, and the leading-identifier pattern reported that
