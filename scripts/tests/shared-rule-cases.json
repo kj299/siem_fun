@@ -139,10 +139,12 @@
     "which is the thing worth pinning.",
     "",
     "A bound is a time PREDICATE, not a mention of _time: 'index=x | stats",
-    "latest(_time)' scans all history but contains the string. '| head' is an",
-    "accepted alternative bound. A block leading with a GENERATING command runs",
-    "unbounded on purpose and is exempt -- but '| search' is a raw-event search",
-    "wearing that syntax and is not."
+    "latest(_time)' scans all history but contains the string. Binning is not a",
+    "bound either, in any of its forms: bin(_time, \"1h\"), '| bin _time span=1h'",
+    "and '| timechart span=1h' all group events without restricting the window.",
+    "'| head' IS an accepted alternative bound. A block leading with a",
+    "GENERATING command runs unbounded on purpose and is exempt -- but",
+    "'| search' is a raw-event search wearing that syntax and is not."
   ],
 
   "spl_time_bound": [
@@ -173,8 +175,25 @@
       "reported": false
     },
     {
-      "name": "bin(_time) is a bound",
-      "query": "index=windows\n| timechart span=1h count\n| bin(_time)",
+      "name": "binning as an eval function is not a bound",
+      "why": "bin(_time, \"1h\") groups events into buckets; it does not restrict the window, so the search still scans all retained history. Both tools listed this as a time predicate, and this case asserted the false negative until a review caught it.",
+      "query": "index=windows\n| eval bucket = bin(_time, \"1h\")\n| stats count by bucket",
+      "reported": true
+    },
+    {
+      "name": "binning as a command is not a bound",
+      "query": "index=windows\n| bin _time span=1h\n| stats count by _time",
+      "reported": true
+    },
+    {
+      "name": "timechart alone is not a bound",
+      "query": "index=windows\n| timechart span=1h count by host",
+      "reported": true
+    },
+    {
+      "name": "bounded first, then binned",
+      "why": "The bound is earliest=, not the binning that follows it.",
+      "query": "index=windows earliest=-24h\n| eval bucket = bin(_time, \"1h\")\n| stats count by bucket",
       "reported": false
     },
     {

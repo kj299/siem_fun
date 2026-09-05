@@ -362,6 +362,13 @@ for label, old, new in PY_MUTS:
     unit_mutation(label, SRC, old, new, py_suite)
 
 PS_MUTS = [
+    ("binning re-admitted as a time bound",
+     # bin(_time, "1h") groups events without restricting the window, so a
+     # search carrying it still scans all retained history. Both tools listed
+     # it as a predicate until a review caught it; shared-rule-cases.json holds
+     # the case, and the grader has the mirror mutation.
+     "$script:splTimePredicateRegex = '(?i)(\\bearliest[ \\t]*=|\\blatest[ \\t]*=|_time[ \\t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \\t]*_time)'",
+     "$script:splTimePredicateRegex = '(?i)(\\bearliest[ \\t]*=|\\blatest[ \\t]*=|_time[ \\t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)'"),
     ("union statement depth guard",
      # Without the depth test the statement ends at the first pipe, including
      # one INSIDE a parenthesized subquery operand, so
@@ -412,6 +419,9 @@ for label, old, new in PS_MUTS:
 # behavioral half while the structural half still reported green. Each entry
 # disables one check; the grader suite must go red.
 GRADER_MUTS = [
+    ("grader: binning re-admitted as a time bound",
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time)"',
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)"'),
     ("grader: unquoted where-boolean check",
      r'_WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")',
      r'_WHERE_BOOLEAN_RE = re.compile(r"ZZZNEVERMATCHES")'),
@@ -422,8 +432,8 @@ GRADER_MUTS = [
      '_SPL_NON_GENERATING_LEAD = frozenset({"search"})',
      "_SPL_NON_GENERATING_LEAD = frozenset()"),
     ("grader: _time mentioned but not compared is not a time bound",
-     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time)"',
-     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\bbin[ \\t]*\\([ \\t]*_time|\\b_time\\b)"'),
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time)"',
+     '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\b_time\\b)"'),
     ("grader: a KQL table bound by let is a table reference",
      "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):",
      "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE):"),

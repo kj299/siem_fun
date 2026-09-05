@@ -233,7 +233,14 @@ $script:splNonGeneratingLeadCommands = @("search")
 # An actual time PREDICATE, not a mention of _time. 'index=firewall | stats
 # latest(_time)' scans all history but contains the string '_time', so a bare
 # substring test exempted it.
-$script:splTimePredicateRegex = '(?i)(\bearliest[ \t]*=|\blatest[ \t]*=|_time[ \t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \t]*_time|\bbin[ \t]*\([ \t]*_time)'
+#
+# Binning is NOT a bound and was wrongly listed here. 'bin(_time, "1h")' groups
+# events into buckets; it does not restrict the window, so the search still
+# scans all retained history. The command form ('| bin _time span=1h') and a
+# bare '| timechart span=1h' were always reported, which made the exemption for
+# the parenthesised form an inconsistency as well as a false negative. No
+# tracked document relied on it.
+$script:splTimePredicateRegex = '(?i)(\bearliest[ \t]*=|\blatest[ \t]*=|_time[ \t]*(?:>=|<=|<|>|=)|(?:>=|<=|<|>)[ \t]*_time)'
 # High-precision credential shapes only. A generic 'password=...' pattern would
 # fire on docs that discuss credentials, and a check that cries wolf gets turned
 # off rather than fixed.

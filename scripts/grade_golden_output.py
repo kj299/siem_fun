@@ -101,8 +101,11 @@ _WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)
 # replaces graded it as bounded.
 _TIME_PREDICATE_RE = re.compile(
     r"(?i)(\bearliest[ \t]*=|\blatest[ \t]*=|_time[ \t]*(?:>=|<=|<|>|=)"
-    r"|(?:>=|<=|<|>)[ \t]*_time|\bbin[ \t]*\([ \t]*_time)"
+    r"|(?:>=|<=|<|>)[ \t]*_time)"
 )
+# Binning is NOT a bound, and was wrongly treated as one here and in the
+# validator: `bin(_time, "1h")` groups events into buckets without restricting
+# the window, so the search still scans all retained history.
 # `| head` is an accepted alternative bound, as it is in the validator.
 _HEAD_BOUND_RE = re.compile(r"(?i)\|[ \t]*head\b")
 # A DENYLIST of leading commands, not a whitelist of generating ones, for the
