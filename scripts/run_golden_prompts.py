@@ -121,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
     ap.add_argument("--out", default=DEFAULT_OUT, help="directory for NN.md answers")
     ap.add_argument("--dry-run", action="store_true", help="print the assembled prompts and exit")
+    ap.add_argument("--no-record", action="store_true",
+                    help="do not write examples/golden-run.json after a full passing run")
     args = ap.parse_args(argv)
 
     fixtures = grader.load_fixtures()
@@ -167,6 +169,14 @@ def main(argv: list[str] | None = None) -> int:
         grader.report(f, result, verbose=False)
         failures += 0 if result.success else 1
     print(f"\n{len(fixtures) - failures} of {len(fixtures)} fixture(s) passed; answers in {args.out}")
+    # Record what this run saw, so the validator can say when the content moves
+    # on without a re-run. Only a run of EVERY fixture that passed is worth
+    # recording: a partial run did not exercise the whole skill, and a failing
+    # one is not a baseline anyone should be told is fresh.
+    if not failures and not args.fixture and not args.no_record:
+        import record_golden_run
+        path = record_golden_run.write_marker("api", f"{len(fixtures)} of {len(fixtures)}")
+        print(f"recorded the run in {os.path.relpath(path, grader.REPO)}")
     return 1 if failures else 0
 
 

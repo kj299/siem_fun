@@ -68,7 +68,8 @@ siem_fun/
 |-- .env.example
 |-- .gitignore
 |-- examples/
-|   `-- golden-prompts.md
+|   |-- golden-prompts.md
+|   `-- golden-run.json
 |-- CLAUDE.md
 |-- README.md
 |-- QUERY_SKILL_PLAN.md
@@ -77,8 +78,10 @@ siem_fun/
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
 |   |   |-- test_grade_golden_output.py
+|   |   |-- test_record_golden_run.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
+|   |-- record_golden_run.py
 |   |-- required-checks.txt
 |   |-- run_golden_prompts.py
 |   `-- validate-skill-pack.ps1
@@ -454,6 +457,8 @@ To get the best results with either model:
 - [scripts/run_golden_prompts.py](scripts/run_golden_prompts.py): drives a model through every fixture with the skill loaded as a client would load it, then grades
 - [scripts/grade_golden_output.py](scripts/grade_golden_output.py): grades a model's answer against a fixture's spec and the validator's own rules
 - [scripts/tests/test_grade_golden_output.py](scripts/tests/test_grade_golden_output.py): unit tests for the grader and the runner's request shape, the model call stubbed
+- [scripts/record_golden_run.py](scripts/record_golden_run.py): writes [examples/golden-run.json](examples/golden-run.json), a content hash of every file the model run depends on, taken at the moment of the run; the validator compares it to the tree and prints a NOTICE naming what changed since
+- [scripts/tests/test_record_golden_run.py](scripts/tests/test_record_golden_run.py): unit tests for the marker: line endings do not change the hash, the watched set is a rule rather than a list, and the runner records only a full passing run
 - [scripts/validate-skill-pack.ps1](scripts/validate-skill-pack.ps1): local validation for metadata, links, helpers, and encoding
 - [scripts/tests/validate-skill-pack.tests.ps1](scripts/tests/validate-skill-pack.tests.ps1): unit tests for the validator's helper functions, including regression coverage for past defects
 - [scripts/tests/mutation-check.py](scripts/tests/mutation-check.py): reintroduces each bug the tests exist for and asserts it is caught, and proves every validator and grader check fires

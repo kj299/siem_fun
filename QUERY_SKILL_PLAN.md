@@ -162,7 +162,8 @@ siem_fun/
 |       `-- validate.yml
 |-- .gitignore
 |-- examples/
-|   `-- golden-prompts.md
+|   |-- golden-prompts.md
+|   `-- golden-run.json
 |-- CLAUDE.md
 |-- QUERY_SKILL_PLAN.md
 |-- README.md
@@ -171,8 +172,10 @@ siem_fun/
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
 |   |   |-- test_grade_golden_output.py
+|   |   |-- test_record_golden_run.py
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
+|   |-- record_golden_run.py
 |   |-- required-checks.txt
 |   |-- run_golden_prompts.py
 |   `-- validate-skill-pack.ps1
@@ -293,6 +296,15 @@ Result after correction: 10 of 10.
   production query, only supplied or catalogued identifiers, and no request
   for a credential.
 
+## What the third model run found
+
+Third run, 2026-09-05, same method as the first two, executed to give the new
+freshness marker a real result to record rather than a placeholder. 10 of 10
+with no correction needed: the first run in which neither a fixture nor a
+skill was wrong. The marker in [examples/golden-run.json](examples/golden-run.json)
+records the content this run saw; the validator will name whichever of those
+files changes next.
+
 ## What checking the catalogues against the vendors found
 
 The validator checks the documents against the catalogues. Nothing checked the
@@ -325,12 +337,33 @@ network policy, so the Splunk half was checked through search rather than by
 reading the pages. That is weaker evidence than the Sentinel half, where
 Microsoft's documentation was read directly.
 
+## Whether the model half was re-run
+
+Three fixture defects have been found only by a model run, and CI cannot
+perform one, so whether the run was repeated after a `SKILL.md` or reference
+change was an honour-system rule. It is now a recorded fact:
+[examples/golden-run.json](examples/golden-run.json) holds a content hash of
+every file the run depends on -- each skill's `SKILL.md`, every markdown file
+under its `references/`, and the fixture file -- written by
+[scripts/record_golden_run.py](scripts/record_golden_run.py) at the moment of
+the run (the API runner records automatically after a full passing run). The
+validator compares those hashes to the tree on every run and prints a NOTICE
+naming any file changed since. A notice, not a failure, on purpose: the fix is
+a model run CI cannot perform, and a check that blocks every content edit
+until someone finds a credential gets routed around rather than obeyed.
+
+Hashes are of LF-normalised bytes, because the validator runs on a CRLF
+checkout; without that every file would read as changed on the only platform
+that runs it.
+
 ## What is still open
 
-Running the model half on a schedule. CI holds no model credential, so the
-weekly run covers everything except the one check that needs a model. Adding
-a repository secret for the API key would close that, and it is the repository
-owner's decision, not this plan's.
+Running the model half on a schedule against a credential. A weekly Routine
+now runs it with subagents instead, which needs no secret, and reports only
+when something fails; what it cannot do is push the refreshed marker, so a
+stale NOTICE after a content change still waits on a person to re-run and
+record. Adding a repository secret so the API runner could do both in CI
+remains the repository owner's decision, not this plan's.
 
 ## For your own environment
 

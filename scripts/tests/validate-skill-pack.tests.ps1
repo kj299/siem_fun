@@ -100,6 +100,7 @@ function Reset-ValidatorState {
     # Caches and the issue list are script-scoped in the validator; a dot-source
     # puts them in this scope, so tests can clear them between cases.
     if ($null -ne $issues) { $issues.Clear() }
+    if ($null -ne $script:notices) { $script:notices.Clear() }
     if ($null -ne $script:textCache) { $script:textCache.Clear() }
     if ($null -ne $script:yamlCache) { $script:yamlCache.Clear() }
 }
@@ -786,6 +787,100 @@ try {
         Assert-NoIssues
         Assert-Contains "present.md" "HELLO" "uppercase greeting"
         Assert-IssueMatching "is missing uppercase greeting"
+    }
+
+    Write-Host "Golden-run freshness" -ForegroundColor Cyan
+
+    Test-Case "the content hash folds CRLF to LF and is the plain sha256 of the LF form" {
+        # REGRESSION-class guard: the validator runs on a CRLF checkout. A
+        # raw-bytes hash would report every watched file as changed there
+        # while agreeing with itself on Linux, so the notice would fire on
+        # every CI run and be ignored within a week. The Python side computes
+        # the same value; its test asserts the same constant.
+        $lf = Join-Path $fixtureRoot "hash-lf.md"
+        $crlf = Join-Path $fixtureRoot "hash-crlf.md"
+        [System.IO.File]::WriteAllBytes($lf, [System.Text.Encoding]::ASCII.GetBytes("one`ntwo`n"))
+        [System.IO.File]::WriteAllBytes($crlf, [System.Text.Encoding]::ASCII.GetBytes("one`r`ntwo`r`n"))
+        $h = Get-NormalisedFileHash $lf
+        Assert-Equal $h (Get-NormalisedFileHash $crlf) "CRLF and LF must hash identically"
+        Assert-Equal "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8" $h "known sha256 of one LF two LF, the value the Python suite pins too"
+    }
+
+    Test-Case "a lone CR is content, not a line ending" {
+        $p = Join-Path $fixtureRoot "hash-cr.md"
+        [System.IO.File]::WriteAllBytes($p, [System.Text.Encoding]::ASCII.GetBytes("a`rb`n"))
+        $plain = Join-Path $fixtureRoot "hash-plain.md"
+        [System.IO.File]::WriteAllBytes($plain, [System.Text.Encoding]::ASCII.GetBytes("ab`n"))
+        Assert-True ((Get-NormalisedFileHash $p) -cne (Get-NormalisedFileHash $plain)) "a bare CR must not be dropped"
+    }
+
+    # A skill laid out under the fixture root, so the watched-set rule and the
+    # freshness check run against files this suite controls.
+    $gs = "golden-skill"
+    New-Item -ItemType Directory -Path (Join-Path $fixtureRoot "$gs/references") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $fixtureRoot "examples") -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $fixtureRoot "$gs/SKILL.md") -Value "# skill" -NoNewline
+    Set-Content -LiteralPath (Join-Path $fixtureRoot "$gs/references/a.md") -Value "alpha" -NoNewline
+    Set-Content -LiteralPath (Join-Path $fixtureRoot "$gs/references/notes.txt") -Value "not watched" -NoNewline
+    Set-Content -LiteralPath (Join-Path $fixtureRoot "examples/golden-prompts.md") -Value "# fixtures" -NoNewline
+
+    Test-Case "the watched set is every SKILL.md, references/*.md and the fixture file" {
+        $w = [string[]](Get-GoldenWatchedFiles @($gs))
+        Assert-True ($w -ccontains "$gs/SKILL.md") "SKILL.md must be watched"
+        Assert-True ($w -ccontains "$gs/references/a.md") "references/*.md must be watched"
+        Assert-True (-not ($w -ccontains "$gs/references/notes.txt")) "only markdown under references/ is watched"
+        Assert-True ($w -ccontains "examples/golden-prompts.md") "the fixture file must be watched"
+    }
+
+    function Write-GoldenMarker {
+        param([hashtable]$Files, [string]$Extra = "")
+        $entries = ($Files.GetEnumerator() | ForEach-Object { '"' + $_.Key + '": "' + $_.Value + '"' }) -join ", "
+        $json = '{ "date": "2026-01-01", "method": "agents", "result": "1 of 1", "files": { ' + $entries + ' }' + $Extra + ' }'
+        Set-Content -LiteralPath (Join-Path $fixtureRoot "examples/golden-run.json") -Value $json -NoNewline
+        Reset-ValidatorState
+    }
+
+    Test-Case "a marker matching the tree raises no notice and no issue" {
+        $files = @{}
+        foreach ($rel in [string[]](Get-GoldenWatchedFiles @($gs))) { $files[$rel] = Get-NormalisedFileHash (Join-Path $fixtureRoot $rel) }
+        Write-GoldenMarker $files
+        Test-GoldenRunFreshness @($gs)
+        Assert-NoIssues
+        Assert-Equal 0 $script:notices.Count "no notice expected for a fresh marker"
+    }
+
+    Test-Case "a changed watched file is named in a notice, and validation is not failed" {
+        $files = @{}
+        foreach ($rel in [string[]](Get-GoldenWatchedFiles @($gs))) { $files[$rel] = Get-NormalisedFileHash (Join-Path $fixtureRoot $rel) }
+        Write-GoldenMarker $files
+        Set-Content -LiteralPath (Join-Path $fixtureRoot "$gs/references/a.md") -Value "alpha changed" -NoNewline
+        Test-GoldenRunFreshness @($gs)
+        Assert-NoIssues
+        Assert-Equal 1 $script:notices.Count "exactly one notice"
+        Assert-True ($script:notices[0] -clike "*$gs/references/a.md*") "the notice must name the changed file"
+        Assert-True ($script:notices[0] -clike "*2026-01-01 (1 of 1)*") "the notice must say when and with what result the last run happened"
+    }
+
+    Test-Case "a recorded file that no longer exists is named too" {
+        $files = @{}
+        foreach ($rel in [string[]](Get-GoldenWatchedFiles @($gs))) { $files[$rel] = Get-NormalisedFileHash (Join-Path $fixtureRoot $rel) }
+        $files["$gs/references/gone.md"] = "0000"
+        Write-GoldenMarker $files
+        Test-GoldenRunFreshness @($gs)
+        Assert-True ($script:notices.Count -ge 1 -and $script:notices[0] -clike "*gone.md*") "a removed file must be reported"
+    }
+
+    Test-Case "a malformed marker is an issue, not a notice" {
+        # A marker that no longer parses would otherwise be read as 'nothing
+        # recorded' and the whole check would go quiet.
+        Set-Content -LiteralPath (Join-Path $fixtureRoot "examples/golden-run.json") -Value "{ not json" -NoNewline
+        Reset-ValidatorState
+        Test-GoldenRunFreshness @($gs)
+        Assert-IssueMatching "not valid JSON or lacks a files map"
+        Set-Content -LiteralPath (Join-Path $fixtureRoot "examples/golden-run.json") -Value '{ "date": "x" }' -NoNewline
+        Reset-ValidatorState
+        Test-GoldenRunFreshness @($gs)
+        Assert-IssueMatching "not valid JSON or lacks a files map"
     }
 
     Write-Host "Shared rule corpus" -ForegroundColor Cyan

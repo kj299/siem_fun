@@ -1,0 +1,24 @@
+{
+  "_comment": "Written by scripts/record_golden_run.py after a model run of every fixture. The validator compares these LF-normalised sha256 hashes to the tree and prints a NOTICE naming any file changed since. Do not edit by hand.",
+  "date": "2026-09-05",
+  "method": "agents",
+  "result": "10 of 10",
+  "files": {
+    "examples/golden-prompts.md": "c5ab20313663f273a1bd0318c7fa97ff6264b8f38c871ab18f0438104cf331e5",
+    "splunk-data-dictionary-builder/SKILL.md": "f41e37ed6075f86d420121230a46b9b3e4e650f0d0d2500e6030a340d43c29cb",
+    "splunk-data-dictionary-builder/references/workflow.md": "c70b9d9bbe3e38a00c3998f7b52a3cf0bf47bd30cb64c261d75d5eb60f569ba5",
+    "splunk-enrichment-query-builder/SKILL.md": "27aac22d531102030e133f935e0333c40ec73dbe28c783951ced3a6799339ab3",
+    "splunk-enrichment-query-builder/references/greynoise-integration.md": "5533083459745854e3f8adf8bfefdad9478c82c918d5e7d6c159d97fb2f7779e",
+    "splunk-enrichment-query-builder/references/multi-index-patterns.md": "7433f29ae0412f732aad113cc12b95e1ef93319a3ec760f816e090241fe128d9",
+    "splunk-enrichment-query-builder/references/splunk-cloud-index-management.md": "5f83d841584bacd11c878593672a2fc4dbfc9901f13d82f835ee923e263ff5cd",
+    "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md": "b82656460a75abc6964287cf89377cf9c6a586172aa72cd81e9016df90c6b221",
+    "splunk-sentinel-query-builder/SKILL.md": "d9f949c5e715bde4a9e479379484fe61868557b977d2338507cf826976c8413f",
+    "splunk-sentinel-query-builder/references/cim-vendor-alignment.md": "87932b9d196152f62dac6602d163a834b31fe8ebc11bd3cfbe1d0082fbd1ba5a",
+    "splunk-sentinel-query-builder/references/data-dictionary-integration.md": "99b20a27e1de404e912fe501159b530b68342e77098ac785de036ab538699729",
+    "splunk-sentinel-query-builder/references/examples-and-troubleshooting.md": "f74d85862f43c968921d1f7e2df89a1ee2e4b948d29341ef8f07feeee58b6526",
+    "splunk-sentinel-query-builder/references/model-guidance.md": "608f5ae873ed91bddf91c96d846faf9cfb7868f4b19972ee2b554464b7f343e4",
+    "splunk-sentinel-query-builder/references/query-workflow.md": "a1b033f0d80bbe8df6071a177400d272dde626a7cc54214c57e71041c6cae80f",
+    "splunk-sentinel-query-builder/references/sentinel-table-catalog.md": "449f0f4fc5dade275e39484de64a62e1e4a90031885f0e13346cdf1c1a897a45",
+    "splunk-sentinel-query-builder/references/splunk-to-kql-mapping.md": "905fc10eee3c50c97ef9b9aed2af5c9388c0a0a906ed4ad72073da2f24e1bc47"
+  }
+}
