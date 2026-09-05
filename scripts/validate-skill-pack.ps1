@@ -359,6 +359,62 @@ function Add-CatalogueSourcetypeNames {
     }
 }
 
+# Every row of a catalogue table that has a Sourcetype column must cite the
+# documentation that names the sourcetype, in a column headed Reference. The
+# Sentinel catalogue has required a citation per table since it was written;
+# the Splunkbase catalogue carried none for a year, so re-verifying it meant
+# finding the vendor documentation from scratch each time. Column location is
+# the same header-driven read as Add-CatalogueSourcetypeNames: the separator
+# row identifies the header above it, and a table with no Sourcetype column is
+# not a catalogue table and is left alone.
+function Test-CatalogueReferences {
+    param([string]$File, [string]$Text)
+
+    $sourcetypeColumn = -1
+    $referenceColumn = -1
+    $previous = $null
+    $lines = $Text -split "\r?\n"
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        if (-not $line.TrimStart().StartsWith("|")) {
+            $sourcetypeColumn = -1
+            $referenceColumn = -1
+            $previous = $null
+            continue
+        }
+        $cells = Get-TableCells $line
+        $notSeparator = @($cells | Where-Object { $_ -notmatch $script:tableSeparatorRegex })
+        if ($cells.Count -gt 0 -and $notSeparator.Count -eq 0) {
+            $sourcetypeColumn = -1
+            $referenceColumn = -1
+            if ($null -ne $previous) {
+                for ($c = 0; $c -lt $previous.Count; $c++) {
+                    if ($previous[$c] -eq "Sourcetype" -or $previous[$c] -eq "Sourcetypes") {
+                        $sourcetypeColumn = $c
+                    } elseif ($previous[$c] -eq "Reference") {
+                        $referenceColumn = $c
+                    }
+                }
+                if ($sourcetypeColumn -ge 0 -and $referenceColumn -lt 0) {
+                    Add-Issue "$File has a Sourcetype table at line $($i + 1) with no Reference column; every catalogued sourcetype must cite the documentation that names it"
+                    # Nothing to read per row without the column; the header
+                    # issue already says what is wrong with every row.
+                    $sourcetypeColumn = -1
+                }
+            }
+            $previous = $null
+            continue
+        }
+        if ($sourcetypeColumn -ge 0) {
+            if ($referenceColumn -ge $cells.Count -or $cells[$referenceColumn].Length -eq 0) {
+                Add-Issue "$File has a catalogue row at line $($i + 1) with an empty Reference cell; cite the documentation that names the sourcetype, or emit a discovery query instead"
+            }
+            continue
+        }
+        $previous = $cells
+    }
+}
+
 # Every sourcetype value written in query position, placeholders removed.
 function Get-SourcetypeValues {
     param([string]$Text)
@@ -924,6 +980,10 @@ foreach ($registryFile in $script:sourcetypeRegistryFiles) {
     # Names of any shape, taken from the catalogue's Sourcetype column rather
     # than by shape.
     Add-CatalogueSourcetypeNames $registryText $script:knownSourcetypeNames
+    # A registry row is a claim that the name exists; the Reference column is
+    # where the claim is backed. Checked on the registry files only, because
+    # that is where a Sourcetype-headed table is a registry rather than prose.
+    Test-CatalogueReferences $registryFile $registryText
     foreach ($m in [regex]::Matches($registryText, $script:cimBulletNameRegex)) {
         $null = $script:knownSourcetypeNames.Add($m.Groups[1].Value)
     }
