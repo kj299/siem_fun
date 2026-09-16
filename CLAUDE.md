@@ -262,6 +262,15 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
 - `bool("0")` is `True`. Splunk REST returns booleans as strings in places;
   normalize through `parse_bool`.
 
+**GitHub Actions**
+
+- A job's `needs:` only implies waiting on their success when the job has no
+  `if:` of its own. Adding an `if:` replaces that implicit `success()` check
+  rather than joining it, so a job with both `needs` and an `if` that only
+  tests something else (an event type, a branch name) runs even after a
+  needed job failed. Write `success() && <condition>` explicitly whenever a
+  job combines `needs` with its own `if`.
+
 ## Testing policy
 
 - Two suites, both dependency-free on purpose: stdlib `unittest` for Python,
