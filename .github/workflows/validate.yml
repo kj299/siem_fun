@@ -110,7 +110,13 @@ jobs:
   # subagent-driven Routine described in issue #44, not a replacement for it.
   golden-run:
     needs: [validate, python]
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    # A job's `needs` only implies waiting on their success when the job has
+    # no `if` of its own; adding one replaces that implicit success() check
+    # rather than joining it, so without the explicit success() below this
+    # job would run the moment the event type matched even after validate or
+    # python failed -- exactly what "needs validate and python green first"
+    # above says it does not do.
+    if: ${{ success() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
