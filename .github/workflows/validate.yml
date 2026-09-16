@@ -91,8 +91,115 @@ jobs:
         run: python -m unittest discover -s splunk-data-dictionary-builder/tests -v
 
       # The golden-prompt grader. Stdlib only, like everything else here; the
-      # runner that calls a model is exercised through a stub because CI holds
-      # no model credential.
+      # runner that calls a model is exercised through a stub in this job
+      # because a pull_request or a push holds no model credential. The
+      # golden-run job below is the one that calls a real model.
       - name: Run golden-prompt grader tests
         if: ${{ !cancelled() }}
         run: python -m unittest discover -s scripts/tests -p "test_*.py" -v
+
+  # Runs only on the weekly schedule or a manual dispatch, never on a
+  # pull_request or a push: this calls a paid model API per fixture and, on a
+  # full pass, writes back to the repository, and doing either on every PR
+  # would be surprising and wasteful. Needs `validate` and `python` green
+  # first -- no point spending an API call proving the model half still holds
+  # when the pack itself already fails validation, likely to runner-image or
+  # module drift on this same schedule. ANTHROPIC_API_KEY is a repository
+  # secret (Settings -> Secrets and variables -> Actions), never a workflow
+  # literal; CI is a second, narrower credential path alongside the weekly
+  # subagent-driven Routine described in issue #44, not a replacement for it.
+  golden-run:
+    needs: [validate, python]
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install anthropic SDK
+        run: pip install anthropic
+
+      # Captured rather than let fail outright: a graded fixture failure
+      # (exit 1) is expected data this job reports on below, not an
+      # infrastructure error. An auth or setup problem
+      # (anthropic.AuthenticationError, or the SDK failing to install) is
+      # exit 2 from the script itself, with nothing gradeable to report, and
+      # is treated as a real job failure by the next step instead.
+      - name: Run the golden prompts against a model
+        id: golden_run
+        if: ${{ !cancelled() }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          python3 scripts/run_golden_prompts.py 2>&1 | tee golden-run-output.log
+          status="${PIPESTATUS[0]}"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Fail on a setup or credential problem
+        if: ${{ !cancelled() && steps.golden_run.outputs.status != '0' && steps.golden_run.outputs.status != '1' }}
+        run: |
+          echo "golden-run setup or credential problem (exit ${{ steps.golden_run.outputs.status }}); see the run log above" >&2
+          exit 1
+
+      # A real fixture failure. record_golden_run.py's own full_pass gate
+      # already refused a marker for this run (see the tail of
+      # scripts/run_golden_prompts.py's main()), so main is untouched; this
+      # issue is the report. Both model runs so far found a fixture that
+      # contradicted the skill, not a skill defect -- read the relevant
+      # SKILL.md and reference file before assuming the answer is at fault.
+      - name: Open an issue naming the failure
+        if: ${{ !cancelled() && steps.golden_run.outputs.status == '1' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          summary=$(tail -n 1 golden-run-output.log)
+          gh issue create \
+            --title "Golden-run check (CI): ${summary}" \
+            --body "$(printf 'Scheduled run of scripts/run_golden_prompts.py found a failing fixture.\nRead the relevant SKILL.md and reference file before assuming the answer\nis at fault -- both prior model runs found a fixture that contradicted\nthe skill, not a skill defect (see QUERY_SKILL_PLAN.md). This job does\nnot fix or push; examples/golden-run.json was left untouched.\n\n%s\n' "$(cat golden-run-output.log)")"
+
+      - name: Fail the job on a graded fixture failure
+        if: ${{ !cancelled() && steps.golden_run.outputs.status == '1' }}
+        run: exit 1
+
+      # Every fixture passed. run_golden_prompts.py already wrote a fresh
+      # examples/golden-run.json in this checkout as a side effect (see its
+      # --no-record flag); push it so a stale NOTICE never has to wait on a
+      # person running record_golden_run.py by hand. If main requires a pull
+      # request before merging, this push fails with a protected-branch error
+      # in the log -- exempt this workflow's actor or loosen that rule for
+      # this one file.
+      - name: Push the refreshed marker
+        if: ${{ !cancelled() && steps.golden_run.outputs.status == '0' }}
+        run: |
+          if git diff --quiet -- examples/golden-run.json; then
+            echo "marker already fresh; nothing to push"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add examples/golden-run.json
+          git commit -m "Record a full passing golden-run"
+          # main can move between checkout and this push (a merge while the
+          # model run was in flight, which can take minutes across 10
+          # fixtures); rebase onto the latest and retry rather than losing
+          # the marker to a rejected push.
+          attempts=3
+          for i in $(seq 1 $attempts); do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push attempt $i of $attempts failed; fetching and rebasing"
+            git fetch origin main
+            git rebase origin/main
+          done
+          echo "failed to push the refreshed marker after $attempts attempts" >&2
+          exit 1
