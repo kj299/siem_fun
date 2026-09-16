@@ -48,6 +48,16 @@ mystery failure in whatever PR happens to come next. A push to a topic branch
 with no open PR runs nothing, so run them locally before pushing; several bugs
 in this repo's history reached CI only because a local run was skipped.
 
+The weekly schedule (and a manual `workflow_dispatch`) additionally runs a
+third job, `golden-run`, which does call a model: it needs `validate` and
+`python` green first, then runs every fixture against the `ANTHROPIC_API_KEY`
+repository secret. A full pass pushes the refreshed marker to `main` itself,
+so a stale NOTICE never has to wait on a person running
+`record_golden_run.py` by hand; a real fixture failure opens an issue naming
+it instead, and touches nothing. This is a second, narrower path to the same
+mechanism the weekly Routine in issue #44 already drives with subagents, not
+a replacement for it.
+
 ## Hard rules
 
 - **ASCII only.** Every tracked file must contain only tab, LF, CR, and
@@ -324,9 +334,12 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
     no check at all; both agree on what counts as a violation, which is the
     part worth pinning.
 
-  The model run itself is not in CI because CI holds no credential: run it
-  locally after changing a `SKILL.md` or a reference file, and record what it
-  found in [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Whether that re-run
+  The model run is not in CI's `validate` or `python` jobs because a
+  pull_request or a push holds no credential, and running a paid model call
+  on every PR would be wasteful anyway. Run it locally after changing a
+  `SKILL.md` or a reference file rather than waiting for the weekly
+  `golden-run` job, and record what it found in
+  [QUERY_SKILL_PLAN.md](QUERY_SKILL_PLAN.md). Whether that re-run
   happened is no longer trusted: `examples/golden-run.json` holds a hash of
   every file the run depends on, and the validator prints a NOTICE naming any
   that changed since. The API runner writes the marker after a full passing

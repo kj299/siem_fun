@@ -501,14 +501,25 @@ recorded set nothing could match, downgrading a malformed marker to an
 ordinary freshness notice; the value now has to be a map. Both have
 mutations.
 
-## What is still open
+## Running the model half on a schedule against a credential, 2026-09-16
 
-Running the model half on a schedule against a credential. A weekly Routine
-now runs it with subagents instead, which needs no secret, and reports only
-when something fails; what it cannot do is push the refreshed marker, so a
-stale NOTICE after a content change still waits on a person to re-run and
-record. Adding a repository secret so the API runner could do both in CI
-remains the repository owner's decision, not this plan's.
+The weekly Routine (issue #44) runs the model half with subagents, which
+needs no secret, and reports only when something fails; what it cannot do is
+push the refreshed marker, so a stale NOTICE after a content change still
+waited on a person to re-run and record. Adding a repository secret so the
+API runner could do both in CI was left as the repository owner's decision,
+not this plan's -- and the owner made it: `.github/workflows/validate.yml`
+gained a third job, `golden-run`, that runs only on the weekly schedule or a
+manual dispatch (never on a pull_request or a push, which hold no credential
+and would make a paid model call on every PR). It calls `ANTHROPIC_API_KEY`
+from a repository secret, pushes the refreshed marker to `main` itself on a
+full pass, and opens an issue naming the failure otherwise, touching nothing.
+
+This is a second path to the same mechanism the Routine already drives, not
+a replacement for it: the Routine also runs the validator, both unit suites,
+and the mutation harness in one pass, and can be made to open an issue on
+any of those once issue #44 is done. `golden-run` only ever exercises the
+model half and the marker.
 
 ## For your own environment
 

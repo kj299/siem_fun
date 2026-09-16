@@ -213,9 +213,14 @@ Run the golden-prompt grader's unit tests (stdlib only, also in CI):
 python -m unittest discover -s scripts/tests -p "test_*.py"
 ```
 
-Run the golden prompts against a model and grade the answers. This is the one
-check CI cannot run, because it needs a model credential. The SDK reads the
-key from the environment; the script never takes it as an argument.
+Run the golden prompts against a model and grade the answers. `validate` and
+`python`, the two jobs that run on every pull request, cannot run this: a
+pull_request or a push holds no model credential. A third job, `golden-run`,
+runs it weekly (and on a manual dispatch) with a repository secret instead,
+pushing the refreshed marker on a full pass or opening an issue on a real
+failure; run it locally too after changing a `SKILL.md` or reference file
+rather than waiting for Monday. The SDK reads the key from the environment;
+the script never takes it as an argument.
 
 ```bash
 pip install anthropic
