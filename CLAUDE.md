@@ -238,6 +238,12 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   testing the returned value for `$null`.
 - `Get-Content -Raw` returns `$null` for an empty file; calling a method on it
   throws.
+- `ConvertFrom-Json` gives a `PSCustomObject` only for a JSON *object*. An
+  array parses to `Object[]`, a string to `String`, a number to `Int64`, a
+  bool to `Boolean` -- all of them non-null, so a guard that only checks a
+  property "exists and is not `$null`" accepts every one of them where the
+  invariant actually needs a map. Test with
+  `-is [System.Management.Automation.PSCustomObject]`.
 
 **Python**
 
