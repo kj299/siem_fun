@@ -111,3 +111,58 @@ MicrosoftGraphActivityLogs
 | project AppId, NewUserAgent = UserAgent, Requests, Tenants, IPs, FirstSeen, LastSeen
 | order by Tenants desc
 
+
+// --- H-AGT-017  Spec-driven API targeting (Unit 42 2026-10-30) ---------------------------------
+// A source map / OpenAPI / docs download followed within two minutes by five or more distinct /api/
+// routes from the same source, with no wordlist brute force in between: the agent reads the spec
+// and calls only what it defines. Unit 42 saw the first spec-defined call two seconds after download.
+let specs = _Im_WebSession(starttime=ago(7d))
+    | where Url matches regex @"(?i)\.js\.map(\?|$)|/openapi\.json|/redoc|/docs(/|$)|/swagger"
+    | summarize SpecTime = min(TimeGenerated), SpecUrls = make_set(Url, 5) by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr);
+_Im_WebSession(starttime=ago(7d))
+| where Url contains "/api/"
+| summarize ApiTime = min(TimeGenerated), ApiUrls = dcount(Url), Requests = count() by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr)
+| join kind=inner specs on SrcIpAddr, Dst
+| where ApiTime >= SpecTime and ApiTime - SpecTime <= 2m and ApiUrls >= 5
+| project SrcIpAddr, Dst, SpecTime, SecondsToFirstApiCall = datetime_diff("second", ApiTime, SpecTime), ApiUrls, Requests, SpecUrls
+| order by SecondsToFirstApiCall asc
+
+// --- H-AGT-018  Canary username, then a privileged account (Unit 42 2026-10-30) -----------------
+// The agent logs in as a generated nonexistent user (zz_no_such_user_9f3a, zzq.nonexistent9x7) to
+// baseline the error response, then one second later as admin. Entra sign-ins shown; the same
+// shape applies to any IdP or web login log.
+SigninLogs
+| where TimeGenerated > ago(30d) and ResultType != "0"
+| extend u = tolower(UserPrincipalName)
+| extend Kind = case(u startswith "zz" or u contains "nonexistent" or u contains "not-a-user", "canary",
+                     u startswith "admin" or u startswith "root@", "admin", "")
+| where Kind != ""
+| summarize CanaryTime = minif(TimeGenerated, Kind == "canary"), AdminTime = minif(TimeGenerated, Kind == "admin"),
+            CanaryUsers = make_set_if(UserPrincipalName, Kind == "canary", 5), AdminUsers = make_set_if(UserPrincipalName, Kind == "admin", 5) by IPAddress
+| where isnotnull(CanaryTime) and isnotnull(AdminTime) and AdminTime >= CanaryTime and AdminTime - CanaryTime <= 1m
+| project IPAddress, CanaryTime, SecondsToAdmin = datetime_diff("second", AdminTime, CanaryTime), CanaryUsers, AdminUsers
+
+// --- H-AGT-019  ARTEX task artifacts on a compromised host (S-RM 2026-11-04) -------------------
+// S-RM found /opt/artex/data/task/<task>/i4028/i4028.asp on a victim, disposable GitHub branches
+// named artex-wtest-<n>, and placeholder emails at example.invalid. The i<number> is the agent's
+// intent counter, so hunt the shape, not one name. ScopeWeaver (an ARTEX derivative) renames the
+// binary and its variables; both are included.
+union
+  (DeviceFileEvents | where TimeGenerated > ago(30d)
+     | where FolderPath contains "/opt/artex" or FolderPath contains @"\artex\data\task" or FileName matches regex @"^i[0-9]{3,5}\.(asp|aspx|php|jsp|jspx)$"
+     | project TimeGenerated, DeviceName, Signal = "task artifact", Detail = strcat(FolderPath, " ", FileName)),
+  (DeviceProcessEvents | where TimeGenerated > ago(30d)
+     | where ProcessCommandLine has_any ("artex-wtest-", "example.invalid", "SCOPEWEAVER_LLM_", "/opt/artex/") or FileName in~ ("scopeweaver", "scopeweaver.exe")
+     | project TimeGenerated, DeviceName, Signal = "process", Detail = ProcessCommandLine)
+| summarize Signals = make_set(Signal, 5), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| order by LastSeen desc
+
+// --- H-AGT-020  OAuth redirect-URI probing across many client IDs (Unit 42 2026-10-30) ---------
+// Authorize requests with unregistered redirect URIs across a high number of application client IDs
+// from one source. Unit 42's IdP returned illegal_redirect_uri_enhanced; the Entra equivalent is
+// AADSTS50011 (reply URL mismatch), which is what is queried here.
+SigninLogs
+| where TimeGenerated > ago(7d) and ResultType == "50011"
+| summarize Apps = dcount(AppId), Attempts = count(), Users = dcount(UserPrincipalName), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by IPAddress
+| where Apps >= 5
+| order by Apps desc

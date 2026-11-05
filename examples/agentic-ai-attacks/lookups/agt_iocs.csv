@@ -143,3 +143,13 @@ fastcdn.bar,domain,high,C2 for the Windows beacon,Kaspersky Securelist 2026-11-0
 media.fastcdn.bar,domain,high,C2 for the Linux beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
 strix.ai,domain,medium,"HTTP-Referer value on STRIX LLM calls, paired with the X-Title header (strix/config/models.py)",STRIX source code (usestrix/strix)
 d5070f52262effe216b840711343bff8f2787f39208d887d8dfd9c673f8d1573,sha256,high,SHA-256 of the backdoored /app/artex binary inside tomicdd/artex,"Badbyte 2026-11-04 (primary; page blocks scripted download, read via fetch tool)"
+31.40.205.155,ipv4,medium,"ARTEX infrastructure: answers WWW-Authenticate Basic realm=ARTEX and runs a Sub2API LLM gateway on :8080; primary source of self-registration, API data reads, source-map harvesting and IdP probing",Unit 42 timely threat intel 2026-10-30
+173.254.220.78,ipv4,medium,"same Sub2API gateway; source of consumer-site recon, config harvesting, account-recovery probing and 700+ denied IAP requests",Unit 42 timely threat intel 2026-10-30
+Mozilla/5.0 (security-testing; authorized),user_agent,medium,self-describing agent user agent seen in ARTEX-derived intrusions,Unit 42 timely threat intel 2026-10-30
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) recon-audit,user_agent,medium,self-describing agent user agent seen in ARTEX-derived intrusions,Unit 42 timely threat intel 2026-10-30
+Fuzz Faster U Fool v2.1.0-dev,user_agent,low,"ffuf default user agent, mixed with curl/python-requests/Python-urllib from one ARTEX source (ffuf is a generic tool)",Unit 42 timely threat intel 2026-10-30
+103.122.245.194,ipv4,medium,"ARTEX C&C cluster of 10 hosts in 103.122.245.0/24 (AS152918 Liberally Network, Thailand) updated in lockstep (tag dev-db-resilience-20261031); CPR lists .198 .199 .204 .214-.219 as siblings",Check Point Research 2026-11-05
+192.236.172.197,ipv4,medium,"ARTEX C&C cluster with rolling 0.3.15-pro.* version tag, AS36352 HostPapa (US)",Check Point Research 2026-11-05
+198.44.123.66,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
+204.44.66.81,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
+104.168.112.237,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
