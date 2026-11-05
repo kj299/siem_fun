@@ -70,6 +70,20 @@ absence as nothing.
   140 targets in 11 days; CrowdStrike's own post reports more than 200
   organizations targeted, post-exploitation confirmed at nine, and spraying at
   twelve more. This section uses CrowdStrike's figures.
+- **Telemetry and monitoring signals.** Beyond the user-agents seen arriving at
+  your edge, three frameworks emit identifiable strings to their OWN endpoints
+  (STRIX's `X-Title: Strix` and `strix.ai` referer on LLM calls, CyberStrikeAI's
+  `X-CyberStrike-Summarization` header, PentAGI's `langfuse golang sdk`): a host
+  of yours emitting these is running the framework, and the strip-markers habit
+  that hides edge user-agents does not reach them. In cloud audit logs,
+  Storm-0940's ARTEX operators used `azure-toolkit/1.0` and specific Boto3 /
+  aws-cli build strings. The most durable monitoring signal is not an indicator
+  at all: Huntress found the hijacked ConnectWise apps normally call Graph as
+  `kiota-dotnet`, and the giveaway was that user-agent being replaced by
+  `Python-urllib/3.12`. Baseline each vendor application's user-agent and alert
+  on drift (hunt H-AGT-016). The generic clients (`python-requests`, `curl`,
+  `Python-urllib`) are noisy alone -- Wiz says so explicitly -- and are context,
+  never a standalone alert.
 
 ## How to use this section
 
@@ -96,8 +110,12 @@ absence as nothing.
   (variants for an estate running the NVIDIA Morpheus behavioral pipeline),
   [sentinel-rules.yaml](../../examples/agentic-ai-attacks/sentinel-rules.yaml)
   (Microsoft Sentinel scheduled analytic rules), and
-  [hunting.kql](../../examples/agentic-ai-attacks/hunting.kql). Lookups the rules
-  read are in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/).
+  [hunting.kql](../../examples/agentic-ai-attacks/hunting.kql) -- including
+  H-AGT-015 (framework self-telemetry on egress) and H-AGT-016 (OAuth
+  application user-agent drift, the Huntress method). Lookups the rules read are
+  in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);
+  the cloud-log and baseline indicators are deliberately kept out of the
+  auto-block sweep.
 - **Build a query** -- when the request is to detect this activity in a specific
   SIEM, follow the query workflow in [query-workflow.md](query-workflow.md) and
   the CIM and table provenance in
@@ -244,6 +262,10 @@ tactic is an intelligence gap, not an assurance.
 - User-agent strings can be changed by any operator, so their absence proves
   nothing. Framework update and telemetry hosts are the more durable host-level
   tell.
+- The framework self-telemetry headers (STRIX, CyberStrikeAI) reach the model
+  provider over TLS, so you see them only from a header-logging forward proxy or
+  from endpoint telemetry on the host -- not from flow logs. The user-agent-drift
+  hunt needs the Microsoft Graph activity logs connector enabled.
 - The detection content is `needs_validation`: its logic was checked against the
   Morpheus behavioral trackers on a synthetic corpus, not executed against a
   live Splunk or Sentinel. Derive every threshold from your own baseline period.

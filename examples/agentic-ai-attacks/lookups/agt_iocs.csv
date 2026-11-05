@@ -109,7 +109,6 @@ cce7e887604bdb99a23dfa31d931294e9289c2387badfc4edfa88c23416cb6c5,sha256,high,ART
 cdbaa9cf60159a1f0e367737b3a2463ec8be9bf49db219959c5fbd662582de1f,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
 fe30bfc2c1517de84618d38838d9731f7aa76571f4a34a01fc680a2496822b54,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
 270692c2ece26013570743f0205c062f43196cbbb7da2a7caff8e24596ccbff5,sha256,medium,file with ARTEX forensic artifacts,Nextron Valhalla HKTL_ARTEX_Forensic_Artifacts_Oct26
-640899529ff070c90fd788b85c632bc7cd19882c046f6fcd460d18c2f8cb4a02,sha256,low,binary embedding the Norma agent library,Nextron Valhalla PUA_NORMA_Usage_Oct26
 56691378a70755df7fcfd33b9e232acdd69deaea76201cee499bb074b0cf04e4,sha256,high,ARTEX Docker deployment config,Nextron Valhalla HKTL_ARTEX_Docker_Oct26
 d168ec58b836d6c58a7249f51894644da998f063271acd41af3545917f529c4b,sha256,high,official ARTEX v0.3.14 release ZIP (linux-amd64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
 fff3f501db2ec8e2f424eabd33f009c6aff82ae3332a7b3118ad4038b11275af,sha256,high,official ARTEX v0.3.14 release ZIP (linux-arm64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
@@ -124,12 +123,10 @@ Mozilla/5.0 (spa-api-recon spider),user_agent,high,ARTEX api-recon skill spider,
 HexStrike-HTTP-Framework/1.0 (Advanced Security Testing),user_agent,high,HTTP testing framework session UA (hexstrike_server.py),framework source code (0x4m4/hexstrike-ai)
 Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0),user_agent,high,Webshell manager request user-agent (internal/handler/webshell.go),framework source code (Ed1s0nZ/CyberStrikeAI)
 PentAGI/1.0,user_agent,medium,SearXNG search client user-agent (backend/pkg/tools/searchers/searxng.go),framework source code (vxcontrol/pentagi)
-git/2.43.0,user_agent,low,"Strix git-repo probe header (strix/interface/utils.py); very generic, context only",framework source code (usestrix/strix)
 strix.gateway.scarf.sh,domain,medium,Strix telemetry endpoint; a host of yours reaching it is running Strix,framework source code (usestrix/strix)
 app.strix.ai,domain,low,Strix platform host,framework source code (usestrix/strix)
 CyberStrikeAI/1.7.4,user_agent,medium,FOFA API client user-agent (internal/handler/fofa.go),framework source code (Ed1s0nZ/CyberStrikeAI)
 tcp_beacon,user_agent,medium,Default TCP beacon user-agent when none set (internal/c2/tcp_beacon_server.go),framework source code (Ed1s0nZ/CyberStrikeAI)
-PentAGI-Installer,user_agent,low,Installer HTTP client user-agent (backend/cmd/installer),framework source code (vxcontrol/pentagi)
 update.pentagi.com,domain,medium,PentAGI update-check host; a host of yours reaching it is running PentAGI,framework source code (vxcontrol/pentagi)
 HexStrike-BrowserAgent/1.0 (Security Testing),user_agent,high,Headless-browser UA (hexstrike_server.py),framework source code (0x4m4/hexstrike-ai)
 212.11.64.250,ipv4,medium,"Server with the CyberStrikeAI banner on :8080, linked to FortiGate targeting (Team Cymru via Amazon)",Team Cymru 2026-03-02 (banner on :8080); Amazon 2026-02-20
@@ -144,3 +141,4 @@ d726a8b4886c636f76ca6d30ef6a6ff4,md5,high,Windows beacon c:\windows\temp\svchost
 104.234.26.163,ipv4,high,payload delivery and Linux beacon C2,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
 fastcdn.bar,domain,high,C2 for the Windows beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
 media.fastcdn.bar,domain,high,C2 for the Linux beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+strix.ai,domain,medium,"HTTP-Referer value on STRIX LLM calls, paired with the X-Title header (strix/config/models.py)",STRIX source code (usestrix/strix)

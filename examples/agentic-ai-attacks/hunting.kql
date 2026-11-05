@@ -71,3 +71,43 @@ union
 | extend SignalCount = array_length(Signals)
 | order by SignalCount desc
 
+// --- H-AGT-015  Framework self-telemetry on egress (STRIX, CyberStrikeAI, PentAGI) ------------
+// These strings go to the frameworks' OWN LLM/observability/update endpoints, not to the target,
+// so STRIX's strip-markers prompt rule does not remove them. The header matches need a proxy that
+// logs request headers (<PROXY_HEADERS_TABLE>, e.g. a Zscaler/Netskope custom table or Defender
+// for Cloud Apps); the domain and user-agent matches run on standard tables. A host of yours
+// emitting any of these is likely running the framework.
+let fw_hosts = dynamic(["strix.ai", "strix.gateway.scarf.sh", "update.pentagi.com", "support.pentagi.com"]);
+let fw_ua = dynamic(["langfuse golang sdk", "artex-selfupdate"]);
+union isfuzzy=true
+  (DeviceNetworkEvents | where TimeGenerated > ago(30d) | extend u = tolower(RemoteUrl)
+     | extend Domain = iff(u has "://", tostring(parse_url(u).Host), tostring(split(u, "/")[0]))
+     | where Domain in (fw_hosts)
+     | project TimeGenerated, DeviceName, Signal = strcat("egress ", Domain), Detail = InitiatingProcessCommandLine),
+  (_Im_WebSession(starttime=ago(30d)) | where HttpUserAgent in (fw_ua)
+     | project TimeGenerated, DeviceName = SrcHostname, Signal = strcat("user-agent ", HttpUserAgent), Detail = Url),
+  // Header matches: enable only if your proxy logs request headers. Replace the table and column.
+  (<PROXY_HEADERS_TABLE> | where TimeGenerated > ago(30d)
+     | where <REQUEST_HEADERS_COLUMN> has "X-CyberStrike-Summarization"
+          or (<REQUEST_HEADERS_COLUMN> has "X-Title: Strix" and <REQUEST_HEADERS_COLUMN> has "strix.ai")
+     | project TimeGenerated, DeviceName = <CLIENT_COLUMN>, Signal = "framework LLM header", Detail = <URL_COLUMN>)
+| summarize Signals = make_set(Signal, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| order by LastSeen desc
+
+// --- H-AGT-016  OAuth application user-agent drift (Huntress ConnectWise method) --------------
+// The compromised ConnectWise apps normally call Graph as kiota-dotnet; the operator's token loop
+// used Python-urllib/3.12, one request per tenant a few minutes apart. Baseline each watched app's
+// user-agent over the prior 14 days and alert when a new one appears in the last 24 hours. Needs
+// the Microsoft Graph activity logs connector. App IDs are the compromised ConnectWise ones.
+let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827"]);
+let baseline = MicrosoftGraphActivityLogs
+    | where TimeGenerated between (ago(14d) .. ago(1d)) and AppId in (watched)
+    | summarize KnownAgents = make_set(UserAgent) by AppId;
+MicrosoftGraphActivityLogs
+| where TimeGenerated > ago(1d) and AppId in (watched)
+| summarize Requests = count(), Tenants = dcount(TenantId), IPs = make_set(IPAddress, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by AppId, UserAgent
+| join kind=leftouter baseline on AppId
+| where isnull(KnownAgents) or UserAgent !in (KnownAgents)
+| project AppId, NewUserAgent = UserAgent, Requests, Tenants, IPs, FirstSeen, LastSeen
+| order by Tenants desc
+

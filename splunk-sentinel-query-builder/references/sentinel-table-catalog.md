@@ -34,6 +34,7 @@ search *
 | `AADNonInteractiveUserSignInLogs` | Sign-ins performed by a client on behalf of a user with no user interaction. Note that this name does capitalise the `I`. | [Entra ID connector data types](https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory#microsoft-entra-id-data-connector-data-types) |
 | `AuditLogs` | Directory activity: user and group management, application and directory changes. | [Entra ID connector data types](https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory#microsoft-entra-id-data-connector-data-types) |
 | `AADServicePrincipalSignInLogs` | Sign-ins by service principals (applications), as opposed to users. Needed for OAuth-application abuse hunts. | [AADServicePrincipalSignInLogs table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadserviceprincipalsigninlogs) |
+| `MicrosoftGraphActivityLogs` | Microsoft Graph API request telemetry (AppId, IPAddress, UserAgent, request URI). Needed to baseline a vendor application's normal user-agent and alert on drift. | [MicrosoftGraphActivityLogs table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/microsoftgraphactivitylogs) |
 
 ## Azure platform and workspace operations
 
