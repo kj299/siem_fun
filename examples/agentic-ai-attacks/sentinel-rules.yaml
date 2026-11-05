@@ -42,8 +42,15 @@ entityMappings:
   fieldMappings:
   - identifier: Address
     columnName: Src
-suppressionEnabled: true
-suppressionDuration: PT24H
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -91,8 +98,15 @@ entityMappings:
   fieldMappings:
   - identifier: HostName
     columnName: DeviceName
-suppressionEnabled: true
-suppressionDuration: PT24H
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -141,8 +155,15 @@ entityMappings:
   fieldMappings:
   - identifier: Name
     columnName: AccountName
-suppressionEnabled: true
-suppressionDuration: PT24H
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -191,8 +212,15 @@ entityMappings:
   fieldMappings:
   - identifier: FullName
     columnName: Actor
-suppressionEnabled: true
-suppressionDuration: PT24H
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -264,8 +292,15 @@ entityMappings:
   fieldMappings:
   - identifier: Address
     columnName: AttackerIp
-suppressionEnabled: true
-suppressionDuration: PT24H
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -324,8 +359,15 @@ entityMappings:
   fieldMappings:
   - identifier: Address
     columnName: IPAddress
-suppressionEnabled: true
-suppressionDuration: PT24H
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT24H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -384,8 +426,15 @@ entityMappings:
   fieldMappings:
   - identifier: Address
     columnName: SrcIpAddr
-suppressionEnabled: true
+suppressionEnabled: false
 suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -420,8 +469,15 @@ entityMappings:
   fieldMappings:
   - identifier: Address
     columnName: IPAddress
-suppressionEnabled: true
+suppressionEnabled: false
 suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -463,7 +519,14 @@ entityMappings:
   - identifier: HostName
     columnName: DeviceName
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -509,7 +572,14 @@ entityMappings:
   - identifier: Address
     columnName: SourceIpAddress
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -542,14 +612,22 @@ entityMappings:
   - identifier: Address
     columnName: SrcIpAddr
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
 id: 63ba72bf-e1db-5182-a61a-b45daff39a72
 name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
 description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (125 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, AhnLab,
-  NorForge, Gambit, PLURA/FSS and Nextron Valhalla). Upload sentinel_watchlist.csv as watchlist alias ArtexCairnIocs with search key Ioc. Status: needs_validation.'
+  NorForge, Gambit, PLURA/FSS and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload it as
+  a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -597,7 +675,14 @@ entityMappings:
   - identifier: Address
     columnName: RemoteIP
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -633,7 +718,14 @@ entityMappings:
   - identifier: HostName
     columnName: DeviceName
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -675,7 +767,14 @@ entityMappings:
   - identifier: HostName
     columnName: DeviceName
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -708,7 +807,14 @@ entityMappings:
   - identifier: Address
     columnName: SrcIpAddr
 suppressionEnabled: false
-suppressionDuration: PT5H
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled
 ---
@@ -746,7 +852,14 @@ entityMappings:
   fieldMappings:
   - identifier: HostName
     columnName: DeviceName
-suppressionEnabled: true
+suppressionEnabled: false
 suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
 version: 1.0.0
 kind: Scheduled

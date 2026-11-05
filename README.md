@@ -80,7 +80,8 @@ siem_fun/
 |   |   |   |-- agt_scheduled_clients.csv
 |   |   |   |-- agt_sp_change_actors.csv
 |   |   |   |-- agt_web_proc_pairs.csv
-|   |   |   `-- llm_api_domains.csv
+|   |   |   |-- llm_api_domains.csv
+|   |   |   `-- sentinel_watchlist.csv
 |   |   |-- attack-navigator-layer.json
 |   |   |-- hunting.kql
 |   |   |-- iocs.csv
