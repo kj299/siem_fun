@@ -625,7 +625,7 @@ kind: Scheduled
 ---
 id: 63ba72bf-e1db-5182-a61a-b45daff39a72
 name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
-description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (145 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
+description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (143 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
   AhnLab, NorForge, Gambit, PLURA/FSS and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload
   it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
 severity: High
