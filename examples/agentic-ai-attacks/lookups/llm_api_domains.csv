@@ -1,0 +1,8 @@
+llm_domain,provider,basis,snapshot
+api.deepseek.com,DeepSeek,ARTEX primary backend (Zscaler ThreatLabz 2026-10-14; CrowdStrike via THN),2026-11-05
+open.bigmodel.cn,Zhipu GLM,ARTEX supplementary backend (Zscaler ThreatLabz 2026-10-14),2026-11-05
+api.x.ai,xAI Grok,ARTEX supplementary backend (Zscaler ThreatLabz 2026-10-14),2026-11-05
+api.anthropic.com,Anthropic,listed as LLM-use signal (Zscaler ThreatLabz 2026-10-14),2026-11-05
+xcai.pro,reseller,likely DeepSeek reseller for ARTEX (CrowdStrike via THN 2026-10-08),2026-11-05
+api.openai.com,OpenAI,ARTEX accepts any OpenAI-compatible endpoint (CSA 2026-10-28) - provider coverage,2026-11-05
+generativelanguage.googleapis.com,Google Gemini,provider coverage (SCARLET LOOP configured Gemini; THN 2026-10-08),2026-11-05

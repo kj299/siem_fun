@@ -1,0 +1,113 @@
+// ===== Hunting queries (run ad hoc; not scheduled rules). Status: needs_validation =====
+
+// --- H-AGT-007  Zammad CVE-2026-102489 session material in error output -------------------------
+// DIVD-2026-00015's own IoC check (cve-2026-102489_ioc_check_script_v2.sh) greps production.log,
+// railsserver.log, websocket.log, scheduler.log and nginx logs for this. Ship those logs as Syslog or a
+// custom table first; <ZAMMAD_TABLE>/<RAW_COLUMN> are yours (e.g. Syslog/SyslogMessage).
+<ZAMMAD_TABLE>
+| where TimeGenerated > ago(60d)
+| where <RAW_COLUMN> matches regex @'ERROR -- :.*("Cookie"=>"|@clients=\{)'
+| extend Cookie = extract(@'"Cookie"=>"([^"]*)"', 1, <RAW_COLUMN>)
+| summarize Hits = count(), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Cookies = make_set(Cookie, 20) by Computer
+
+// --- H-AGT-010  Slow enumeration trajectory (port of Morpheus R-P-L7-010) ----------------------
+// Daily distinct paths per client climbing on a straight line while its busiest 10-minute window stays
+// under R-D-AGT-001's 200-path floor (same guard as the Splunk rule's peak lookup).
+let web = _Im_WebSession(starttime=ago(14d)) | extend Path = tostring(parse_url(Url).Path);
+let peak10 = web | summarize Paths = dcount(Path) by SrcIpAddr, bin(TimeGenerated, 10m) | summarize Peak10m = max(Paths) by SrcIpAddr;
+web
+| make-series Paths = dcount(Path) default = 0 on TimeGenerated step 1d by SrcIpAddr
+| extend (RSquare, Slope, Variance, RVariance, Interception, LineFit) = series_fit_line(Paths)
+| extend PeakDay = toint(series_stats_dynamic(Paths).max)
+| join kind=inner peak10 on SrcIpAddr
+| where Slope >= 10 and RSquare >= 0.8 and Peak10m <= 200
+| project SrcIpAddr, Slope = round(Slope, 1), RSquare = round(RSquare, 3), PeakDay, Peak10m, Paths
+
+// --- H-AGT-011  Off-hours concentration (Morpheus tc5_cadence idea; CERT-In: weekends/holidays) --
+// Share of a principal's sign-ins falling on Sat/Sun or 22:00-06:00 local this week vs its own prior share.
+let local_offset = 0h;  // set to your time zone offset
+SigninLogs
+| where TimeGenerated > ago(14d) and ResultType == "0"
+| extend T = TimeGenerated + local_offset
+| extend OffHours = dayofweek(T) in (0d, 6d) or hourofday(T) >= 22 or hourofday(T) < 6
+| extend Period = iff(TimeGenerated > ago(7d), "this_week", "prior")
+| summarize Share = round(todouble(countif(OffHours)) / count(), 3), N = count() by UserPrincipalName, Period
+| summarize ThisWeek = take_anyif(Share, Period == "this_week"), Prior = take_anyif(Share, Period == "prior"), N = sum(N) by UserPrincipalName
+| where ThisWeek >= 0.5 and Prior < 0.1
+
+// --- H-AGT-012  Service-principal sign-in burst. Microsoft saw 200+ sign-ins in under 4 minutes; the
+// 50-per-5-minute threshold below is deliberately lower so it also catches a slower variant - tune up if noisy.
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(14d)
+| summarize SignIns = count(), Ips = dcount(IPAddress), Resources = make_set(ResourceDisplayName, 10) by AppId, ServicePrincipalName, bin(TimeGenerated, 5m)
+| where SignIns > 50
+| order by SignIns desc
+
+// --- H-AGT-013  Script files written into web roots by the web server (polyglot upload) ---------
+DeviceFileEvents
+| where TimeGenerated > ago(14d)
+| where InitiatingProcessFileName in~ ("w3wp.exe","php-cgi.exe","httpd.exe","java.exe","node.exe","php-fpm","apache2","httpd","nginx","java","node")
+| where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|aspx|ashx|asmx)$"
+| project TimeGenerated, DeviceName, FolderPath, FileName, InitiatingProcessFileName, SHA256
+
+// --- H-AGT-014  CyberStrikeAI implant artifacts (Kaspersky Securelist 2026-11-02) -------------
+// Beacon and tool names, the SystemUpdate persistence pair, comsvcs MiniDump of LSASS and certutil
+// payload decoding, scored by how many distinct signals a host shows. The strongest network tell,
+// the X-Implant-Token header on every implant HTTP request, needs proxy or NDR logs that keep
+// request headers, so it is not queried here.
+let names = dynamic(["svchosts.exe", "svcmon32.exe", "wdiag2.exe"]);
+union
+  (DeviceFileEvents | where TimeGenerated > ago(30d) | where FileName in~ (names)
+     | project TimeGenerated, DeviceName, Signal = strcat("file ", tolower(FileName)), Detail = FolderPath),
+  (DeviceProcessEvents | where TimeGenerated > ago(30d)
+     | where (FileName =~ "schtasks.exe" and ProcessCommandLine has "SystemUpdate" and ProcessCommandLine has "create")
+          or (FileName =~ "rundll32.exe" and ProcessCommandLine has "comsvcs" and ProcessCommandLine has "MiniDump")
+          or (FileName =~ "certutil.exe" and ProcessCommandLine has "decode")
+     | project TimeGenerated, DeviceName, Signal = tolower(FileName), Detail = ProcessCommandLine),
+  (DeviceRegistryEvents | where TimeGenerated > ago(30d)
+     | where RegistryKey has @"\CurrentVersion\Run" and RegistryValueName =~ "SystemUpdate"
+     | project TimeGenerated, DeviceName, Signal = "run value SystemUpdate", Detail = RegistryValueData)
+| summarize Signals = make_set(Signal, 10), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| extend SignalCount = array_length(Signals)
+| order by SignalCount desc
+
+// --- H-AGT-015  Framework self-telemetry on egress (STRIX, CyberStrikeAI, PentAGI) ------------
+// These strings go to the frameworks' OWN LLM/observability/update endpoints, not to the target,
+// so STRIX's strip-markers prompt rule does not remove them. The header matches need a proxy that
+// logs request headers (<PROXY_HEADERS_TABLE>, e.g. a Zscaler/Netskope custom table or Defender
+// for Cloud Apps); the domain and user-agent matches run on standard tables. A host of yours
+// emitting any of these is likely running the framework.
+let fw_hosts = dynamic(["strix.ai", "strix.gateway.scarf.sh", "update.pentagi.com", "support.pentagi.com"]);
+let fw_ua = dynamic(["langfuse golang sdk", "artex-selfupdate"]);
+union isfuzzy=true
+  (DeviceNetworkEvents | where TimeGenerated > ago(30d) | extend u = tolower(RemoteUrl)
+     | extend Domain = iff(u has "://", tostring(parse_url(u).Host), tostring(split(u, "/")[0]))
+     | where Domain in (fw_hosts)
+     | project TimeGenerated, DeviceName, Signal = strcat("egress ", Domain), Detail = InitiatingProcessCommandLine),
+  (_Im_WebSession(starttime=ago(30d)) | where HttpUserAgent in (fw_ua)
+     | project TimeGenerated, DeviceName = SrcHostname, Signal = strcat("user-agent ", HttpUserAgent), Detail = Url),
+  // Header matches: enable only if your proxy logs request headers. Replace the table and column.
+  (<PROXY_HEADERS_TABLE> | where TimeGenerated > ago(30d)
+     | where <REQUEST_HEADERS_COLUMN> has "X-CyberStrike-Summarization"
+          or (<REQUEST_HEADERS_COLUMN> has "X-Title: Strix" and <REQUEST_HEADERS_COLUMN> has "strix.ai")
+     | project TimeGenerated, DeviceName = <CLIENT_COLUMN>, Signal = "framework LLM header", Detail = <URL_COLUMN>)
+| summarize Signals = make_set(Signal, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| order by LastSeen desc
+
+// --- H-AGT-016  OAuth application user-agent drift (Huntress ConnectWise method) --------------
+// The compromised ConnectWise apps normally call Graph as kiota-dotnet; the operator's token loop
+// used Python-urllib/3.12, one request per tenant a few minutes apart. Baseline each watched app's
+// user-agent over the prior 14 days and alert when a new one appears in the last 24 hours. Needs
+// the Microsoft Graph activity logs connector. App IDs are the compromised ConnectWise ones.
+let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827"]);
+let baseline = MicrosoftGraphActivityLogs
+    | where TimeGenerated between (ago(14d) .. ago(1d)) and AppId in (watched)
+    | summarize KnownAgents = make_set(UserAgent) by AppId;
+MicrosoftGraphActivityLogs
+| where TimeGenerated > ago(1d) and AppId in (watched)
+| summarize Requests = count(), Tenants = dcount(TenantId), IPs = make_set(IPAddress, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by AppId, UserAgent
+| join kind=leftouter baseline on AppId
+| where isnull(KnownAgents) or UserAgent !in (KnownAgents)
+| project AppId, NewUserAgent = UserAgent, Requests, Tenants, IPs, FirstSeen, LastSeen
+| order by Tenants desc
+

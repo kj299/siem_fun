@@ -83,3 +83,4 @@ references:
   translation_mapping: "../references/splunk-to-kql-mapping.md"
   sentinel_table_catalog: "../references/sentinel-table-catalog.md"
   model_guidance: "../references/model-guidance.md"
+  agentic_ai_attacks: "../references/agentic-ai-attacks.md"

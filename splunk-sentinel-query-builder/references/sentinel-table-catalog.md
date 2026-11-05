@@ -33,6 +33,8 @@ search *
 | `SigninLogs` | Interactive user sign-ins, where a user supplied an authentication factor. Note the lowercase `i` in `in`. | [Entra ID connector data types](https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory#microsoft-entra-id-data-connector-data-types) |
 | `AADNonInteractiveUserSignInLogs` | Sign-ins performed by a client on behalf of a user with no user interaction. Note that this name does capitalise the `I`. | [Entra ID connector data types](https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory#microsoft-entra-id-data-connector-data-types) |
 | `AuditLogs` | Directory activity: user and group management, application and directory changes. | [Entra ID connector data types](https://learn.microsoft.com/azure/sentinel/connect-azure-active-directory#microsoft-entra-id-data-connector-data-types) |
+| `AADServicePrincipalSignInLogs` | Sign-ins by service principals (applications), as opposed to users. Needed for OAuth-application abuse hunts. | [AADServicePrincipalSignInLogs table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/aadserviceprincipalsigninlogs) |
+| `MicrosoftGraphActivityLogs` | Microsoft Graph API request telemetry (AppId, IPAddress, UserAgent, request URI). Needed to baseline a vendor application's normal user-agent and alert on drift. | [MicrosoftGraphActivityLogs table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/microsoftgraphactivitylogs) |
 
 ## Azure platform and workspace operations
 
@@ -53,6 +55,7 @@ search *
 | `CommonSecurityLog` | CEF-formatted firewall, VPN, and web proxy events. | [UEBA data sources](https://learn.microsoft.com/azure/sentinel/ueba-reference#ueba-data-sources) |
 | `W3CIISLog` | IIS web server logs. | [Data source schema reference](https://learn.microsoft.com/azure/sentinel/data-source-schema-reference) |
 | `VMConnection` | VM Insights network connection records. | [Data source schema reference](https://learn.microsoft.com/azure/sentinel/data-source-schema-reference) |
+| `AWSCloudTrail` | AWS CloudTrail management and data events via the Amazon Web Services connector. Fields such as `EventName`, `UserIdentityArn`, `SessionIssuerArn`. | [AWSCloudTrail table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/awscloudtrail) |
 
 ## Office 365
 
@@ -87,6 +90,10 @@ enabled. Confirm the connector is on before scoping a query to them.
 | `DeviceProcessEvents` | Process creation and related endpoint events. | [DeviceProcessEvents table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/deviceprocessevents) |
 | `DeviceNetworkInfo` | Device network properties: adapters, IP and MAC addresses, connected networks. | [Advanced hunting schema tables](https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables#learn-the-schema-tables) |
 | `DeviceRegistryEvents` | Registry key and value creation and modification. | [Advanced hunting schema tables](https://learn.microsoft.com/defender-xdr/advanced-hunting-schema-tables#learn-the-schema-tables) |
+| `DeviceNetworkEvents` | Network connections and related events from the endpoint, including `RemoteUrl` and `RemoteIP`. | [DeviceNetworkEvents table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/devicenetworkevents) |
+| `DeviceFileEvents` | File creation, modification and other file system events, with `SHA256` and `MD5`. | [DeviceFileEvents table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/devicefileevents) |
+| `DeviceImageLoadEvents` | DLL loading events; the table for side-loading hunts. | [DeviceImageLoadEvents table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/deviceimageloadevents) |
+| `DeviceInfo` | Machine inventory including `DeviceType` (for example `Server`, `DomainController`). | [DeviceInfo table](https://learn.microsoft.com/azure/azure-monitor/reference/tables/deviceinfo) |
 
 ## Placeholders
 
