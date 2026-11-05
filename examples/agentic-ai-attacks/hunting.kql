@@ -49,3 +49,25 @@ DeviceFileEvents
 | where InitiatingProcessFileName in~ ("w3wp.exe","php-cgi.exe","httpd.exe","java.exe","node.exe","php-fpm","apache2","httpd","nginx","java","node")
 | where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|aspx|ashx|asmx)$"
 | project TimeGenerated, DeviceName, FolderPath, FileName, InitiatingProcessFileName, SHA256
+
+// --- H-AGT-014  CyberStrikeAI implant artifacts (Kaspersky Securelist 2026-11-02) -------------
+// Beacon and tool names, the SystemUpdate persistence pair, comsvcs MiniDump of LSASS and certutil
+// payload decoding, scored by how many distinct signals a host shows. The strongest network tell,
+// the X-Implant-Token header on every implant HTTP request, needs proxy or NDR logs that keep
+// request headers, so it is not queried here.
+let names = dynamic(["svchosts.exe", "svcmon32.exe", "wdiag2.exe"]);
+union
+  (DeviceFileEvents | where TimeGenerated > ago(30d) | where FileName in~ (names)
+     | project TimeGenerated, DeviceName, Signal = strcat("file ", tolower(FileName)), Detail = FolderPath),
+  (DeviceProcessEvents | where TimeGenerated > ago(30d)
+     | where (FileName =~ "schtasks.exe" and ProcessCommandLine has "SystemUpdate" and ProcessCommandLine has "create")
+          or (FileName =~ "rundll32.exe" and ProcessCommandLine has "comsvcs" and ProcessCommandLine has "MiniDump")
+          or (FileName =~ "certutil.exe" and ProcessCommandLine has "decode")
+     | project TimeGenerated, DeviceName, Signal = tolower(FileName), Detail = ProcessCommandLine),
+  (DeviceRegistryEvents | where TimeGenerated > ago(30d)
+     | where RegistryKey has @"\CurrentVersion\Run" and RegistryValueName =~ "SystemUpdate"
+     | project TimeGenerated, DeviceName, Signal = "run value SystemUpdate", Detail = RegistryValueData)
+| summarize Signals = make_set(Signal, 10), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| extend SignalCount = array_length(Signals)
+| order by SignalCount desc
+

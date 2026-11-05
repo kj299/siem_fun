@@ -116,11 +116,31 @@ fff3f501db2ec8e2f424eabd33f009c6aff82ae3332a7b3118ad4038b11275af,sha256,high,off
 dde132714981bd6af672ce7a09bcd8010da5d106f7f9d64f4672adfb283ab252,sha256,high,official ARTEX v0.3.14 release ZIP (windows-amd64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
 5b45c239f24c5cb8002a996963f80d7b50cacee4a00e13c0f08a3f694064d81f,sha256,high,official ARTEX v0.3.14 release ZIP (darwin-amd64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
 8a746590771e17146860c39fda44ed46d89b1749c90d8965f84acadf36613e0c,sha256,high,official ARTEX v0.3.14 release ZIP (darwin-arm64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
-artex-enrich/1.0,user_agent,high,ARTEX asset-enrichment probe,code:baarai
-artex-selfupdate,user_agent,high,"ARTEX self-update to api.github.com (outbound, from an ARTEX host)",code:jiwoochris_artex-global
-norma/0.4,user_agent,medium,Norma agent WebFetch (ARTEX engine; not ARTEX-exclusive per Nextron),code:norma44
-Mozilla/5.0 (spa-api-recon),user_agent,high,ARTEX api-recon skill,code:baarai
-Mozilla/5.0 (spa-api-recon spider),user_agent,high,ARTEX api-recon skill spider,code:baarai
-HexStrike-HTTP-Framework/1.0 (Advanced Security Testing),user_agent,medium,Hexstrike-AI (co-occurring framework),code:0x4m4_hexstrike-ai
-Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0),user_agent,medium,CyberStrikeAI webshell client (co-occurring),code:Ed1s0nZ_CyberStrikeAI
-PentAGI/1.0,user_agent,low,PentAGI search client (co-occurring),code:vxcontrol_pentagi
+artex-enrich/1.0,user_agent,high,ARTEX asset-enrichment probe,source code (baarai)
+artex-selfupdate,user_agent,high,"ARTEX self-update to api.github.com (outbound, from an ARTEX host)",source code (jiwoochris_artex-global)
+norma/0.4,user_agent,medium,Norma agent WebFetch (ARTEX engine; not ARTEX-exclusive per Nextron),source code (norma44)
+Mozilla/5.0 (spa-api-recon),user_agent,high,ARTEX api-recon skill,source code (baarai)
+Mozilla/5.0 (spa-api-recon spider),user_agent,high,ARTEX api-recon skill spider,source code (baarai)
+HexStrike-HTTP-Framework/1.0 (Advanced Security Testing),user_agent,high,HTTP testing framework session UA (hexstrike_server.py),framework source code (0x4m4/hexstrike-ai)
+Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0),user_agent,high,Webshell manager request user-agent (internal/handler/webshell.go),framework source code (Ed1s0nZ/CyberStrikeAI)
+PentAGI/1.0,user_agent,medium,SearXNG search client user-agent (backend/pkg/tools/searchers/searxng.go),framework source code (vxcontrol/pentagi)
+git/2.43.0,user_agent,low,"Strix git-repo probe header (strix/interface/utils.py); very generic, context only",framework source code (usestrix/strix)
+strix.gateway.scarf.sh,domain,medium,Strix telemetry endpoint; a host of yours reaching it is running Strix,framework source code (usestrix/strix)
+app.strix.ai,domain,low,Strix platform host,framework source code (usestrix/strix)
+CyberStrikeAI/1.7.4,user_agent,medium,FOFA API client user-agent (internal/handler/fofa.go),framework source code (Ed1s0nZ/CyberStrikeAI)
+tcp_beacon,user_agent,medium,Default TCP beacon user-agent when none set (internal/c2/tcp_beacon_server.go),framework source code (Ed1s0nZ/CyberStrikeAI)
+PentAGI-Installer,user_agent,low,Installer HTTP client user-agent (backend/cmd/installer),framework source code (vxcontrol/pentagi)
+update.pentagi.com,domain,medium,PentAGI update-check host; a host of yours reaching it is running PentAGI,framework source code (vxcontrol/pentagi)
+HexStrike-BrowserAgent/1.0 (Security Testing),user_agent,high,Headless-browser UA (hexstrike_server.py),framework source code (0x4m4/hexstrike-ai)
+212.11.64.250,ipv4,medium,"Server with the CyberStrikeAI banner on :8080, linked to FortiGate targeting (Team Cymru via Amazon)",Team Cymru 2026-03-02 (banner on :8080); Amazon 2026-02-20
+d726a8b4886c636f76ca6d30ef6a6ff4,md5,high,Windows beacon c:\windows\temp\svchosts.exe,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+2770562d104391b92b42671c270079bb,md5,high,Windows beacon svcmon32.exe (Windows Temp / ProgramData),Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+09e1da2afa1216ecc55648ec8e122d2a,md5,high,Linux beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+805b9e4ae74c903787416800999b8418,md5,high,Linux beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+29efd64dd3c7fe1e2b022b7ad73a1ba5,md5,high,renamed mimikatz wdiag2.exe used for DCSync and Golden Ticket,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+74f57b3e897a4960dcdd5b7e8a54f9df,md5,high,RogueWinRM.exe privilege-escalation tool,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+0bbd08af95f877f1d568b03de2eb76b4,md5,high,p1.ps1 reverse-shell PowerShell script,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+185.186.245.144,ipv4,high,C2 for the Windows beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+104.234.26.163,ipv4,high,payload delivery and Linux beacon C2,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+fastcdn.bar,domain,high,C2 for the Windows beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
+media.fastcdn.bar,domain,high,C2 for the Linux beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)

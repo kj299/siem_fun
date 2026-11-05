@@ -625,9 +625,9 @@ kind: Scheduled
 ---
 id: 63ba72bf-e1db-5182-a61a-b45daff39a72
 name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
-description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (125 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, AhnLab,
-  NorForge, Gambit, PLURA/FSS and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload it as
-  a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
+description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (145 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
+  AhnLab, NorForge, Gambit, PLURA/FSS and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload
+  it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -732,7 +732,8 @@ kind: Scheduled
 id: cb7ec1d3-addd-530b-b57c-ea66bcd5193e
 name: R-D-AGT-014 Agentic intrusion - ARTEX or CAIRN running on one of your hosts
 description: 'Process or file evidence of an agent framework on a host you own: the artex binary, ARTEX_* configuration, the artx5v directory and artex-probe-* files (CrowdStrike, GTIG), Cairn''s worker
-  token variable or worker image (oritera/Cairn; NorForge). Status: needs_validation.'
+  token variable or worker image (oritera/Cairn; NorForge), or a pull or run of a trojanized or unofficial ARTEX Docker image such as tomicdd/artex (Badbyte via The Hacker News 2026-11-05; the backdoored
+  build exposes an unauthenticated root shell). Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -752,9 +753,10 @@ relevantTechniques:
 - T1059
 query: |
   let marks = dynamic(["ARTEX_LLM_BASE_URL", "ARTEX_PG_DSN", "artx5v", "artex-probe-", "TSEC_AGENT_TOKEN", "cairn-worker-container", "artex-local:"]);
+  let images = dynamic(["tomicdd/artex", "congdonglinux/artex", "mianhuatang11/artex", "autumn26/artex", "andy1099zz/artex", "dgddw/artex", "ylh440104/artex"]);
   union
     (DeviceProcessEvents | where TimeGenerated > ago(15m)
-       | where FileName in~ ("artex", "artex.exe") or ProcessCommandLine has_any (marks)
+       | where FileName in~ ("artex", "artex.exe") or ProcessCommandLine has_any (marks) or ProcessCommandLine has_any (images)
        | project TimeGenerated, DeviceName, Evidence = ProcessCommandLine),
     (DeviceFileEvents | where TimeGenerated > ago(15m)
        | where FileName startswith "artex-probe-" or FolderPath has @"\artx5v\" or FileName matches regex @"^artex-[0-9.]+-[a-z]+-[a-z0-9]+\.zip$"
