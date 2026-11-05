@@ -128,6 +128,13 @@
    "showSubtechniques": true
   },
   {
+   "techniqueID": "T1056.003",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: S-RM Cyber Incident Response 2026-11-04.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
    "techniqueID": "T1059",
    "score": 2,
    "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: CERT-In CIAD-2026-0058; GTIG 2026-10-30.",
@@ -198,9 +205,16 @@
    "showSubtechniques": true
   },
   {
-   "techniqueID": "T1090.003",
+   "techniqueID": "T1090.002",
    "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: CrowdStrike; Zscaler; CERT-In.",
+   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1090.003",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: CrowdStrike; Zscaler; CERT-In; S-RM Cyber Incident Response 2026-11-04.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -241,8 +255,8 @@
   },
   {
    "techniqueID": "T1110.003",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Wiz; CrowdStrike.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Wiz; CrowdStrike; Unit 42 timely threat intel 2026-10-30.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -264,6 +278,13 @@
    "techniqueID": "T1134",
    "score": 1,
    "comment": "Frameworks: ARTEX. Sources: CrowdStrike 2026-10-29.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1136",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -290,22 +311,36 @@
   },
   {
    "techniqueID": "T1190",
-   "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI. Sources: GTIG 2026-10-30; Check Point Research 2025-09-02; TrendAI via The Hacker News 2026-10-27; Zscaler; DIVD-2026-00014; NorForge; CERT-In.",
+   "score": 4,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI. Sources: GTIG 2026-10-30; Check Point Research 2025-09-02; S-RM Cyber Incident Response 2026-11-04; TrendAI via The Hacker News 2026-10-27; Zscaler; DIVD-2026-00014; NorForge; CERT-In.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1195.002",
-   "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Badbyte via The Hacker News 2026-11-05; CERT-In CIAD-2026-0058 via The Hacker News; Microsoft 2026-10-21.",
+   "score": 4,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Badbyte via The Hacker News 2026-11-05; CERT-In CIAD-2026-0058 via The Hacker News; Check Point Research 2026-11-05; S-RM 2026-11-04; Microsoft 2026-10-21.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1199",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: S-RM Cyber Incident Response 2026-11-04.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1498",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1505.003",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, CAIRN, HexStrike-AI. Sources: Check Point Research 2025-09-02; CrowdStrike; NorForge; GTIG.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN, HexStrike-AI. Sources: Check Point Research 2025-09-02; CrowdStrike; NorForge; GTIG; S-RM Cyber Incident Response 2026-11-04.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -318,8 +353,15 @@
   },
   {
    "techniqueID": "T1528",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Unit 42 timely threat intel 2026-10-30.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1530",
    "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21.",
+   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -353,8 +395,8 @@
   },
   {
    "techniqueID": "T1552.001",
-   "score": 1,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Kaspersky Securelist 2026-11-02; CERT-In CIAD-2026-0058 via The Hacker News.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Check Point Research 2026-11-05; Kaspersky Securelist 2026-11-02; CERT-In CIAD-2026-0058 via The Hacker News.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -415,6 +457,13 @@
    "showSubtechniques": true
   },
   {
+   "techniqueID": "T1565.001",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
    "techniqueID": "T1567",
    "score": 1,
    "comment": "Frameworks: ARTEX. Sources: Zscaler ThreatLabz 2026-10-21.",
@@ -446,6 +495,13 @@
    "techniqueID": "T1580",
    "score": 1,
    "comment": "Frameworks: ARTEX. Sources: GTIG 2026-10-30.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1583.003",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05; S-RM 2026-11-04.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -485,6 +541,13 @@
    "showSubtechniques": true
   },
   {
+   "techniqueID": "T1594",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
    "techniqueID": "T1595.001",
    "score": 1,
    "comment": "Frameworks: CyberStrikeAI. Sources: Amazon Threat Intelligence 2026-02-20; Team Cymru 2026-03-02.",
@@ -500,8 +563,8 @@
   },
   {
    "techniqueID": "T1595.003",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Wiz 2026-10-22.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30; Wiz 2026-10-22.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -587,7 +650,7 @@
   },
   {
    "name": "evidence_rows",
-   "value": "100"
+   "value": "117"
   }
  ]
 }

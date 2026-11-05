@@ -586,7 +586,7 @@ kind: Scheduled
 id: eceb4f4f-d4c0-5663-a057-5032b8a58627
 name: R-D-AGT-011 Agentic intrusion - agent framework user-agent inbound
 description: 'A request carrying a user-agent compiled into ARTEX (artex-enrich/1.0, Mozilla/5.0 (spa-api-recon[ spider])), the Norma agent engine (norma/0.4), Hexstrike-AI, CyberStrikeAI or PentAGI. Read
-  from the frameworks'' source; confirmed in the wild by AhnLab and Wiz. Operators can change these. Status: needs_validation.'
+  from the frameworks'' source; confirmed in the wild by AhnLab and Wiz. Operators can change these. Unit 42 (2026-10-30) adds two self-describing agent strings. Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -603,7 +603,7 @@ relevantTechniques:
 query: |
   _Im_WebSession(starttime=ago(15m))
   | where HttpUserAgent startswith "artex-enrich/" or HttpUserAgent contains "spa-api-recon" or HttpUserAgent startswith "norma/"
-       or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/"
+       or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/" or HttpUserAgent contains "security-testing; authorized" or HttpUserAgent contains "recon-audit"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10)
             by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), HttpUserAgent
 entityMappings:
@@ -625,9 +625,9 @@ kind: Scheduled
 ---
 id: 63ba72bf-e1db-5182-a61a-b45daff39a72
 name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
-description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (144 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
-  AhnLab, NorForge, Gambit, PLURA/FSS and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload
-  it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
+description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (154 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
+  AhnLab, NorForge, Gambit, PLURA/FSS, Unit 42, S-RM, Check Point Research and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source);
+  upload it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -733,7 +733,8 @@ id: cb7ec1d3-addd-530b-b57c-ea66bcd5193e
 name: R-D-AGT-014 Agentic intrusion - ARTEX or CAIRN running on one of your hosts
 description: 'Process or file evidence of an agent framework on a host you own: the artex binary, ARTEX_* configuration, the artx5v directory and artex-probe-* files (CrowdStrike, GTIG), Cairn''s worker
   token variable or worker image (oritera/Cairn; NorForge), or a pull or run of a trojanized or unofficial ARTEX Docker image such as tomicdd/artex (Badbyte via The Hacker News 2026-11-05; the backdoored
-  build exposes an unauthenticated root shell). Status: needs_validation.'
+  build exposes an unauthenticated root shell). Also covers the /opt/artex/data/task/ working folder S-RM found on compromised hosts (2026-11-04) and the ScopeWeaver derivative (renamed binary, SCOPEWEAVER_LLM_*
+  variables). Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -752,14 +753,14 @@ relevantTechniques:
 - T1588
 - T1059
 query: |
-  let marks = dynamic(["ARTEX_LLM_BASE_URL", "ARTEX_PG_DSN", "artx5v", "artex-probe-", "TSEC_AGENT_TOKEN", "cairn-worker-container", "artex-local:"]);
+  let marks = dynamic(["SCOPEWEAVER_LLM_", "/opt/artex/", "ARTEX_LLM_BASE_URL", "ARTEX_PG_DSN", "artx5v", "artex-probe-", "TSEC_AGENT_TOKEN", "cairn-worker-container", "artex-local:"]);
   let images = dynamic(["tomicdd/artex", "congdonglinux/artex", "mianhuatang11/artex", "autumn26/artex", "andy1099zz/artex", "dgddw/artex", "ylh440104/artex"]);
   union
     (DeviceProcessEvents | where TimeGenerated > ago(15m)
-       | where FileName in~ ("artex", "artex.exe") or ProcessCommandLine has_any (marks) or ProcessCommandLine has_any (images)
+       | where FileName in~ ("artex", "artex.exe", "scopeweaver", "scopeweaver.exe") or ProcessCommandLine has_any (marks) or ProcessCommandLine has_any (images)
        | project TimeGenerated, DeviceName, Evidence = ProcessCommandLine),
     (DeviceFileEvents | where TimeGenerated > ago(15m)
-       | where FileName startswith "artex-probe-" or FolderPath has @"\artx5v\" or FileName matches regex @"^artex-[0-9.]+-[a-z]+-[a-z0-9]+\.zip$"
+       | where FileName startswith "artex-probe-" or FolderPath contains "/opt/artex/data/task" or FileName startswith "scopeweaver" or FolderPath has @"\artx5v\" or FileName matches regex @"^artex-[0-9.]+-[a-z]+-[a-z0-9]+\.zip$"
             or (FileName =~ "mitmproxy-ca-cert.pem" and FolderPath has "_ca")
        | project TimeGenerated, DeviceName, Evidence = FolderPath)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Evidence = make_set(Evidence, 10) by DeviceName
