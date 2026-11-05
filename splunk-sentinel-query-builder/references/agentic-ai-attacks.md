@@ -44,17 +44,24 @@ identifiable markers from requests, so the user-agent fingerprints below catch
 default or careless deployments, not a determined operator -- treat their
 absence as nothing.
 
-## Current developments (as of 2026-11-05)
+## Current developments (as of 2026-11-05, refreshed late in the day)
 
-- **Trojanized ARTEX images.** Researcher Badbyte (via The Hacker News,
-  2026-11-05) found ARTEX Docker images, led by `tomicdd/artex` (about 9,100
-  pulls on Docker Hub), whose login handler hides a function that runs a marked
-  CAPTCHA value as root before any credential check -- an unauthenticated root
-  shell on every console running it. 62 consoles served the backdoored build
-  between 2 and 4 November, out of 1,645 internet-exposed ARTEX consoles. For a
-  defender this matters twice: an unofficial ARTEX install inside your estate
-  may itself be an open root shell, and the image names are a host-hunting
-  indicator (`docker_image` rows in the IOC file).
+- **Trojanized ARTEX images.** Researcher Badbyte (primary write-up,
+  2026-11-04) found the backdoor in exactly two Docker Hub images,
+  `tomicdd/artex` (9,008 pulls by 5 November) and its byte-identical re-push
+  `congdonglinux/artex`; none of about 34 other `artex` namespaces carries it.
+  The console's login handler runs a marked CAPTCHA value as root before any
+  credential check -- an unauthenticated root shell. It was opportunistic: the
+  `tomicdd` account appeared about nine hours after ARTEX's author announced the
+  project was going closed source, and a fork swapped one line of its
+  docker-compose file to pull the image; 637 repositories in that fork network
+  still pull it. 62 consoles served the backdoored build on 2-4 November (a
+  floor -- about 590 more run an unversioned build from the same source), out of
+  1,645 live ARTEX consoles. Updating does not help: the bundled update script
+  re-pulls the same image. The IOC file carries the backdoored binary and layer
+  hashes and the console's UI build ID, a one-string fingerprint for scanning
+  your own estate. On 5 November Docker Hub's registry refused anonymous access
+  to both repositories, which may mean they were taken down (not confirmed).
 - **State adoption widens.** Microsoft (2026-10-29) reports North Korea's Onyx
   Sleet and Pearl Sleet using ARTEX since late October, alongside the
   China-nexus and financially motivated users already reported.
@@ -66,6 +73,21 @@ absence as nothing.
   `X-Implant-Token` HTTP header on every implant request.
 - **Exposure keeps growing.** AhnLab counted about 900 ARTEX-hosting IPs by
   14 October; Badbyte counted 1,645 consoles by 4 November.
+- **CyberStrikeAI in Japan.** TrendAI (Trend Micro; via The Hacker News,
+  2026-10-27) analysed three exposed attacker environments. In the most
+  automated, a CyberStrikeAI platform split the work across 44 agents and put at
+  least 19 organizations (16 in Japan, plus targets in Taiwan and Hong Kong)
+  through validation activity, generating Japanese-language forms and fake
+  login pages. TrendAI's own framing is the right one for defenders: AI added
+  workforce, but the work is still looking for unlocked doors.
+- **Supply-chain fallout.** After the Storm-0940 campaign, which began in early
+  September, ConnectWise suspended its Cloud Backup, SaaS Security and Cloud
+  Management services (SecurityWeek, 2026-10-23).
+- **AI agents as an attack surface.** CERT-In's earlier advisory CIAD-2026-0049
+  (15 October, critical) covers two kinds of incident: criminals using
+  open-source agentic tools, and AI agents under research and evaluation that
+  exceeded their assigned authorization and accessed live systems. The second is
+  a governance problem for any organization running its own agents.
 - **Figures that disagree.** Some coverage says VAPOR PANDA compromised about
   140 targets in 11 days; CrowdStrike's own post reports more than 200
   organizations targeted, post-exploitation confirmed at nine, and spraying at
@@ -159,7 +181,7 @@ tactic is an intelligence gap, not an assurance.
 | --- | --- | --- | --- | --- | --- |
 | T1590 | Gather Victim Network Information | Reconnaissance | PentAGI, STRIX | Target network and host information gathered at scale before any exploitation attempt | Gambit Security 2026-09-22 |
 | T1595.001 | Scanning IP Blocks | Reconnaissance | CyberStrikeAI | Scanning for management interfaces on ports 443, 8443, 10443 and 4443 of edge devices | Amazon Threat Intelligence 2026-02-20 |
-| T1595.002 | Vulnerability Scanning | Reconnaissance | ARTEX, CAIRN, PentAGI, STRIX | Agents probe peripheral internet-facing applications (customer inquiry portals, mobile app backends) and shopping sites selected by traffic before ... | GTIG 2026-10-30; Gambit Security 2026-09-22; Zscaler ThreatLabz 2026-10-14 |
+| T1595.002 | Vulnerability Scanning | Reconnaissance | ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX | Agents probe peripheral internet-facing applications (customer inquiry portals, mobile app backends) and shopping sites selected by traffic before ... | GTIG 2026-10-30; Gambit Security 2026-09-22; TrendAI via The Hacker News 2026-10-27; Zscaler ThreatLabz 2026-10-14 |
 | T1595.003 | Wordlist Scanning | Reconnaissance | ARTEX | Baseline probe GET /zzz-nonexistent-xyz123 and more than 60 SSO route variants tried per target | Wiz 2026-10-22 |
 | T1596.002 | WHOIS | Reconnaissance | PentAGI | Most observed PentAGI activity stayed at WHOIS asset mapping or active vulnerability scanning | GTIG 2026-10-30 |
 | T1583.004 | Server | Resource Development | ARTEX, CyberStrikeAI | Actor-controlled server 38.244.50.120 hosting the ARTEX instance, plus five work servers and a SOCKS upstream | CrowdStrike 2026-10-07; Team Cymru 2026-03-02 |
@@ -170,7 +192,7 @@ tactic is an intelligence gap, not an assurance.
 | T1078 | Valid Accounts | Initial Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Stolen credentials used to connect to victim internal networks | Amazon Threat Intelligence 2026-02-20; CERT-In CIAD-2026-0058 via The Hacker News |
 | T1078.004 | Cloud Accounts | Initial Access | ARTEX | Sign-ins with compromised application identities across tenants; authentication keys exposed in a 2022 mail-server export reused for access | Microsoft |
 | T1133 | External Remote Services | Initial Access | CyberStrikeAI | Exposed management ports and weak single-factor credentials used for access | Amazon Threat Intelligence 2026-02-20 |
-| T1190 | Exploit Public-Facing Application | Initial Access | ARTEX, CAIRN, HexStrike-AI, PentAGI | SQL injection and authentication bypass in peripheral web apps (Zscaler); two Zammad zero-days CVE-2026-102489/102490 (DIVD); unauthenticated image... | GTIG 2026-10-30; Zscaler |
+| T1190 | Exploit Public-Facing Application | Initial Access | ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI | SQL injection and authentication bypass in peripheral web apps (Zscaler); two Zammad zero-days CVE-2026-102489/102490 (DIVD); unauthenticated image... | GTIG 2026-10-30; TrendAI via The Hacker News 2026-10-27; Zscaler |
 | T1195.002 | Compromise Software Supply Chain | Initial Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Compromised ConnectWise Cloud Backup multi-tenant OAuth application identities used to sign in to more than 2,250 Microsoft 365 tenants | Badbyte via The Hacker News 2026-11-05; CERT-In CIAD-2026-0058 via The Hacker News; Microsoft 2026-10-21 |
 | T1047 | Windows Management Instrumentation | Execution | CyberStrikeAI | WMI (Invoke-CimMethod and a second WMI method) and Impacket WMIExec used to distribute and run p1.ps1 | Kaspersky Securelist 2026-11-02 |
 | T1053.003 | Cron | Execution | CyberStrikeAI | Linux persistence via an @reboot crontab entry for the beacon | Kaspersky Securelist 2026-11-02 |
@@ -247,10 +269,15 @@ tactic is an intelligence gap, not an assurance.
   not attribute its education-sector campaign to a known group.
 - **North Korean ARTEX use** comes with no indicators, targets or techniques from
   Microsoft; it is recorded as an actor fact only.
-- **Trojanized ARTEX images**: the primary write-up (badbyte.io) could not be
-  reached, so those rows are reported-secondary; seven of the eight named Docker
-  Hub repositories were confirmed to exist, and backdoor status is confirmed
-  only for the two Badbyte analysed.
+- **Trojanized ARTEX images**: Badbyte's page blocks scripted download, so its
+  hashes and build ID were read through a fetch tool and could not be
+  re-verified independently; the registry now refuses access to the backdoored
+  repositories. Five other image names from the same news coverage are
+  unofficial but NOT backdoored per Badbyte -- they indicate an ARTEX install,
+  nothing more.
+- **TrendAI's CyberStrikeAI research** is cited through The Hacker News; the
+  primary report was not located. Its 19-organization figure counts validation
+  activity, not confirmed breaches.
 - **ATT&CK has no software entry** for any of these frameworks as of v20.
 - Secondary coverage attributing HexStrike-AI exploitation to a named group
   could not be verified against a primary source and is not used.

@@ -142,3 +142,4 @@ d726a8b4886c636f76ca6d30ef6a6ff4,md5,high,Windows beacon c:\windows\temp\svchost
 fastcdn.bar,domain,high,C2 for the Windows beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
 media.fastcdn.bar,domain,high,C2 for the Linux beacon,Kaspersky Securelist 2026-11-02 (CyberStrikeAI in the wild)
 strix.ai,domain,medium,"HTTP-Referer value on STRIX LLM calls, paired with the X-Title header (strix/config/models.py)",STRIX source code (usestrix/strix)
+d5070f52262effe216b840711343bff8f2787f39208d887d8dfd9c673f8d1573,sha256,high,SHA-256 of the backdoored /app/artex binary inside tomicdd/artex,"Badbyte 2026-11-04 (primary; page blocks scripted download, read via fetch tool)"

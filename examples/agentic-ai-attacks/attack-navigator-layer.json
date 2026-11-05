@@ -290,8 +290,8 @@
   },
   {
    "techniqueID": "T1190",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, CAIRN, HexStrike-AI, PentAGI. Sources: GTIG 2026-10-30; Check Point Research 2025-09-02; Zscaler; DIVD-2026-00014; NorForge; CERT-In.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI. Sources: GTIG 2026-10-30; Check Point Research 2025-09-02; TrendAI via The Hacker News 2026-10-27; Zscaler; DIVD-2026-00014; NorForge; CERT-In.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -493,8 +493,8 @@
   },
   {
    "techniqueID": "T1595.002",
-   "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN, PentAGI, STRIX. Sources: GTIG 2026-10-30; Gambit Security 2026-09-22; Zscaler ThreatLabz 2026-10-14; NorForge 2026-10-19.",
+   "score": 4,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX. Sources: GTIG 2026-10-30; Gambit Security 2026-09-22; TrendAI via The Hacker News 2026-10-27; Zscaler ThreatLabz 2026-10-14; NorForge 2026-10-19.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -568,7 +568,7 @@
    "#1f5f8b"
   ],
   "minValue": 1,
-  "maxValue": 3
+  "maxValue": 4
  },
  "legendItems": [
   {
@@ -587,7 +587,7 @@
   },
   {
    "name": "evidence_rows",
-   "value": "98"
+   "value": "100"
   }
  ]
 }
