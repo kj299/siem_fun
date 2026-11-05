@@ -69,6 +69,24 @@ siem_fun/
 |-- .env.example
 |-- .gitignore
 |-- examples/
+|   |-- agentic-ai-attacks/
+|   |   |-- lookups/
+|   |   |   |-- README.md
+|   |   |   |-- agt_asset_ip.csv
+|   |   |   |-- agt_host_history.csv
+|   |   |   |-- agt_host_llm_seen.csv
+|   |   |   |-- agt_host_roles.csv
+|   |   |   |-- agt_iocs.csv
+|   |   |   |-- agt_scheduled_clients.csv
+|   |   |   |-- agt_sp_change_actors.csv
+|   |   |   |-- agt_web_proc_pairs.csv
+|   |   |   `-- llm_api_domains.csv
+|   |   |-- attack-navigator-layer.json
+|   |   |-- hunting.kql
+|   |   |-- iocs.csv
+|   |   |-- sentinel-rules.yaml
+|   |   |-- splunk-morpheus-native.conf
+|   |   `-- splunk-savedsearches.conf
 |   |-- golden-prompts.md
 |   `-- golden-run.json
 |-- CLAUDE.md
@@ -78,6 +96,7 @@ siem_fun/
 |   |-- tests/
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
+|   |   |-- test_agentic_ai_attacks.py
 |   |   |-- test_grade_golden_output.py
 |   |   |-- test_record_golden_run.py
 |   |   `-- validate-skill-pack.tests.ps1
@@ -116,6 +135,7 @@ siem_fun/
     |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
+        |-- agentic-ai-attacks.md
         |-- cim-vendor-alignment.md
         |-- data-dictionary-integration.md
         |-- examples-and-troubleshooting.md
@@ -487,6 +507,8 @@ To get the best results with either model:
 - [references/data-dictionary-integration.md](splunk-sentinel-query-builder/references/data-dictionary-integration.md): internal URL usage
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning
+- [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches, Sentinel rules, hunting KQL, lookups)
+- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other
 - [splunk-enrichment-query-builder/SKILL.md](splunk-enrichment-query-builder/SKILL.md): multi-index enrichment skill instructions
 - [splunk-enrichment-query-builder/references/splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM mappings
 - [splunk-enrichment-query-builder/references/multi-index-patterns.md](splunk-enrichment-query-builder/references/multi-index-patterns.md): SPL patterns for multi-index search and iteration

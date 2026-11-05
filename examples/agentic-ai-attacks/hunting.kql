@@ -1,0 +1,51 @@
+// ===== Hunting queries (run ad hoc; not scheduled rules). Status: needs_validation =====
+
+// --- H-AGT-007  Zammad CVE-2026-102489 session material in error output -------------------------
+// DIVD-2026-00015's own IoC check (cve-2026-102489_ioc_check_script_v2.sh) greps production.log,
+// railsserver.log, websocket.log, scheduler.log and nginx logs for this. Ship those logs as Syslog or a
+// custom table first; <ZAMMAD_TABLE>/<RAW_COLUMN> are yours (e.g. Syslog/SyslogMessage).
+<ZAMMAD_TABLE>
+| where TimeGenerated > ago(60d)
+| where <RAW_COLUMN> matches regex @'ERROR -- :.*("Cookie"=>"|@clients=\{)'
+| extend Cookie = extract(@'"Cookie"=>"([^"]*)"', 1, <RAW_COLUMN>)
+| summarize Hits = count(), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Cookies = make_set(Cookie, 20) by Computer
+
+// --- H-AGT-010  Slow enumeration trajectory (port of Morpheus R-P-L7-010) ----------------------
+// Daily distinct paths per client climbing on a straight line while its busiest 10-minute window stays
+// under R-D-AGT-001's 200-path floor (same guard as the Splunk rule's peak lookup).
+let web = _Im_WebSession(starttime=ago(14d)) | extend Path = tostring(parse_url(Url).Path);
+let peak10 = web | summarize Paths = dcount(Path) by SrcIpAddr, bin(TimeGenerated, 10m) | summarize Peak10m = max(Paths) by SrcIpAddr;
+web
+| make-series Paths = dcount(Path) default = 0 on TimeGenerated step 1d by SrcIpAddr
+| extend (RSquare, Slope, Variance, RVariance, Interception, LineFit) = series_fit_line(Paths)
+| extend PeakDay = toint(series_stats_dynamic(Paths).max)
+| join kind=inner peak10 on SrcIpAddr
+| where Slope >= 10 and RSquare >= 0.8 and Peak10m <= 200
+| project SrcIpAddr, Slope = round(Slope, 1), RSquare = round(RSquare, 3), PeakDay, Peak10m, Paths
+
+// --- H-AGT-011  Off-hours concentration (Morpheus tc5_cadence idea; CERT-In: weekends/holidays) --
+// Share of a principal's sign-ins falling on Sat/Sun or 22:00-06:00 local this week vs its own prior share.
+let local_offset = 0h;  // set to your time zone offset
+SigninLogs
+| where TimeGenerated > ago(14d) and ResultType == "0"
+| extend T = TimeGenerated + local_offset
+| extend OffHours = dayofweek(T) in (0d, 6d) or hourofday(T) >= 22 or hourofday(T) < 6
+| extend Period = iff(TimeGenerated > ago(7d), "this_week", "prior")
+| summarize Share = round(todouble(countif(OffHours)) / count(), 3), N = count() by UserPrincipalName, Period
+| summarize ThisWeek = take_anyif(Share, Period == "this_week"), Prior = take_anyif(Share, Period == "prior"), N = sum(N) by UserPrincipalName
+| where ThisWeek >= 0.5 and Prior < 0.1
+
+// --- H-AGT-012  Service-principal sign-in burst. Microsoft saw 200+ sign-ins in under 4 minutes; the
+// 50-per-5-minute threshold below is deliberately lower so it also catches a slower variant - tune up if noisy.
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(14d)
+| summarize SignIns = count(), Ips = dcount(IPAddress), Resources = make_set(ResourceDisplayName, 10) by AppId, ServicePrincipalName, bin(TimeGenerated, 5m)
+| where SignIns > 50
+| order by SignIns desc
+
+// --- H-AGT-013  Script files written into web roots by the web server (polyglot upload) ---------
+DeviceFileEvents
+| where TimeGenerated > ago(14d)
+| where InitiatingProcessFileName in~ ("w3wp.exe","php-cgi.exe","httpd.exe","java.exe","node.exe","php-fpm","apache2","httpd","nginx","java","node")
+| where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|aspx|ashx|asmx)$"
+| project TimeGenerated, DeviceName, FolderPath, FileName, InitiatingProcessFileName, SHA256

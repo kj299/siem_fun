@@ -1,0 +1,126 @@
+ioc,ioc_type,confidence,context,source
+nginxmysql.com,domain,high,BLOODALCHEMY C2 (VAPOR PANDA),CrowdStrike 2026-10-29 VAPOR PANDA
+45.153.126.223,ipv4,high,resolution of nginxmysql.com,CrowdStrike 2026-10-29 VAPOR PANDA
+sqlserver-sqlite.com,domain,high,BLOODALCHEMY C2,CrowdStrike 2026-10-29 VAPOR PANDA
+89.46.234.50,ipv4,high,resolution of sqlserver-sqlite.com,CrowdStrike 2026-10-29 VAPOR PANDA
+www.ddduuuppp.com,domain,high,BLOODALCHEMY C2,CrowdStrike 2026-10-29 VAPOR PANDA
+192.121.47.20,ipv4,high,resolution of www.ddduuuppp.com,CrowdStrike 2026-10-29 VAPOR PANDA
+49fe70419fd19b81ca8d730a6ef7c1ec71b681d60b390761070d42686c7d2068,sha256,high,GameHook binary renamed svchost.exe (side-load host),CrowdStrike 2026-10-29 VAPOR PANDA
+3fb5a9fb3e2cb1d6208966bd4e55d10282d19c7250d827efa560463d60a12ee4,sha256,high,BLOODALCHEMY loader graphics-hook-filter64.dll,CrowdStrike 2026-10-29 VAPOR PANDA
+364251838edfcf5ef1107fa692da3c5bd9a540482449f645992830134bf807ab,sha256,high,BLOODALCHEMY payload graphics-hook_config.bin,CrowdStrike 2026-10-29 VAPOR PANDA
+38.244.50.120,ipv4,high,actor-controlled ARTEX host; open dir :18899,CrowdStrike 2026-10-07 South Korea finance
+xcai.pro,domain,medium,LLM API reseller used as ARTEX model gateway,CrowdStrike 2026-10-07 South Korea finance
+101.53.80.20,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+205.214.59.31,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+124.155.252.63,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+154.201.79.246,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+23.248.249.90,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+23.158.220.98,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+103.248.148.84,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+203.160.133.172,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+209.209.85.38,ipv4,medium,actor proxy (CrowdStrike Table 1),CrowdStrike 2026-10-07 South Korea finance
+144.172.64.128,ipv4,high,Storm-0940 sign-ins / Graph; .99 = Oct 10-14 spray source,Microsoft 2026-10-21 Storm-0940
+144.172.64.99,ipv4,high,Storm-0940 sign-ins / Graph; .99 = Oct 10-14 spray source,Microsoft 2026-10-21 Storm-0940
+144.172.64.60,ipv4,high,Storm-0940 sign-ins / Graph; .99 = Oct 10-14 spray source,Microsoft 2026-10-21 Storm-0940
+187.15.88.186,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
+187.15.90.217,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
+187.15.89.186,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
+506e08f9-6e9a-4da4-942b-a099a03644ae,entra_app_id,high,"compromised multi-tenant app: ConnectWise Cloud Backup (LEGIT app, abused)",Microsoft 2026-10-21 Storm-0940
+24205314-2b89-4e07-a2a4-579e898a5640,entra_app_id,high,"compromised multi-tenant app: ConnectWise - MS Teams (LEGIT app, abused)",Microsoft 2026-10-21 Storm-0940
+0de14c77-b9b0-4137-9360-34878a929827,entra_app_id,high,"compromised multi-tenant app: ConnectWise - MS Graph (LEGIT app, abused)",Microsoft 2026-10-21 Storm-0940
+104.194.150.21,ipv4,high,Storm-0940 infrastructure (Wiz),Wiz 2026-10-22 Storm-0940
+167.88.172.97,ipv4,high,Storm-0940 infrastructure (Wiz),Wiz 2026-10-22 Storm-0940
+23.248.226.250,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
+23.248.226.251,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
+23.248.226.252,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
+23.248.226.253,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
+23.248.226.254,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
+161.8.161.140,ipv4,high,upstream SOCKS proxy :11005,Zscaler ThreatLabz 2026-10-21
+134.122.137.132,ipv4,medium,host with ARTEX open directory,AhnLab ASEC 2026-10-14
+204.194.51.54,ipv4,medium,host with ARTEX open directory,AhnLab ASEC 2026-10-14
+085f53a1ce8c634ac7b0d63e42b56b15,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+0c501aca4fc29efe47f122ddc9c1af85,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+0eb259067e565221109a3ee988e1faa3,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+220a1465b2c5ee3ec86861ee17a91e2f,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+2d13374c14bcaaa99ab00f16cc18b300,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+326bb512422930f723e8434d219bea15,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+4fff3a0e67210deea726a3bd8c0b625f,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+5881f74d3bb167e48f6e61c8d9c220e7,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+5a38c92fcf2772f65517485f3a23810e,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+5d151bb4512fc48932a83d3bc24ea806,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+6593d2601f967566ae1efe521ec7b470,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+773dc8997a50425fb4146161d747c10f,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+78c3efc26c8db056933da58032361706,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+8858508e75ac58ce586631101be87973,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+912e8bb04a86f34c76d7d9bad8b67685,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+baddd4d75a6980e0df8d47333d9472c3,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+be4033d98dd65437516a94048adc8ac5,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+fec5d7eb6cf4ed6cfbcd2c588bb761af,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
+129.212.181.253,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+134.185.91.25,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+64.20.39.190,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+129.212.181.23,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+74.82.60.23,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+34.175.107.233,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+18.183.215.124,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+104.28.162.188,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+104.28.164.188,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+104.28.164.196,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+104.28.166.183,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+104.28.155.179,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
+199.247.25.25,ipv4,high,Cairn cluster AIA0002 staging server,NorForge 2026-10-19 Inside Cairn
+199.247.27.2,ipv4,high,Cairn cluster AIA0002 staging server,NorForge 2026-10-19 Inside Cairn
+155.254.22.215,ipv4,high,agentic retail-intrusion infrastructure (staging/C2/exfil/skimmer),Gambit Security 2026-09-22
+209.126.4.170,ipv4,high,agentic retail-intrusion infrastructure (staging/C2/exfil/skimmer),Gambit Security 2026-09-22
+213.21.239.62,ipv4,high,agentic retail-intrusion infrastructure (staging/C2/exfil/skimmer),Gambit Security 2026-09-22
+172.245.224.188,ipv4,high,agentic retail-intrusion infrastructure (staging/C2/exfil/skimmer),Gambit Security 2026-09-22
+172.245.89.137,ipv4,high,agentic retail-intrusion infrastructure (staging/C2/exfil/skimmer),Gambit Security 2026-09-22
+medbooksource.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+traffic-analyzer.net,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+b8t.shop,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+cdn.netlfjs.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+x1opay.co,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+static-js.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+cdn.js-static.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+js-static.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+jsnetlify.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+netlifyjs.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+newssjs.com,domain,high,agentic retail campaign console / C2 / skimmer host,Gambit Security 2026-09-22
+014154af33662f55901a20902b9deae23a63fe3817fad44a2718f6e30e7a9cb1,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+080a0c302f4ed5499ad9cbedfd8dfd1e10d813351774b35884d8c088ba705410,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+2d2b32c115c606e33cabd48e0b132e5515fd7bb33827ad17191fb37356a121b9,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+37c6f69f8ab92d3fc2abc94f5205fa163576420d8fcd819adab8edc38722dadc,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+44f8cb7983396bd788bed1d3050536e14b342fbc9533de65192e0d0621d7383e,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+4f3799e957ec6e00f63c2718d137227f512a01cc6f93d0c1e4d49c3e45652085,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+7062c0b95eaef75058ea1c8cc45e2819e182bd7a1b0cffdd0fe97ec4c986fba4,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+8a910f4c99479901d44c92db19e81cfb2d9df1155583dc952500ebc31d79af65,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+a3b477a6f2f6c131f5a3de1d2e4e632672858da897d0df9cd811a18d3b46f8a4,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+c61ced2755714cf175c91ca72291d264c052808aa254b4ca9f3e7f1b1f98e245,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+c6616765ce657255949d9d9f23fed616d1a1bc5fdc73cb5670f2e363fc0fcad1,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+d97f75c6049cb724f45a8e67efcb2e4f187fb665f4d7ff1cfe85e31352f27ce2,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+db9fcde39d063f3a03a9a387e64cce82d6f06ca11ff442f82518a69a57b3ea13,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+fef8e000dda1fb7100a2e8db823b50e908b341580bcee606c5e67066e5d65b87,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+0fd9bd3adcaccd65e7dae5e37dbbdb352c37a753298458065ac11f4f6e548c0e,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+14e8d3f73d03b745bd29b0a397aab157a37089f65f64519f836889e5c9219a49,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+15f2c050d974edc60298dc3555a3f6887a80d10853b611d1355cb2674844dee0,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+42175ef6cece7c25b47ad293debdc350a851efe036de9fdb3c18913148eb0306,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+b4692f5b3eda0b3bc5eaa2ee733bceb186af4564aa39f454adc5f32e3a902adb,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+cce7e887604bdb99a23dfa31d931294e9289c2387badfc4edfa88c23416cb6c5,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+cdbaa9cf60159a1f0e367737b3a2463ec8be9bf49db219959c5fbd662582de1f,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+fe30bfc2c1517de84618d38838d9731f7aa76571f4a34a01fc680a2496822b54,sha256,high,ARTEX build (matches Nextron HKTL_ARTEX_Oct26),Nextron Valhalla HKTL_ARTEX_Oct26 sample list
+270692c2ece26013570743f0205c062f43196cbbb7da2a7caff8e24596ccbff5,sha256,medium,file with ARTEX forensic artifacts,Nextron Valhalla HKTL_ARTEX_Forensic_Artifacts_Oct26
+640899529ff070c90fd788b85c632bc7cd19882c046f6fcd460d18c2f8cb4a02,sha256,low,binary embedding the Norma agent library,Nextron Valhalla PUA_NORMA_Usage_Oct26
+56691378a70755df7fcfd33b9e232acdd69deaea76201cee499bb074b0cf04e4,sha256,high,ARTEX Docker deployment config,Nextron Valhalla HKTL_ARTEX_Docker_Oct26
+d168ec58b836d6c58a7249f51894644da998f063271acd41af3545917f529c4b,sha256,high,official ARTEX v0.3.14 release ZIP (linux-amd64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
+fff3f501db2ec8e2f424eabd33f009c6aff82ae3332a7b3118ad4038b11275af,sha256,high,official ARTEX v0.3.14 release ZIP (linux-arm64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
+dde132714981bd6af672ce7a09bcd8010da5d106f7f9d64f4672adfb283ab252,sha256,high,official ARTEX v0.3.14 release ZIP (windows-amd64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
+5b45c239f24c5cb8002a996963f80d7b50cacee4a00e13c0f08a3f694064d81f,sha256,high,official ARTEX v0.3.14 release ZIP (darwin-amd64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
+8a746590771e17146860c39fda44ed46d89b1749c90d8965f84acadf36613e0c,sha256,high,official ARTEX v0.3.14 release ZIP (darwin-arm64),PLURA 1st report 2026-10-03 (official v0.3.14 release ZIPs)
+artex-enrich/1.0,user_agent,high,ARTEX asset-enrichment probe,code:baarai
+artex-selfupdate,user_agent,high,"ARTEX self-update to api.github.com (outbound, from an ARTEX host)",code:jiwoochris_artex-global
+norma/0.4,user_agent,medium,Norma agent WebFetch (ARTEX engine; not ARTEX-exclusive per Nextron),code:norma44
+Mozilla/5.0 (spa-api-recon),user_agent,high,ARTEX api-recon skill,code:baarai
+Mozilla/5.0 (spa-api-recon spider),user_agent,high,ARTEX api-recon skill spider,code:baarai
+HexStrike-HTTP-Framework/1.0 (Advanced Security Testing),user_agent,medium,Hexstrike-AI (co-occurring framework),code:0x4m4_hexstrike-ai
+Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0),user_agent,medium,CyberStrikeAI webshell client (co-occurring),code:Ed1s0nZ_CyberStrikeAI
+PentAGI/1.0,user_agent,low,PentAGI search client (co-occurring),code:vxcontrol_pentagi

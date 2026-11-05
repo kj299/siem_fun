@@ -1,0 +1,3 @@
+src,reason
+<UPTIME_MONITOR_IP>,uptime monitor
+<VULN_SCANNER_IP>,authorized scanner

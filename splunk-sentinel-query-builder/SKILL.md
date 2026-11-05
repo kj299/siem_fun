@@ -135,6 +135,7 @@ Load only the smallest relevant reference:
 - [references/data-dictionary-integration.md](references/data-dictionary-integration.md) for internal URLs or excerpts
 - [references/examples-and-troubleshooting.md](references/examples-and-troubleshooting.md) for concrete prompt patterns and failure handling
 - [references/model-guidance.md](references/model-guidance.md) only when tuning the skill itself
+- [references/agentic-ai-attacks.md](references/agentic-ai-attacks.md) when the request names an AI-agent or agentic attack framework (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI) or asks for detections of machine-speed intrusions: the ATT&CK technique map, verified IOCs, and ready-made SPL/KQL starters
 
 ## Platform rules
 

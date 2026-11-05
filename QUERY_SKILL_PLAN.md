@@ -162,6 +162,24 @@ siem_fun/
 |       `-- validate.yml
 |-- .gitignore
 |-- examples/
+|   |-- agentic-ai-attacks/
+|   |   |-- lookups/
+|   |   |   |-- README.md
+|   |   |   |-- agt_asset_ip.csv
+|   |   |   |-- agt_host_history.csv
+|   |   |   |-- agt_host_llm_seen.csv
+|   |   |   |-- agt_host_roles.csv
+|   |   |   |-- agt_iocs.csv
+|   |   |   |-- agt_scheduled_clients.csv
+|   |   |   |-- agt_sp_change_actors.csv
+|   |   |   |-- agt_web_proc_pairs.csv
+|   |   |   `-- llm_api_domains.csv
+|   |   |-- attack-navigator-layer.json
+|   |   |-- hunting.kql
+|   |   |-- iocs.csv
+|   |   |-- sentinel-rules.yaml
+|   |   |-- splunk-morpheus-native.conf
+|   |   `-- splunk-savedsearches.conf
 |   |-- golden-prompts.md
 |   `-- golden-run.json
 |-- CLAUDE.md
@@ -171,6 +189,7 @@ siem_fun/
 |   |-- tests/
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
+|   |   |-- test_agentic_ai_attacks.py
 |   |   |-- test_grade_golden_output.py
 |   |   |-- test_record_golden_run.py
 |   |   `-- validate-skill-pack.tests.ps1
@@ -209,6 +228,7 @@ siem_fun/
     |   `-- openai.yaml
     |-- SKILL.md
     `-- references/
+        |-- agentic-ai-attacks.md
         |-- cim-vendor-alignment.md
         |-- data-dictionary-integration.md
         |-- examples-and-troubleshooting.md

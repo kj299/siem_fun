@@ -1,0 +1,752 @@
+# Microsoft Sentinel scheduled analytics rules for agentic-intrusion detection, one YAML document per rule
+# (Azure-Sentinel repository format). Split on '---' to import individually. Status: needs_validation.
+# Design notes and the ATT&CK mapping: splunk-sentinel-query-builder/references/agentic-ai-attacks.md
+---
+id: a980ff17-6532-5146-9b46-2078a4a861ca
+name: R-B-AGT-002 Agentic intrusion - machine-regular request cadence
+description: 'Requests from one client to one destination arriving at a regular interval: coefficient of variation of the gaps < 0.15 over >= 12 gaps in 24 h (Morpheus ArrivalRegularityTracker / R-B-L3-002
+  thresholds). Catches the self-throttled agent a rate rule misses. Allow-list your monitors. Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: ASimWebSession
+  dataTypes: []
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Reconnaissance
+- CredentialAccess
+relevantTechniques:
+- T1595
+- T1110
+query: |
+  let allow = dynamic(["<UPTIME_MONITOR_IP>", "<VULN_SCANNER_IP>"]);
+  union
+    (_Im_WebSession(starttime=ago(1d)) | project TimeGenerated, Src = SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), Kind = "web"),
+    (SigninLogs | where TimeGenerated > ago(1d) | project TimeGenerated, Src = IPAddress, Dst = AppDisplayName, Kind = "signin")
+  | where isnotempty(Src) and Src !in (allow)
+  | sort by Src asc, Dst asc, Kind asc, TimeGenerated asc
+  | extend Gap = iff(Src == prev(Src) and Dst == prev(Dst) and Kind == prev(Kind), (TimeGenerated - prev(TimeGenerated)) / 1s, real(null))
+  | where isnotnull(Gap)
+  | summarize Intervals = count(), MeanGap = avg(Gap), SdGap = stdevp(Gap) by Src, Dst, Kind
+  | extend IntervalCv = iff(MeanGap > 0, round(SdGap / MeanGap, 3), real(null))
+  | where Intervals >= 12 and IntervalCv < 0.15
+  | project Src, Dst, Kind, Intervals, MeanGapSeconds = round(MeanGap, 1), IntervalCv
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: Src
+suppressionEnabled: true
+suppressionDuration: PT24H
+version: 1.0.0
+kind: Scheduled
+---
+id: 77b6dbca-f0bf-5a92-b076-68ab18148b2c
+name: R-B-AGT-004 Agentic intrusion - first LLM API contact from a server
+description: 'A server contacting an LLM API domain it has not contacted in 14 days, after >=7 days of history (ValueNoveltyTracker port, tc7_service inverted onto egress). These are legitimate services:
+  the signal is the server, not the domain. Zscaler ThreatLabz 2026-10-14; CERT-In CIAD-2026-0058. Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+  - DeviceInfo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CommandAndControl
+relevantTechniques:
+- T1102
+- T1071
+query: |
+  let llm = dynamic(["api.deepseek.com","open.bigmodel.cn","api.x.ai","api.anthropic.com","xcai.pro","api.openai.com","generativelanguage.googleapis.com"]);
+  let recent = 1h;
+  let servers = DeviceInfo
+      | where TimeGenerated > ago(14d)
+      | summarize arg_max(TimeGenerated, DeviceType), FirstSeen = min(TimeGenerated) by DeviceId, DeviceName
+      | where DeviceType in ("Server", "DomainController") and FirstSeen <= ago(7d)
+      | project DeviceId;
+  DeviceNetworkEvents
+  | where TimeGenerated > ago(14d) and isnotempty(RemoteUrl)
+  | extend u = tolower(RemoteUrl)
+  | extend Domain = iff(u has "://", tostring(parse_url(u).Host), tostring(split(u, "/")[0]))
+  | where Domain in (llm)
+  | summarize FirstContact = min(TimeGenerated), Connections = count(),
+              Processes = make_set(InitiatingProcessFileName, 10), CommandLines = make_set(InitiatingProcessCommandLine, 5)
+              by DeviceId, DeviceName, Domain
+  | where FirstContact > ago(recent)
+  | join kind=inner servers on DeviceId
+  | project FirstContact, DeviceName, Domain, Connections, Processes, CommandLines
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+suppressionEnabled: true
+suppressionDuration: PT24H
+version: 1.0.0
+kind: Scheduled
+---
+id: a5c1f958-ff46-5112-89fb-a543e637f219
+name: R-B-AGT-005 Agentic intrusion - web server spawns a process it never has
+description: 'A web-server process producing a child it has not produced on this host in 14 days, on a host with >=7 days of history (port of Morpheus R-B-L7-004 process-ancestry novelty). Webshell execution
+  after agent-driven upload / SQLi / deserialization (NorForge via GridinSoft; CERT-In). Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Persistence
+- Execution
+relevantTechniques:
+- T1505
+- T1059
+query: |
+  let webParents = dynamic(["w3wp.exe","httpd.exe","httpd","nginx.exe","nginx","php-cgi.exe","php-fpm","apache2","tomcat9.exe","java.exe","java","node.exe","node"]);
+  let recent = 1h;
+  let hostAge = DeviceProcessEvents
+      | where TimeGenerated > ago(14d)
+      | summarize HostFirstSeen = min(TimeGenerated) by DeviceId;
+  DeviceProcessEvents
+  | where TimeGenerated > ago(14d)
+  | where InitiatingProcessFileName in~ (webParents)
+  | summarize PairFirstSeen = min(TimeGenerated), Count = count(),
+              CommandLines = make_set(ProcessCommandLine, 10), AccountName = any(AccountName)
+              by DeviceId, DeviceName, Parent = tolower(InitiatingProcessFileName), Child = tolower(FileName)
+  | where PairFirstSeen > ago(recent)
+  | join kind=inner hostAge on DeviceId
+  | where HostFirstSeen <= ago(7d)
+  | project PairFirstSeen, DeviceName, Parent, Child, Count, AccountName, CommandLines
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: AccountName
+suppressionEnabled: true
+suppressionDuration: PT24H
+version: 1.0.0
+kind: Scheduled
+---
+id: de84db79-1ddc-5ffc-813e-fe76af53188d
+name: R-B-AGT-008 Agentic intrusion - identity control-plane writes beyond the actor envelope
+description: 'A principal adding app/SP credentials, owners, role assignments or consents more than 5x its own 14-day daily 99th percentile, or at all when not on the approved list (tc7_saas envelope port).
+  Storm-0940 agents added application credentials for persistence (Microsoft via CSA 2026-10-28). Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Persistence
+- PrivilegeEscalation
+relevantTechniques:
+- T1098
+- T1078
+query: |
+  let approved = dynamic(["<AUTOMATION_IDENTITY>"]);
+  let ops = dynamic(["Add service principal credentials", "Certificates and secrets management", "Add owner to application",
+                     "Add owner to service principal", "Add app role assignment to service principal", "Add member to role", "Consent to application"]);
+  let writes = AuditLogs
+      | where TimeGenerated > ago(14d)
+      | where OperationName in (ops)
+      | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
+               Target = tostring(TargetResources[0].displayName), TargetId = tostring(TargetResources[0].id);
+  let envelope = writes
+      | where TimeGenerated < ago(1d)
+      | summarize Daily = count() by Actor, OperationName, bin(TimeGenerated, 1d)
+      | summarize P99Daily = percentile(Daily, 99), Days = dcount(TimeGenerated) by Actor, OperationName;
+  writes
+  | where TimeGenerated > ago(1d)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Count = count(), Targets = make_set(Target, 20), TargetIds = make_set(TargetId, 20) by Actor, OperationName
+  | join kind=leftouter envelope on Actor, OperationName
+  | extend Approved = Actor in (approved)
+  | where not(Approved) or (coalesce(Days, 0) >= 7 and Count > 5 * coalesce(P99Daily, 0.0))
+  | project StartTime, EndTime, Actor, OperationName, Count, P99Daily, Days, Approved, Targets, TargetIds
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+suppressionEnabled: true
+suppressionDuration: PT24H
+version: 1.0.0
+kind: Scheduled
+---
+id: 9beb03a6-a6d7-5759-8d04-b9ff193a3517
+name: R-C-AGT-001 Agentic intrusion chain - recon, web execution, LLM egress
+description: 'Ordered on one host (Morpheus R-C pattern): agent-shaped enumeration against it, then a novel web-server child within 2 h, then first LLM API contact from it within 24 h. Each step alone is
+  explainable; the ordered sequence is not. Self-contained so it does not depend on the other rules having run. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: ASimWebSession
+  dataTypes: []
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceNetworkEvents
+  - DeviceNetworkInfo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+- Execution
+- CommandAndControl
+relevantTechniques:
+- T1190
+- T1505
+- T1102
+query: |
+  let llm = dynamic(["api.deepseek.com","open.bigmodel.cn","api.x.ai","api.anthropic.com","xcai.pro","api.openai.com","generativelanguage.googleapis.com"]);
+  let webParents = dynamic(["w3wp.exe","httpd.exe","httpd","nginx.exe","nginx","php-cgi.exe","php-fpm","apache2","tomcat9.exe","java.exe","java","node.exe","node"]);
+  let ipmap = DeviceNetworkInfo
+      | where TimeGenerated > ago(2d)
+      | mv-expand Addr = IPAddresses
+      | extend Ip = tostring(Addr.IPAddress)
+      | distinct DeviceId, DeviceName, Ip;
+  let recon = _Im_WebSession(starttime=ago(2d))
+      | extend Path = tostring(parse_url(Url).Path), Status = toint(EventResultDetails)
+      | summarize Paths = dcount(Path), Refusals = countif(Status between (400 .. 499)), Successes = countif(Status between (200 .. 299))
+                by AttackerIp = SrcIpAddr, Ip = DstIpAddr, W = bin(TimeGenerated, 10m)
+      | where Paths > 200 and Refusals > 0.7 * Successes
+      | join kind=inner ipmap on Ip
+      | summarize TRecon = min(W) by DeviceId, DeviceName, AttackerIp;
+  let exec = DeviceProcessEvents
+      | where TimeGenerated > ago(14d) and InitiatingProcessFileName in~ (webParents)
+      | summarize TExec = min(TimeGenerated) by DeviceId, Parent = tolower(InitiatingProcessFileName), Child = tolower(FileName)
+      | where TExec > ago(2d);
+  let egress = DeviceNetworkEvents
+      | where TimeGenerated > ago(14d) and isnotempty(RemoteUrl)
+      | extend u = tolower(RemoteUrl)
+      | extend Domain = iff(u has "://", tostring(parse_url(u).Host), tostring(split(u, "/")[0]))
+      | where Domain in (llm)
+      | summarize TEgress = min(TimeGenerated) by DeviceId, Domain
+      | where TEgress > ago(2d);
+  recon
+  | join kind=inner exec on DeviceId
+  | where TExec > TRecon and TExec <= TRecon + 2h
+  | join kind=inner egress on DeviceId
+  | where TEgress > TExec and TEgress <= TExec + 24h
+  | summarize TRecon = min(TRecon), TExec = min(TExec), TEgress = min(TEgress), Children = make_set(Child), Domains = make_set(Domain)
+            by DeviceName, AttackerIp
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: AttackerIp
+suppressionEnabled: true
+suppressionDuration: PT24H
+version: 1.0.0
+kind: Scheduled
+---
+id: b6f12b9e-bcf8-5d89-accc-e0411afd84cb
+name: R-C-AGT-002 Agentic intrusion chain - spray to identity persistence
+description: 'Ordered: a source sprays (>=10 principals, <=3 tries each), one sprayed principal then signs in successfully from that source within 1 h, and that principal performs an identity-plane write
+  within 4 h. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+  - AuditLogs
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+- Persistence
+relevantTechniques:
+- T1110
+- T1098
+query: |
+  let fails = dynamic(["50126", "50053", "50055", "50057", "50034"]);
+  let sprays = SigninLogs
+      | where TimeGenerated > ago(1d) and ResultType in (fails)
+      | extend UserPrincipalName = tolower(UserPrincipalName)
+      | summarize Attempts = count(), TFirst = min(TimeGenerated) by IPAddress, UserPrincipalName, W = bin(TimeGenerated, 1h)
+      | summarize Principals = dcount(UserPrincipalName), Worst = max(Attempts), TSpray = min(TFirst), Users = make_set(UserPrincipalName) by IPAddress, W
+      | where Principals >= 10 and Worst <= 3
+      | mv-expand UserPrincipalName = Users to typeof(string);
+  let wins = SigninLogs
+      | where TimeGenerated > ago(1d) and ResultType == "0"
+      | project TSuccess = TimeGenerated, IPAddress, UserPrincipalName = tolower(UserPrincipalName);
+  let writes = AuditLogs
+      | where TimeGenerated > ago(1d)
+      | where OperationName has_any ("Add service principal credentials", "Certificates and secrets management", "Add owner to application",
+                                     "Add app role assignment to service principal", "Add member to role", "Consent to application")
+      | project TWrite = TimeGenerated, UserPrincipalName = tolower(tostring(InitiatedBy.user.userPrincipalName)), OperationName,
+                Target = tostring(TargetResources[0].displayName);
+  sprays
+  | join kind=inner wins on IPAddress, UserPrincipalName
+  | where TSuccess > TSpray and TSuccess <= TSpray + 1h
+  | join kind=inner writes on UserPrincipalName
+  | where TWrite > TSuccess and TWrite <= TSuccess + 4h
+  | summarize TSpray = min(TSpray), TSuccess = min(TSuccess), TWrite = min(TWrite), Operations = make_set(OperationName), Targets = make_set(Target)
+            by UserPrincipalName, IPAddress
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: UserPrincipalName
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+suppressionEnabled: true
+suppressionDuration: PT24H
+version: 1.0.0
+kind: Scheduled
+---
+id: 60cf6d51-f502-530d-bb85-8814464fec8a
+name: R-D-AGT-001 Agentic intrusion - agent-shaped enumeration
+description: 'One client requesting >200 distinct paths in 10 min, >0.7 client errors per success, non-browser user-agent family, a forged Chrome header (fewer than four version parts or no KHTML token,
+  per Wiz), or <5% static assets, and >=2x its own busiest prior 10-min window (or <7 days history). Port of Morpheus R-D-L7-005 plus http_ua_family. ARTEX/CAIRN recon tempo (Zscaler ThreatLabz 2026-10-14).
+  Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: ASimWebSession
+  dataTypes: []
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Reconnaissance
+- InitialAccess
+relevantTechniques:
+- T1595
+- T1190
+query: |
+  let floor_paths = 200;
+  let window = 10m;
+  let recent = 1h;
+  let staticRx = @"(?i)\.(css|js|png|jpe?g|gif|svg|woff2?|ico)$";
+  let web = _Im_WebSession(starttime=ago(14d))
+      | extend Path = tostring(parse_url(Url).Path), Status = toint(EventResultDetails)
+      | extend UaFamily = case(HttpUserAgent contains "HeadlessChrome", "headless",
+                               HttpUserAgent contains "Chrome/" and (not(HttpUserAgent matches regex @"Chrome/\d+\.\d+\.\d+\.\d+") or HttpUserAgent !contains "(KHTML, like Gecko)"), "forged-chrome",
+                               HttpUserAgent startswith "Mozilla/" and HttpUserAgent matches regex @"(Edg|EdgA|Chrome|CriOS|Firefox|FxiOS|Safari)/", "browser",
+                               HttpUserAgent startswith "Mozilla/", "mozilla",
+                               isempty(HttpUserAgent), "none",
+                               tolower(extract(@"^\s*([A-Za-z][A-Za-z0-9._+-]*)", 1, HttpUserAgent)));
+  let baseline = web
+      | where TimeGenerated < ago(recent)
+      | summarize Paths = dcount(Path) by SrcIpAddr, bin(TimeGenerated, window)
+      | summarize PeakPaths = max(Paths), BaselineDays = dcount(bin(TimeGenerated, 1d)) by SrcIpAddr;
+  web
+  | where TimeGenerated >= ago(recent)
+  | summarize DistinctPaths = dcount(Path), Requests = count(),
+              Refusals = countif(Status between (400 .. 499)), Successes = countif(Status between (200 .. 299)),
+              StaticShare = round(todouble(countif(Path matches regex staticRx)) / count(), 3),
+              UaFamilies = make_set(UaFamily, 10), Destinations = make_set(coalesce(DstHostname, DstIpAddr), 10)
+              by SrcIpAddr, Window = bin(TimeGenerated, window)
+  | where DistinctPaths > floor_paths and Refusals > 0.7 * Successes
+  | where array_length(set_difference(UaFamilies, dynamic(["browser"]))) > 0 or StaticShare < 0.05
+  | join kind=leftouter baseline on SrcIpAddr
+  | extend BaselineMature = coalesce(BaselineDays, 0) >= 7
+  | where not(BaselineMature) or DistinctPaths >= 2 * PeakPaths
+  | project Window, SrcIpAddr, DistinctPaths, Requests, Refusals, Successes, StaticShare, UaFamilies, Destinations, PeakPaths, BaselineMature
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
+suppressionEnabled: true
+suppressionDuration: PT1H
+version: 1.0.0
+kind: Scheduled
+---
+id: 37d3f4f9-303b-530e-b6bc-12f6f6123f6f
+name: R-D-AGT-003 Agentic intrusion - source-centric password spray
+description: 'One source failing sign-in for >=10 distinct principals in 1 h with no principal failing >3 times (DistinctWindowTracker keyed on source; the Morpheus fork only counts per principal). Storm-0940
+  via ARTEX: 151,000 failures vs 327 accounts (Microsoft via CSA 2026-10-28). Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+relevantTechniques:
+- T1110
+query: |
+  SigninLogs
+  | where TimeGenerated > ago(1h)
+  | where ResultType in ("50126", "50053", "50055", "50057", "50034")
+  | summarize Attempts = count() by IPAddress, UserPrincipalName
+  | summarize FailingPrincipals = dcount(UserPrincipalName), WorstPrincipalAttempts = max(Attempts),
+              TotalAttempts = sum(Attempts), Principals = make_set(UserPrincipalName, 50) by IPAddress
+  | where FailingPrincipals >= 10 and WorstPrincipalAttempts <= 3
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+suppressionEnabled: true
+suppressionDuration: PT1H
+version: 1.0.0
+kind: Scheduled
+---
+id: f970a3d3-22d7-5be5-91b8-0c08994c7835
+name: R-D-AGT-006 Agentic intrusion - BLOODALCHEMY side-load
+description: 'graphics-hook-filter64.dll / graphics-hook_config.bin, or svchost.exe outside the Windows system directories. VAPOR PANDA follow-on payload after ARTEX access (CrowdStrike via IT Brief UK
+  2026-10-29). Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceImageLoadEvents
+  - DeviceFileEvents
+  - DeviceProcessEvents
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+- Persistence
+relevantTechniques:
+- T1574
+- T1036
+query: |
+  let files = dynamic(["graphics-hook-filter64.dll", "graphics-hook_config.bin"]);
+  union
+    (DeviceImageLoadEvents | where TimeGenerated > ago(15m) | where FileName in~ (files)
+       | project TimeGenerated, DeviceName, Artifact = FileName, FolderPath, Loader = InitiatingProcessFolderPath, SHA256),
+    (DeviceFileEvents | where TimeGenerated > ago(15m) | where FileName in~ (files)
+       | project TimeGenerated, DeviceName, Artifact = FileName, FolderPath, Loader = InitiatingProcessFolderPath, SHA256),
+    (DeviceProcessEvents | where TimeGenerated > ago(15m) | where FileName =~ "svchost.exe"
+       | where not(FolderPath startswith @"C:\Windows\System32\" or FolderPath startswith @"C:\Windows\SysWOW64\" or FolderPath startswith @"C:\Windows\WinSxS\")
+       | project TimeGenerated, DeviceName, Artifact = "svchost.exe outside system dirs", FolderPath, Loader = InitiatingProcessFolderPath, SHA256)
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: 287fc3f5-1549-56f8-bc13-971fe06ec31e
+name: R-D-AGT-009 Agentic intrusion - AWS control-plane execution and key creation
+description: 'SSM SendCommand/StartSession, Lambda code change, or new access key/user/role/inline policy by a principal not on the approved automation list. CERT-In CIAD-2026-0058 (CRAFTY FALCON). Status:
+  needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Execution
+- Persistence
+relevantTechniques:
+- T1651
+- T1098
+- T1136
+query: |
+  let approved = dynamic(["<AUTOMATION_ROLE_ARN>"]);
+  AWSCloudTrail
+  | where TimeGenerated > ago(15m)
+  | where EventName in ("SendCommand", "StartSession", "CreateAccessKey", "CreateUser", "CreateLoginProfile",
+                        "AttachUserPolicy", "PutRolePolicy", "PutUserPolicy", "CreateRole")
+       or EventName startswith "UpdateFunctionCode"
+  | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn)
+  | where Actor !in (approved)
+  | summarize Actions = make_set(EventName), Count = count(), UserAgents = make_set(UserAgent, 5),
+              SourceIpAddress = any(SourceIpAddress), UserIdentityArn = any(UserIdentityArn) by Actor
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SourceIpAddress
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: eceb4f4f-d4c0-5663-a057-5032b8a58627
+name: R-D-AGT-011 Agentic intrusion - agent framework user-agent inbound
+description: 'A request carrying a user-agent compiled into ARTEX (artex-enrich/1.0, Mozilla/5.0 (spa-api-recon[ spider])), the Norma agent engine (norma/0.4), Hexstrike-AI, CyberStrikeAI or PentAGI. Read
+  from the frameworks'' source; confirmed in the wild by AhnLab and Wiz. Operators can change these. Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: ASimWebSession
+  dataTypes: []
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Reconnaissance
+relevantTechniques:
+- T1595
+query: |
+  _Im_WebSession(starttime=ago(15m))
+  | where HttpUserAgent startswith "artex-enrich/" or HttpUserAgent contains "spa-api-recon" or HttpUserAgent startswith "norma/"
+       or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10)
+            by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), HttpUserAgent
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: 63ba72bf-e1db-5182-a61a-b45daff39a72
+name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
+description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (125 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, AhnLab,
+  NorForge, Gambit, PLURA/FSS and Nextron Valhalla). Upload sentinel_watchlist.csv as watchlist alias ArtexCairnIocs with search key Ioc. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+  - DeviceFileEvents
+- connectorId: ASimWebSession
+  dataTypes: []
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CommandAndControl
+- InitialAccess
+relevantTechniques:
+- T1071
+- T1190
+query: |
+  let ioc = _GetWatchlist("ArtexCairnIocs") | project Ioc = tostring(SearchKey), IocType = tostring(IocType), Confidence = tostring(Confidence), Context = tostring(Context), Source = tostring(Source);
+  let net = DeviceNetworkEvents
+      | where TimeGenerated > ago(15m)
+      | extend Host = replace_regex(tolower(tostring(split(replace_regex(tolower(RemoteUrl), @"^[a-z]+://", ""), "/")[0])), @"^www\.", "")
+      | mv-expand Ioc = pack_array(Host, RemoteIP) to typeof(string)
+      | project TimeGenerated, DeviceName, RemoteIP, RemoteUrl, Ioc, SeenIn = "network";
+  let files = DeviceFileEvents
+      | where TimeGenerated > ago(15m)
+      | mv-expand Ioc = pack_array(tolower(SHA256), tolower(MD5)) to typeof(string)
+      | project TimeGenerated, DeviceName, RemoteIP = "", RemoteUrl = FolderPath, Ioc, SeenIn = "file_hash";
+  let web = _Im_WebSession(starttime=ago(15m))
+      | project TimeGenerated, DeviceName = coalesce(DstHostname, DstIpAddr), RemoteIP = SrcIpAddr, RemoteUrl = Url, Ioc = HttpUserAgent, SeenIn = "user_agent";
+  union net, files, web
+  | where isnotempty(Ioc)
+  | join kind=inner ioc on Ioc
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Hits = count(), SeenIn = make_set(SeenIn)
+            by DeviceName, RemoteIP, Ioc, IocType, Confidence, Context, Source
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: RemoteIP
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: 182b0afa-3488-5799-b509-a8459b42595b
+name: R-D-AGT-013 Agentic intrusion - webshell written by the database server
+description: 'mysqld writing a .jsp/.jspx/.php/.aspx file: the end state of MySQL general-log poisoning (SET GLOBAL general_log_file to a web path, then logging a script body) that GTIG observed ARTEX agents
+  use (GTIG 2026-10-30). Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceFileEvents
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Persistence
+- InitialAccess
+relevantTechniques:
+- T1505
+- T1190
+query: |
+  DeviceFileEvents
+  | where TimeGenerated > ago(10m)
+  | where InitiatingProcessFileName in~ ("mysqld.exe", "mysqld", "mariadbd", "mariadbd.exe")
+  | where FileName matches regex @"(?i)\.(jsp|jspx|php|aspx)$"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Files = make_set(strcat(FolderPath), 20), SHA256 = make_set(SHA256, 20) by DeviceName
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: cb7ec1d3-addd-530b-b57c-ea66bcd5193e
+name: R-D-AGT-014 Agentic intrusion - ARTEX or CAIRN running on one of your hosts
+description: 'Process or file evidence of an agent framework on a host you own: the artex binary, ARTEX_* configuration, the artx5v directory and artex-probe-* files (CrowdStrike, GTIG), Cairn''s worker
+  token variable or worker image (oritera/Cairn; NorForge). Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceFileEvents
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- ResourceDevelopment
+- Execution
+relevantTechniques:
+- T1588
+- T1059
+query: |
+  let marks = dynamic(["ARTEX_LLM_BASE_URL", "ARTEX_PG_DSN", "artx5v", "artex-probe-", "TSEC_AGENT_TOKEN", "cairn-worker-container", "artex-local:"]);
+  union
+    (DeviceProcessEvents | where TimeGenerated > ago(15m)
+       | where FileName in~ ("artex", "artex.exe") or ProcessCommandLine has_any (marks)
+       | project TimeGenerated, DeviceName, Evidence = ProcessCommandLine),
+    (DeviceFileEvents | where TimeGenerated > ago(15m)
+       | where FileName startswith "artex-probe-" or FolderPath has @"\artx5v\" or FileName matches regex @"^artex-[0-9.]+-[a-z]+-[a-z0-9]+\.zip$"
+            or (FileName =~ "mitmproxy-ca-cert.pem" and FolderPath has "_ca")
+       | project TimeGenerated, DeviceName, Evidence = FolderPath)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Evidence = make_set(Evidence, 10) by DeviceName
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: ceb6dd51-95b8-540f-b350-29696d1d2f90
+name: R-D-AGT-015 Agentic intrusion - agent probe requests (unsigned JWT, junk OAuth, baseline 404)
+description: 'Requests Wiz recorded ARTEX agents sending to SSO/OAuth endpoints: a JWT with header {"alg":"none"} (base64 eyJhbGciOiJub25l), code=AAAA&state=notvalidb64, and the probe /zzz-nonexistent-xyz123
+  (Wiz 2026-10-22). Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: ASimWebSession
+  dataTypes: []
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1190
+- T1606
+query: |
+  _Im_WebSession(starttime=ago(15m))
+  | where Url contains "eyJhbGciOiJub25l" or Url has "state=notvalidb64" or Url has "zzz-nonexistent-xyz123"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10), Agents = make_set(HttpUserAgent, 5)
+            by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr)
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
+suppressionEnabled: false
+suppressionDuration: PT5H
+version: 1.0.0
+kind: Scheduled
+---
+id: ea089344-be25-57b8-be85-32fae7e361cd
+name: R-D-AGT-016 Agentic intrusion - server calling an out-of-band callback service
+description: 'A server reaching webhook.site or dnslog.cn: GTIG saw ARTEX agents post command output to 491 rotating webhook.site URLs; Hunt.io found a dnslog.cn callback on actor infrastructure. Legitimate
+  services: alert from servers only. Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+  - DeviceInfo
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Exfiltration
+- CommandAndControl
+relevantTechniques:
+- T1567
+- T1071
+query: |
+  let servers = DeviceInfo | where TimeGenerated > ago(1d) | summarize arg_max(TimeGenerated, DeviceType) by DeviceId | where DeviceType in ("Server", "DomainController") | project DeviceId;
+  DeviceNetworkEvents
+  | where TimeGenerated > ago(15m)
+  | where RemoteUrl has "webhook.site" or RemoteUrl has "dnslog.cn"
+  | join kind=inner servers on DeviceId
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Connections = count(), Urls = make_set(RemoteUrl, 10),
+              Processes = make_set(InitiatingProcessCommandLine, 5) by DeviceName
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DeviceName
+suppressionEnabled: true
+suppressionDuration: PT1H
+version: 1.0.0
+kind: Scheduled

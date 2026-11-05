@@ -1,0 +1,3 @@
+host_key,role
+<HOST_OR_IP>,server
+<HOST_OR_IP>,workstation
