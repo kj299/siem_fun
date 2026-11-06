@@ -35,7 +35,8 @@ SigninLogs
 | summarize ThisWeek = take_anyif(Share, Period == "this_week"), Prior = take_anyif(Share, Period == "prior"), N = sum(N) by UserPrincipalName
 | where ThisWeek >= 0.5 and Prior < 0.1
 
-// --- H-AGT-012  Service-principal sign-in burst. Microsoft saw 200+ sign-ins in under 4 minutes; the
+// --- H-AGT-012  Service-principal sign-in burst. Huntress observed a 100-tenant token-request burst
+// from the hijacked ConnectWise apps, one request per tenant one to six minutes apart (2026-10); the
 // 50-per-5-minute threshold below is deliberately lower so it also catches a slower variant - tune up if noisy.
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(14d)
