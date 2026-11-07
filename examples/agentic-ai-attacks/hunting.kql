@@ -167,3 +167,37 @@ SigninLogs
 | summarize Apps = dcount(AppId), Attempts = count(), Users = dcount(UserPrincipalName), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by IPAddress
 | where Apps >= 5
 | order by Apps desc
+
+// --- H-AGT-021  Probe-account and disposable-mail registrations (Okta Threat Intelligence 2026-11-06) --
+// Agents register accounts named i<intent>probe<unix-time>@..., shared-mailbox prefixes at the target
+// domain (admin@, billing@, security@ ...), or API-friendly disposable mail (maxxspace.com via mail.tm),
+// then sign in with nonexistent users and abuse password recovery. Entra shown (self-service sign-up
+// writes an "Add user" audit event); apply the same regexes to your Okta or Auth0 event export.
+let shared = dynamic(["accounting", "admin", "billing", "careers", "compliance", "digital", "info", "investors", "ir", "legal", "marketing", "marketoperations", "membership", "noreply", "sales", "security", "support"]);
+let disposable = dynamic(["maxxspace.com"]);
+union
+  (AuditLogs | where TimeGenerated > ago(30d) and OperationName == "Add user"
+     | mv-expand tr = TargetResources
+     | extend upn = tolower(tostring(tr.userPrincipalName))
+     | project TimeGenerated, Signal = "registration", upn, Actor = tostring(InitiatedBy.user.ipAddress)),
+  (SigninLogs | where TimeGenerated > ago(30d) and ResultType != "0"
+     | extend upn = tolower(UserPrincipalName)
+     | project TimeGenerated, Signal = "failed sign-in", upn, Actor = IPAddress)
+| extend local = tostring(split(upn, "@")[0]), domain = tostring(split(upn, "@")[1])
+| where upn matches regex @"^i[0-9]{2}probe[0-9]{10}@" or domain in (disposable) or local in (shared)
+| summarize Events = count(), Signals = make_set(Signal, 3), Accounts = make_set(upn, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Actor
+| order by Events desc
+
+// --- H-AGT-022  One source signing in as many service principals with leaked secrets (Microsoft 2026-11-05)
+// Microsoft's behavioral pattern for the exposed-secrets campaign: one IP authenticating to three or more
+// service principals, with invalid/expired-secret failures (AADSTS7000215 / 7000222) and a failure followed
+// by a success from the same IP being urgent. 199.19.77.84 was the primary source; hunt the shape.
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(30d)
+| summarize ServicePrincipals = dcount(ServicePrincipalId), Attempts = count(),
+            InvalidSecret = countif(ResultType in ("7000215", "7000222")), Successes = countif(ResultType == "0"),
+            FirstFailure = minif(TimeGenerated, ResultType != "0"), FirstSuccess = minif(TimeGenerated, ResultType == "0"),
+            Apps = make_set(AppDisplayName, 10) by IPAddress
+| where ServicePrincipals >= 3 or (InvalidSecret > 0 and Successes > 0)
+| extend FailureThenSuccess = isnotnull(FirstFailure) and isnotnull(FirstSuccess) and FirstSuccess > FirstFailure
+| order by FailureThenSuccess desc, ServicePrincipals desc

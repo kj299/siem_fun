@@ -153,3 +153,18 @@ Fuzz Faster U Fool v2.1.0-dev,user_agent,low,"ffuf default user agent, mixed wit
 198.44.123.66,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
 204.44.66.81,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
 104.168.112.237,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
+199.19.77.84,ipv4,high,primary sign-in source for service-principal sign-ins with leaked/stolen app credentials (from 2026-10-28); Key Vault exfiltration,Microsoft Threat Intelligence 2026-11-05 (exposed secrets)
+65.87.223.26,ipv4,high,malicious control-plane operations; attempts to obtain App Service authentication tokens; shell commands embedded in a user agent,Microsoft Threat Intelligence 2026-11-05 (exposed secrets)
+157.22.126.128,ipv4,medium,reconnaissance against AI workloads on Azure AI services,Microsoft Threat Intelligence 2026-11-05 (exposed secrets)
+154.64.252.77,ipv4,low,"egress of the researcher's ARTEX agent that reached WorkOS (benchmark run, not malicious)",WorkOS incident update 2026-11-06
+183.1.65.106,ipv4,low,egress of the researcher's ARTEX agent (WorkOS),WorkOS incident update 2026-11-06
+95.169.20.166,ipv4,low,egress of the researcher's ARTEX agent (WorkOS),WorkOS incident update 2026-11-06
+203.190.1.60,ipv4,low,egress of the researcher's ARTEX agent (WorkOS),WorkOS incident update 2026-11-06
+Mozilla/5.0 (compatible; ArtEx/1.0),user_agent,medium,ARTEX default user agent observed by WorkOS alongside artex-enrich/1.0 and norma/0.4,WorkOS incident update 2026-11-06
+Mozilla/5.0 (compatible; infra-hunt/1.0),user_agent,medium,ARTEX skill user agent observed by WorkOS,WorkOS incident update 2026-11-06
+verify-911-probe/1.0,user_agent,medium,ARTEX probe user agent observed by WorkOS,WorkOS incident update 2026-11-06
+c921256f-04a7-44e8-9b2a-69c33929ba19,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; presence shows exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
+b78f6a77-d4e5-46fb-87e5-d1648bd02519,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
+b2b55f5b-7758-4719-8d8f-88ae172e6bdb,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
+2399d300-6fca-4e6a-a686-399fefe75b83,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
+412dcf96-176d-4b3a-a1b0-4981ad66971e,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
