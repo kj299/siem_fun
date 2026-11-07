@@ -178,8 +178,8 @@
   },
   {
    "techniqueID": "T1078.004",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft; CrowdStrike via Cybersecurity Dive.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05; Microsoft; CrowdStrike via Cybersecurity Dive.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -206,8 +206,8 @@
   },
   {
    "techniqueID": "T1090.002",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05; Okta Threat Intelligence 2026-11-06.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -255,8 +255,15 @@
   },
   {
    "techniqueID": "T1110.003",
-   "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Wiz; CrowdStrike; Unit 42 timely threat intel 2026-10-30.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX. Sources: Expel 2026-10-21; Microsoft 2026-10-21; Wiz; CrowdStrike; Unit 42 timely threat intel 2026-10-30.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1110.004",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Okta Threat Intelligence 2026-11-06.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -264,6 +271,13 @@
    "techniqueID": "T1113",
    "score": 1,
    "comment": "Frameworks: CyberStrikeAI. Sources: Kaspersky Securelist 2026-11-02.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1114.002",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -290,8 +304,8 @@
   },
   {
    "techniqueID": "T1136.003",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: GTIG 2026-10-30.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: GTIG 2026-10-30; Okta Threat Intelligence 2026-11-06; Expel 2026-10-21.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -331,6 +345,13 @@
    "showSubtechniques": true
   },
   {
+   "techniqueID": "T1213.003",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
    "techniqueID": "T1498",
    "score": 1,
    "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05.",
@@ -352,16 +373,23 @@
    "showSubtechniques": true
   },
   {
+   "techniqueID": "T1526",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
    "techniqueID": "T1528",
-   "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Unit 42 timely threat intel 2026-10-30.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Okta Threat Intelligence 2026-11-06; Unit 42 timely threat intel 2026-10-30.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1530",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05; Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -423,8 +451,15 @@
   },
   {
    "techniqueID": "T1555.006",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Microsoft Threat Intelligence 2026-11-05.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1556.006",
    "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21.",
+   "comment": "Frameworks: ARTEX. Sources: Expel 2026-10-21.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -500,8 +535,8 @@
   },
   {
    "techniqueID": "T1583.003",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05; S-RM 2026-11-04.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Censys ARC 2026-11-05; Check Point Research 2026-11-05; S-RM 2026-11-04.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -537,6 +572,13 @@
    "techniqueID": "T1590",
    "score": 1,
    "comment": "Frameworks: PentAGI, STRIX. Sources: Gambit Security 2026-09-22; GTIG 2026-10-30.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1593.003",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -612,8 +654,8 @@
   },
   {
    "techniqueID": "T1651",
-   "score": 1,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: CERT-In CIAD-2026-0058.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: CERT-In CIAD-2026-0058; Microsoft Threat Intelligence 2026-11-05.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -650,7 +692,7 @@
   },
   {
    "name": "evidence_rows",
-   "value": "117"
+   "value": "132"
   }
  ]
 }

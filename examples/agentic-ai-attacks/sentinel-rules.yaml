@@ -586,7 +586,8 @@ kind: Scheduled
 id: eceb4f4f-d4c0-5663-a057-5032b8a58627
 name: R-D-AGT-011 Agentic intrusion - agent framework user-agent inbound
 description: 'A request carrying a user-agent compiled into ARTEX (artex-enrich/1.0, Mozilla/5.0 (spa-api-recon[ spider])), the Norma agent engine (norma/0.4), Hexstrike-AI, CyberStrikeAI or PentAGI. Read
-  from the frameworks'' source; confirmed in the wild by AhnLab and Wiz. Operators can change these. Unit 42 (2026-10-30) adds two self-describing agent strings. Status: needs_validation.'
+  from the frameworks'' source; confirmed in the wild by AhnLab and Wiz. Operators can change these. Unit 42 (2026-10-30) adds two self-describing agent strings; WorkOS (2026-11-06) published three more
+  ARTEX defaults (ArtEx/1.0, infra-hunt/1.0, verify-911-probe/1.0). Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -603,7 +604,7 @@ relevantTechniques:
 query: |
   _Im_WebSession(starttime=ago(15m))
   | where HttpUserAgent startswith "artex-enrich/" or HttpUserAgent contains "spa-api-recon" or HttpUserAgent startswith "norma/"
-       or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/" or HttpUserAgent contains "security-testing; authorized" or HttpUserAgent contains "recon-audit"
+       or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/" or HttpUserAgent contains "security-testing; authorized" or HttpUserAgent contains "recon-audit" or HttpUserAgent contains "compatible; ArtEx/" or HttpUserAgent contains "infra-hunt/" or HttpUserAgent startswith "verify-911-probe/"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10)
             by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), HttpUserAgent
 entityMappings:
@@ -625,9 +626,9 @@ kind: Scheduled
 ---
 id: 63ba72bf-e1db-5182-a61a-b45daff39a72
 name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
-description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (154 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
-  AhnLab, NorForge, Gambit, PLURA/FSS, Unit 42, S-RM, Check Point Research and Nextron Valhalla). The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source);
-  upload it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
+description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (169 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
+  AhnLab, NorForge, Gambit, PLURA/FSS, Unit 42, S-RM, Check Point Research and Nextron Valhalla, Okta, Expel, Microsoft 2026-11-05 (fetch-read), WorkOS (researcher instance)). The watchlist is shipped at
+  examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:

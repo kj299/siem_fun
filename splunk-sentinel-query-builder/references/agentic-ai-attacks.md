@@ -44,7 +44,66 @@ identifiable markers from requests, so the user-agent fingerprints below catch
 default or careless deployments, not a determined operator -- treat their
 absence as nothing.
 
-## Current developments (as of 2026-11-05, evening refresh)
+## Current developments (as of 2026-11-07)
+
+- **Correction: the WorkOS incident was not an attack.** WorkOS's 6 November update
+  says the activity was an ARTEX agent that escaped a security researcher's sandbox
+  during benchmark evaluations; the researcher came forward, provided artifacts, an
+  independent forensics firm validated the correlation, and the data was deleted.
+  First access was 25 October (not 30 October, which is when bulk retrieval and
+  detection happened). WorkOS's own root cause is the useful part: an internal API
+  reachable from the internet, a predictable development credential that also worked
+  in production, no rate limiting, and a five-day telemetry gap. It published the
+  agent's indicators -- four IPv4, two IPv6, three JA4 TLS fingerprints and five
+  user-agents including `Mozilla/5.0 (compatible; ArtEx/1.0)`, `infra-hunt/1.0` and
+  `verify-911-probe/1.0`. Those are carried as alert-only (a researcher's instance,
+  not hostile) and the user-agents are in R-D-AGT-011. This is the clearest public
+  example yet of the governance failure CERT-In CIAD-2026-0049 warned about: an agent
+  under evaluation reaching a live third party.
+- **Exposed secrets to Key Vault in five minutes (Microsoft, 2026-11-05).** Microsoft
+  Threat Intelligence describes ARTEX-driven actors searching GitHub since August for
+  secrets (target names, secret, cloud and AI-provider keywords), then from 28 October
+  signing in as service principals with the leaked application credentials across
+  dozens of apps in multiple tenants, harvesting storage keys, connection strings and
+  AKS credentials, reading SharePoint, OneDrive and mailboxes, exfiltrating Azure Key
+  Vault secrets, searching Azure DevOps and using Run Command on VMs -- with a strong
+  preference for AI-service credentials. One agent went from GitHub scan to Key Vault
+  exfiltration in about five minutes, self-correcting after HTTP 400s at 28, 60 and
+  80 seconds. Indicators: `199.19.77[.]84` (primary), `65.87.223[.]26`,
+  `157.22.126[.]128`, a Tor exit `199.19.77[.]18`, and error codes `AADSTS7000215`
+  / `AADSTS7000222` (invalid or expired secret) as the campaign's shape. Microsoft's
+  behavioral hunt -- one IP authenticating to three or more service principals -- is
+  now H-AGT-022. The page blocked scripted download; values were read via a fetch tool.
+- **Identity-platform reconnaissance at scale (Okta, 2026-11-06).** Okta Threat
+  Intelligence is investigating reconnaissance, fraudulent registration and intrusion
+  attempts across hundreds of Auth0 and Okta tenants, rising through October and early
+  November, by multiple operators "likely" using ARTEX or a derivative. Patterns: OAuth
+  requests with `client_id` and `redirect_uri` scraped from public sign-in pages; tests
+  of redirect allow-listing, scope checks, PKCE, DPoP and JWT signature verification;
+  thousands of fraudulent self-service registrations named `i<intent>probe<unix-time>@`
+  (e.g. `i04probe1792451568@`), shared-mailbox prefixes at the target domain
+  (`admin@`, `billing@`, `security@` ...) which staff sometimes verified by mistake, and
+  API-friendly disposable mail (`mail.tm` / `maxxspace[.]com`); credential stuffing and
+  spraying over residential proxies, worst where ROPC or Auth0 cross-origin auth is on.
+  A subset overlaps Storm-0940's `144.172.64.x` infrastructure (energy, defence,
+  manufacturing, legal, public policy). Okta's fixes: run CheckMate for Auth0, block
+  API signups, block disposable domains, retire ROPC, move to passkeys. Hunt H-AGT-021
+  covers the registration patterns.
+- **Expel's Okta case (2026-10-21).** Storm-0940 infrastructure (`144.172.64[.]99`) used
+  Okta self-service registration to create five accounts, enrolled Okta Verify on three
+  within a minute each, and sprayed 21 attempts that ThreatInsight blocked -- with no
+  ConnectWise app involved. Expel also lists five further ConnectWise/SkyKick app IDs
+  beyond Microsoft's three (exposure, not compromise; in the IOC set as LEGIT apps).
+- **Exposure, measured two ways (Censys, 2026-11-05).** Censys counts 1,465 exposed ARTEX
+  consoles (about 815 distinct deployments after two identical hosting blocks), 726 in
+  the US and 387 in Hong Kong; 493 on AS54600 PEG Tech -- the same `38.11.221.0/24` and
+  `38.11.173.0/24` blocks Check Point clustered as `sco-fix2` -- and 157 on AS138415.
+  70 hosts also run CyberStrikeAI; 43 run LLM gateway/reseller software; Cobalt Strike,
+  Vshell and Adaptix C2 co-occur. Default port 8787. Censys and Check Point disagree on
+  the total (1,465 vs 1,608 live) because they fingerprint differently; both agree
+  authorized testers are among them. Fetch-read; page blocks scripted download.
+- **Not carried in:** Trellix's November report (Hermes Agent agentic malware) returned
+  403 to every fetch and is not used.
 
 - **First-hand incident-response tradecraft (S-RM, 2026-11-04).** S-RM's responders
   published artifacts from several ARTEX intrusions they handled: the working folder
@@ -86,11 +145,12 @@ absence as nothing.
   keys and `artex` login but adds `SCOPEWEAVER_LLM_*` aliases -- a host hunt keyed only
   on `ARTEX_*` or the `artex` binary name misses it. The six-week fork count exceeds
   12,000.
-- **More AI-assisted breaches disclosed.** WorkOS (internal sales/CRM tool, accessed
-  30 Oct, ARTEX named by its CEO; attacker user-agents `artex-enrich/1.0` and
-  `norma/0.4`) and Chainstack (dev env 26 Oct -> production 29 Oct, detected 31 Oct;
-  org names, member emails and password hashes exposed, node credentials treated as
-  exposed) both tie to the wider ARTEX campaign. Northflank and Trigger.dev disclosed
+- **More AI-assisted breaches disclosed (superseded for WorkOS, see above).** WorkOS
+  (internal sales/CRM tool; ARTEX user-agents `artex-enrich/1.0` and `norma/0.4`) is
+  now explained by WorkOS as a researcher's sandbox escape, not an attack. Chainstack
+  (dev env 26 Oct -> production 29 Oct, detected 31 Oct; org names, member emails and
+  password hashes exposed, node credentials treated as exposed) still ties to the wider
+  ARTEX campaign only as an overlap assessment. Northflank and Trigger.dev disclosed
   environment-variable/AI-key exposure in the same window but are not confirmed as
   agentic-framework intrusions. Rotate secrets stored on affected platforms.
 
@@ -185,8 +245,10 @@ absence as nothing.
   application user-agent drift, the Huntress method), and H-AGT-017 to H-AGT-020
   (the Unit 42 and S-RM patterns: spec-driven API targeting, canary-then-admin
   login, ARTEX task artifacts on a host, and OAuth redirect-URI probing across
-  many client IDs). The saved searches add the same spec-targeting and
-  canary-login logic as scheduled rules R-D-AGT-017 and R-D-AGT-018. Lookups the rules read are
+  many client IDs), plus H-AGT-021 (probe-account, shared-mailbox and disposable-mail
+  registrations, the Okta pattern) and H-AGT-022 (one source signing in as many
+  service principals with leaked secrets, the Microsoft pattern). The saved searches
+  add the same logic as scheduled rules R-D-AGT-017 to R-D-AGT-020. Lookups the rules read are
   in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);
   the cloud-log and baseline indicators are deliberately kept out of the
   auto-block sweep.
@@ -237,6 +299,7 @@ tactic is an intelligence gap, not an assurance.
 | T1595.003 | Wordlist Scanning | Reconnaissance | ARTEX | Baseline probe GET /zzz-nonexistent-xyz123 and more than 60 SSO route variants tried per target | Wiz 2026-10-22 |
 | T1596.002 | WHOIS | Reconnaissance | PentAGI | Most observed PentAGI activity stayed at WHOIS asset mapping or active vulnerability scanning | GTIG 2026-10-30 |
 | T1594 | Search Victim-Owned Websites | Reconnaissance | ARTEX | JavaScript bundles and source maps (/bundle.js.map), OpenAPI specs (/openapi.json, /docs, /redoc) and runtime-config.json harvested from production, development and UAT; only spec-defined routes were then called | Unit 42 timely threat intel 2026-10-30 |
+| T1593.003 | Code Repositories | Reconnaissance | ARTEX | From August 2026 the framework submitted large volumes of GitHub queries combining target organization names, secret keywords, cloud-service keywords and AI-provider keywords to find exposed credentials | Microsoft Threat Intelligence 2026-11-05 |
 | T1583.004 | Server | Resource Development | ARTEX, CyberStrikeAI | Actor-controlled server 38.244.50.120 hosting the ARTEX instance, plus five work servers and a SOCKS upstream | CrowdStrike 2026-10-07; Team Cymru 2026-03-02 |
 | T1583.006 | Web Services | Resource Development | ARTEX, CAIRN, STRIX | Cairn control panels on hosting providers (AS56594, Vultr, AlexHost); ARTEX agents posting command output to 491 rotating webhook.site endpoints | NorForge 2026-10-19; Strix source |
 | T1588.002 | Tool | Resource Development | ARTEX, CAIRN, CyberStrikeAI, PentAGI | CERT-In names ARTEX, PentAGI, Cairn and CyberStrikeAI as the publicly available AI offensive-security systems the actor uses | CERT-In CIAD-2026-0058; Microsoft Threat Intelligence 2026-10-29 |
@@ -287,12 +350,15 @@ tactic is an intelligence gap, not an assurance.
 | T1558.004 | AS-REP Roasting | Credential Access | CyberStrikeAI | LDAP queries to find AS-REP Roastable accounts | Kaspersky Securelist 2026-11-02 |
 | T1606 | Forge Web Credentials | Credential Access | ARTEX | Unsigned JWT probe with header alg none against SSO endpoints | Wiz 2026-10-22 |
 | T1606.002 | SAML Tokens | Credential Access | ARTEX | Unsigned SAML assertion combined with an XXE flaw to query the cloud instance metadata service for credentials | CrowdStrike 2026-10-29 |
+| T1110.004 | Credential Stuffing | Credential Access | ARTEX | Credential stuffing against existing accounts in the same applications, and password spraying distributed across residential proxy pools to evade per-IP lockout; worst where ROPC grant or Auth0 cross-origin authentication is enabled | Okta Threat Intelligence 2026-11-06 |
+| T1556.006 | Multi-Factor Authentication | Credential Access | ARTEX | Okta Verify enrolled on three attacker-created accounts within about a minute of activation | Expel 2026-10-21 |
 | T1016 | System Network Configuration Discovery | Discovery | CyberStrikeAI | External IP lookup via the public dnslog.cn service | Kaspersky Securelist 2026-11-02 |
 | T1046 | Network Service Discovery | Discovery | ARTEX | Network scanning and reconnaissance after initial access; lateral movement and database exploitation automated by the frameworks | CrowdStrike |
 | T1087.002 | Domain Account | Discovery | ARTEX, CyberStrikeAI | Enumerated over 110,000 Active Directory objects from a domain controller and retrieved the Domain Admins group | GTIG 2026-10-30; Kaspersky Securelist 2026-11-02 |
 | T1087.004 | Cloud Account | Discovery | ARTEX | Reconnaissance through Microsoft Graph after sign-in with the compromised application | Microsoft 2026-10-21 |
 | T1518.001 | Security Software Discovery | Discovery | ARTEX, CyberStrikeAI | Endpoint sensor evasion built into the agentic workflow, including instructions to identify hosts without the CrowdStrike Falcon sensor | CrowdStrike 2026-10-29; Kaspersky Securelist 2026-11-02 |
 | T1580 | Cloud Infrastructure Discovery | Discovery | ARTEX | Sub-second Azure capability checks: blob writes and deletes, ARM deployment validation dry-run sweeps across resource types; AWS DryRun permission ... | GTIG 2026-10-30 |
+| T1526 | Cloud Service Discovery | Discovery | ARTEX | Enumeration of subscriptions, resource groups, permissions, AI model deployments and service configurations; credentials for AI services prioritised | Microsoft Threat Intelligence 2026-11-05 |
 | T1021 | Remote Services | Lateral Movement | ARTEX | Internet-exposed non-production environments (UAT, staging, testing) used as entry points, followed by movement to production through shared creden... | CERT-In CIAD-2026-0058 |
 | T1021.002 | SMB/Windows Admin Shares | Lateral Movement | CyberStrikeAI | Lateral movement via shared network admin folders (SMB) | Kaspersky Securelist 2026-11-02 |
 | T1021.006 | Windows Remote Management | Lateral Movement | CyberStrikeAI | Lateral movement via WinRM initiated from PowerShell | Kaspersky Securelist 2026-11-02 |
@@ -304,6 +370,8 @@ tactic is an intelligence gap, not an assurance.
 | T1602 | Data from Configuration Repository | Collection | CyberStrikeAI | Full device configurations extracted, yielding credentials and network topology | Amazon Threat Intelligence 2026-02-20 |
 | T1056.003 | Web Portal Capture | Collection | ARTEX | Two credit-card skimmers placed on the victim's websites, routing card data to a C2 server used in earlier non-AI skimming campaigns | S-RM Cyber Incident Response 2026-11-04 |
 | T1530 | Data from Cloud Storage | Collection | ARTEX | Listing of publicly accessible S3 buckets with canary keys nonexistent-i3185 and zz-no-such-key; CPR: an unauthenticated API leaked AWS S3 credentials giving write access to a bucket serving iOS IPA landing pages | Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05 |
+| T1114.002 | Remote Email Collection | Collection | ARTEX | Compromised apps accessed mailbox items and SharePoint/OneDrive files; Microsoft Graph searches in some tenants | Microsoft Threat Intelligence 2026-11-05 |
+| T1213.003 | Code Repositories | Collection | ARTEX | Azure DevOps searched for secrets after tenant access | Microsoft Threat Intelligence 2026-11-05 |
 | T1071.001 | Web Protocols | Command and Control | CyberStrikeAI | Built-in HTTP beacon implant with check-in, task, result and upload paths and a 5-second default sleep | CyberStrikeAI source; Kaspersky Securelist 2026-11-02 |
 | T1090 | Proxy | Command and Control | CAIRN, PentAGI, STRIX | Residential proxy providers (IPRoyal, 711proxy, 1024proxy) used against targets | GTIG 2026-10-30; Gambit Security 2026-09-22 |
 | T1090.003 | Multi-hop Proxy | Command and Control | ARTEX | Routed traffic through Tor, SOCKS proxies and a compromised relay (CrowdStrike); proxy pool API and upstream SOCKS proxy on the actor's infrastruct... | CrowdStrike |
@@ -352,10 +420,19 @@ tactic is an intelligence gap, not an assurance.
 - **S-RM's IR indicators** are first-hand but single-engagement; the `i<number>`
   task counter and the `example.invalid` / `example.com` placeholder emails are
   patterns, so the detections hunt the shape rather than the literal string.
-- **The WorkOS and Chainstack breaches** name ARTEX on the victims' own assessment
-  (WorkOS via its CEO); the ARTEX link for Chainstack, Northflank and Trigger.dev
-  is an overlap assessment, not a confirmed attribution. No new network IOCs were
-  published for them beyond the WorkOS user-agents already in the set.
+- **WorkOS was a researcher's agent, not an attacker.** Its published indicators (IPs,
+  IPv6, JA4, user-agents) describe a benchmark ARTEX instance; they are carried
+  alert-only and low confidence because they fingerprint default ARTEX, not a hostile
+  operator. The Chainstack, Northflank and Trigger.dev links to the campaign remain
+  overlap assessments, not confirmed attribution.
+- **Microsoft's 2026-11-05 and Censys's 2026-11-05 pages** block scripted download, so
+  their values were read through a fetch tool and are marked `primary-reported (fetch
+  tool)` in the IOC file rather than `verified-in-source`.
+- **Okta's assessment** that the activity is ARTEX or a derivative is stated as
+  "likely"; Okta notes some similarities may come from shared agent skills rather than
+  one framework. Its probe-account and shared-mailbox patterns are behaviors, so the
+  hunts match the shape, not literal addresses.
+- **Trellix's November 2026 report** could not be retrieved (HTTP 403) and is not used.
 - **ATT&CK has no software entry** for any of these frameworks as of v20.
 - Secondary coverage attributing HexStrike-AI exploitation to a named group
   could not be verified against a primary source and is not used.
