@@ -7,11 +7,17 @@
     python3 scripts/run_golden_prompts.py --fixture 3 6   # some
     python3 scripts/run_golden_prompts.py --dry-run       # show prompts, call nothing
 
-This is the behavioral half of the golden prompts, the one thing CI cannot do
-because it has no model credential. For each fixture the runner hands the
-model the skill exactly as a client would load it (SKILL.md plus every file
-under references/), sends the fixture prompt as the user turn, writes the
-answer to out/golden/NN.md, and grades it with grade_golden_output.py.
+This is the behavioral half of the golden prompts, the one thing a pull
+request's CI cannot do because it holds no model credential; the weekly
+golden-run job runs it with a repository secret. For each fixture the runner
+hands the model the skill exactly as a client would load it (SKILL.md plus
+every file under references/), sends the fixture prompt as the user turn,
+writes the answer to out/golden/NN.md, and grades it with
+grade_golden_output.py.
+
+Exit codes: 0 every fixture passed, 1 a fixture was graded and failed, 2 a
+setup or credential problem (nothing gradeable). The golden-run job opens an
+issue on 1 only.
 
 Credentials come from the environment only. The SDK resolves them itself
 (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or an `ant auth login` profile);
@@ -28,6 +34,7 @@ import argparse
 import datetime as dt
 import os
 import sys
+import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -115,6 +122,19 @@ def header(fixture: grader.Fixture, message, model: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Exit 1 means "a fixture was graded and failed", and the golden-run job
+    # opens an issue on it. Python also exits 1 on any uncaught exception, so a
+    # crash before grading was reported as a fixture failure: with no
+    # credential the SDK raises TypeError, not AuthenticationError, and that
+    # filed a bogus issue every week. Anything unexpected is a setup problem.
+    try:
+        return _run(argv)
+    except Exception:
+        traceback.print_exc()
+        return 2
+
+
+def _run(argv: list[str] | None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--fixture", type=int, nargs="*", help="fixture numbers (default: all)")
     ap.add_argument("--model", default=DEFAULT_MODEL)

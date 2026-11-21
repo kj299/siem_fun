@@ -135,10 +135,12 @@ jobs:
 
       # Captured rather than let fail outright: a graded fixture failure
       # (exit 1) is expected data this job reports on below, not an
-      # infrastructure error. An auth or setup problem
-      # (anthropic.AuthenticationError, or the SDK failing to install) is
-      # exit 2 from the script itself, with nothing gradeable to report, and
-      # is treated as a real job failure by the next step instead.
+      # infrastructure error. Anything else that stops the run -- no
+      # credential, an API error, the SDK missing -- is exit 2 from the
+      # script itself, with nothing gradeable to report, and is treated as a
+      # real job failure by the next step instead. Until 2026-11 an uncaught
+      # exception reached Python's own exit 1, so a missing secret was filed
+      # as a fixture failure every week (nine issues between #53 and #65).
       - name: Run the golden prompts against a model
         id: golden_run
         if: ${{ !cancelled() }}
@@ -159,9 +161,10 @@ jobs:
       # A real fixture failure. record_golden_run.py's own full_pass gate
       # already refused a marker for this run (see the tail of
       # scripts/run_golden_prompts.py's main()), so main is untouched; this
-      # issue is the report. Both model runs so far found a fixture that
-      # contradicted the skill, not a skill defect -- read the relevant
-      # SKILL.md and reference file before assuming the answer is at fault.
+      # issue is the report. Every model run that has failed so far failed on
+      # a fixture that contradicted the skill, never on a skill defect -- read
+      # the relevant SKILL.md and reference file before assuming the answer is
+      # at fault.
       - name: Open an issue naming the failure
         if: ${{ !cancelled() && steps.golden_run.outputs.status == '1' }}
         env:
@@ -170,7 +173,7 @@ jobs:
           summary=$(tail -n 1 golden-run-output.log)
           gh issue create \
             --title "Golden-run check (CI): ${summary}" \
-            --body "$(printf 'Scheduled run of scripts/run_golden_prompts.py found a failing fixture.\nRead the relevant SKILL.md and reference file before assuming the answer\nis at fault -- both prior model runs found a fixture that contradicted\nthe skill, not a skill defect (see QUERY_SKILL_PLAN.md). This job does\nnot fix or push; examples/golden-run.json was left untouched.\n\n%s\n' "$(cat golden-run-output.log)")"
+            --body "$(printf 'Scheduled run of scripts/run_golden_prompts.py found a failing fixture.\nRead the relevant SKILL.md and reference file before assuming the answer\nis at fault -- every failing model run so far failed on a fixture that\ncontradicted the skill, never on a skill defect (see QUERY_SKILL_PLAN.md).\nThis job does not fix or push; examples/golden-run.json was left untouched.\n\n%s\n' "$(cat golden-run-output.log)")"
 
       - name: Fail the job on a graded fixture failure
         if: ${{ !cancelled() && steps.golden_run.outputs.status == '1' }}

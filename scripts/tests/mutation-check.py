@@ -281,10 +281,10 @@ def check_notice(label: str, breaker, expect_text: str) -> None:
     """Break the repo in a way the validator must NOTICE but must not FAIL.
 
     The golden-run freshness check is the one finding that is deliberately a
-    notice: the fix is a model run CI cannot perform. So the assertion is the
-    inverse of check_mutation's on the verdict -- "validation passed" must
-    still appear -- while the reason must still be named, under both line
-    endings like every other validator mutation.
+    notice: the fix is a model run a pull request's CI cannot perform. So the
+    assertion is the inverse of check_mutation's on the verdict -- "validation
+    passed" must still appear -- while the reason must still be named, under
+    both line endings like every other validator mutation.
     """
     run_counts["notice"] += 1
     ran_labels.append(label)
@@ -537,6 +537,20 @@ RECORDER_MUTS = [
 ]
 for label, old, new in RECORDER_MUTS:
     unit_mutation(label, RECORDER, old, new, grader_suite)
+
+# The runner's exit code is the golden-run job's only signal: 1 opens an issue
+# naming a fixture failure, 2 fails the job as a setup problem. An uncaught
+# exception that reaches Python's own exit 1 turns a missing credential into a
+# fixture failure, which is what filed a bogus issue every week.
+RUNNER = "scripts/run_golden_prompts.py"
+
+RUNNER_MUTS = [
+    ("runner: a crash before grading exits 2, not the graded-failure 1",
+     "        traceback.print_exc()\n        return 2",
+     "        raise"),
+]
+for label, old, new in RUNNER_MUTS:
+    unit_mutation(label, RUNNER, old, new, grader_suite)
 
 # The shared rule corpus, and the two readers that consume it. Kept separate
 # from the lists above because these mutations target the TEST files and the
@@ -1226,7 +1240,8 @@ if fails:
         print(f"  - {f}")
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
-      f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + 2 shared corpus, "
+      f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + "
+      f"{len(RUNNER_MUTS)} runner + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
       f"{run_counts['environment']} environment)")
 sys.exit(0)
