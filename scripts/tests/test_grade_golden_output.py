@@ -448,6 +448,39 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("refused", out.getvalue())
 
+    def test_a_crash_before_grading_is_a_setup_problem_not_a_failure(self):
+        """REGRESSION: an uncaught exception exited 1, the graded-failure code.
+
+        With no credential configured the SDK raises TypeError("Could not
+        resolve authentication method ...") rather than AuthenticationError, so
+        the runner died on a traceback and Python exited 1. The golden-run job
+        reads 1 as a fixture failure and opened nine issues between #53 and
+        #65, one a week, none of which graded anything.
+        """
+        def no_credential(client, params):
+            raise TypeError("Could not resolve authentication method. Expected one of api_key, "
+                            "auth_token, or credentials to be set.")
+
+        fake = types.ModuleType("anthropic")
+        fake.Anthropic = lambda: object()
+        fake.AuthenticationError = type("AuthenticationError", (Exception,), {})
+        saved_mod, saved_call = sys.modules.get("anthropic"), runner.call_model
+        sys.modules["anthropic"], runner.call_model = fake, no_credential
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                out, err = io.StringIO(), io.StringIO()
+                with redirect_stdout(out), redirect_stderr(err):
+                    code = runner.main(["--fixture", "1", "--out", d])
+        finally:
+            runner.call_model = saved_call
+            if saved_mod is None:
+                del sys.modules["anthropic"]
+            else:
+                sys.modules["anthropic"] = saved_mod
+        self.assertEqual(code, 2)
+        self.assertNotIn("[FAIL]", out.getvalue())
+        self.assertIn("Could not resolve authentication method", err.getvalue())
+
 
 class SharedRuleCorpusTests(unittest.TestCase):
     """The half of shared-rule-cases.json this tool is responsible for.

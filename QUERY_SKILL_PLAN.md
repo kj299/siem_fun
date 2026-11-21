@@ -350,7 +350,7 @@ A sixth run, two fixtures again, followed a further prose edit to the same
 catalogue section so the recorded marker would match the tree that shipped:
 10 of 10, no correction.
 
-Three fixture defects in the first three runs, two more here, and still no
+Two fixture defects in the first three runs, two more here, and still no
 skill defect found by a run. The pattern is consistent enough to state plainly:
 these fixtures fail by pinning one string where the skill licenses a family, so
 read the skill before touching the answer. Both corrections are fixture-side;
@@ -541,6 +541,48 @@ a replacement for it: the Routine also runs the validator, both unit suites,
 and the mutation harness in one pass, and can be made to open an issue on
 any of those once issue #44 is done. `golden-run` only ever exercises the
 model half and the marker.
+
+What it actually did, recorded 2026-11-21: the secret was never added, so
+every scheduled run from 2026-09-21 on failed in `golden-run`. Failing was
+right -- there was nothing to grade. How it failed was wrong. With no
+credential the SDK raises `TypeError` while building the request, not the
+`AuthenticationError` the runner caught, so the runner died on a traceback and
+Python exited 1, which is the code the job reads as a graded fixture failure.
+It opened an issue naming a fixture failure every Monday: nine between #53 and
+#65, each titled with the `TypeError`, none of which had graded anything. The
+runner now treats any exception that escapes it as a setup problem (exit 2),
+which fails the job without filing an issue; a REGRESSION test reproduces the
+`TypeError`, and a mutation proves the test catches the old behavior. The job
+still fails every week until the `ANTHROPIC_API_KEY` secret exists.
+
+## Agentic AI attack frameworks, 2026-11
+
+PRs #60 to #63 added
+[references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md),
+which the query builder loads when a request names one of the six frameworks
+it covers or asks for detections of machine-speed intrusions, and its assets
+under [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/): an IOC
+list with a source and confidence on every row, an ATT&CK Navigator layer,
+Splunk saved searches with Morpheus-native variants, Sentinel scheduled rules,
+hunting KQL, and the lookups those read. The Sentinel tables the new content
+uses were added to the table catalogue with Microsoft citations.
+
+What checks it: [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
+keeps `iocs.csv`, the layer and the reference doc's technique table
+consistent. The validator's content checks read markdown only, so the queries
+in the asset files are neither linted nor provenance-checked; CLAUDE.md records
+that boundary. Checked once by hand on 2026-11-21, by running the validator's
+own functions against them: every KQL table is catalogued and every hunt
+bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
+the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
+score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
+`lookups/sentinel_watchlist.csv` carry the same 169 indicators, each present
+in `iocs.csv` with the same type, confidence and source, but no test pins
+that.
+
+No golden-prompt fixture exercises the new reference yet, and because it
+changed the query builder's `SKILL.md` and two reference files, the golden-run
+marker is stale until a model run is recorded.
 
 ## For your own environment
 

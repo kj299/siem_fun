@@ -5,14 +5,15 @@
     python3 scripts/record_golden_run.py --check          # what changed since?
 
 The behavioral half of the golden prompts (a model driven through every
-fixture, then graded) cannot run in CI, so whether it was re-run after a
-SKILL.md or reference change has been an honour-system rule. This makes the
-gap visible instead of trusted: examples/golden-run.json holds a content hash
-of every file the model run depends on, written at the moment of the run, and
-the validator compares those hashes to the tree on every run. A mismatch is
-printed as a NOTICE naming the files -- not a failure, because the fix is a
-model run that CI cannot perform, and a check that blocks every content edit
-until someone remembers a credential gets routed around rather than obeyed.
+fixture, then graded) cannot run in a pull request's CI, so whether it was
+re-run after a SKILL.md or reference change has been an honour-system rule.
+This makes the gap visible instead of trusted: examples/golden-run.json holds
+a content hash of every file the model run depends on, written at the moment
+of the run, and the validator compares those hashes to the tree on every run.
+A mismatch is printed as a NOTICE naming the files -- not a failure, because
+the fix is a model run that a pull request's CI cannot perform, and a check
+that blocks every content edit until someone remembers a credential gets
+routed around rather than obeyed.
 
 Hashes are of LF-normalised bytes on purpose. The validator runs on
 windows-latest, which checks the tree out with CRLF line endings, and a hash
