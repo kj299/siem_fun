@@ -580,9 +580,33 @@ score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lo
 in `iocs.csv` with the same type, confidence and source, but no test pins
 that.
 
-No golden-prompt fixture exercises the new reference yet, and because it
+No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
-marker is stale until a model run is recorded.
+marker went stale; the seventh model run, below, recorded it again.
+
+## What the seventh model run found
+
+Seventh run, 2026-11-21, same method as the earlier ones, after the agentic-AI
+section changed the query builder's `SKILL.md` and two of its reference files.
+9 of 10 before correction. Fixture 6 failed a correct answer. Asked to hunt
+blocked web traffic across Zscaler, Cloudflare and Palo Alto, the answer
+queried the Web data model once and grouped by sourcetype, as
+cim-vendor-alignment.md's cross-vendor strategy says, and also scoped that
+query to the three named sourcetypes with an `OR` group. The spec forbade any
+`OR`-ed sourcetypes on one line.
+
+This was the first run in which the skill's own wording could be read as
+backing the fixture -- "query the shared data model once instead of OR-ing
+vendor sourcetypes" -- so the skill was read first, and two more samples of the
+same fixture were taken. Both added the same scope filter, written as
+`sourcetype IN (...)`, and both passed: the rule distinguished syntax, not
+behavior, and the repo's own stated preference is the `IN` form. The skill's
+sentence contrasts the data model with a raw search, which the spec's `tstats`
+and `datamodel` assertions already reject, so the syntax-only rule is gone and
+the prose bullet now says a vendor scope filter is fine. No skill changed and no
+prompt byte moved, so the ten answers were re-graded rather than re-run: 10 of
+10, and the marker records it. Five fixture defects across seven runs, in four
+fixtures, and still no skill defect found by a run.
 
 ## For your own environment
 
