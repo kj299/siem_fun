@@ -31,7 +31,8 @@ function Add-Issue {
 }
 
 # A notice is printed and does NOT fail the run. It exists for exactly one
-# kind of finding: something a model run would settle and CI cannot perform.
+# kind of finding: something a model run would settle and a pull request's CI
+# cannot perform.
 # Everything else stays an issue; a check that cannot fail is not a check.
 $script:notices = New-Object System.Collections.Generic.List[string]
 function Add-Notice {
@@ -878,12 +879,13 @@ function Test-LookupOutputFields {
 
 # --- golden-prompt run freshness --------------------------------------------
 # The behavioral half of the golden prompts (a model driven through every
-# fixture, then graded) cannot run in CI. examples/golden-run.json records a
-# content hash of every file that run depends on, written by
-# scripts/record_golden_run.py at the moment of the run; this compares those
-# hashes to the tree. A mismatch is a NOTICE, not an issue: the fix is a model
-# run that CI cannot perform, and a check that blocks every content edit until
-# someone remembers a credential gets routed around rather than obeyed.
+# fixture, then graded) cannot run in a pull request's CI, which holds no model
+# credential. examples/golden-run.json records a content hash of every file
+# that run depends on, written by scripts/record_golden_run.py at the moment of
+# the run; this compares those hashes to the tree. A mismatch is a NOTICE, not
+# an issue: the fix is a model run that this CI job cannot perform, and a check
+# that blocks every content edit until someone remembers a credential gets
+# routed around rather than obeyed.
 #
 # Hashes are of LF-normalised bytes. windows-latest checks out CRLF, and a hash
 # of raw bytes would report every file as changed there while agreeing with

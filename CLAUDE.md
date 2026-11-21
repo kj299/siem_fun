@@ -16,9 +16,11 @@ pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1
 # Dictionary builder unit tests
 python -m unittest discover -s splunk-data-dictionary-builder/tests
 
-# Golden-prompt grader unit tests. These also read
-# scripts/tests/shared-rule-cases.json, the cases the validator's suite checks
-# against too, so a rule that drifts between the two tools fails here.
+# Everything else under scripts/tests: the golden-prompt grader and runner,
+# the golden-run marker recorder, and the agentic-AI asset consistency suite.
+# The grader's tests also read scripts/tests/shared-rule-cases.json, the cases
+# the validator's suite checks against too, so a rule that drifts between the
+# two tools fails here.
 python -m unittest discover -s scripts/tests -p "test_*.py"
 
 # Mutation-check every suite (proves the REGRESSION tests and the grader's
@@ -54,9 +56,10 @@ third job, `golden-run`, which does call a model: it needs `validate` and
 repository secret. A full pass pushes the refreshed marker to `main` itself,
 so a stale NOTICE never has to wait on a person running
 `record_golden_run.py` by hand; a real fixture failure opens an issue naming
-it instead, and touches nothing. This is a second, narrower path to the same
-mechanism the weekly Routine in issue #44 already drives with subagents, not
-a replacement for it.
+it instead, and touches nothing. A setup or credential problem (the runner's
+exit 2) fails the job without an issue; until the secret is added, that is
+every week. This is a second, narrower path to the same mechanism the weekly
+Routine in issue #44 already drives with subagents, not a replacement for it.
 
 ## Hard rules
 
@@ -200,6 +203,23 @@ Breaking any of these fails CI, so change them deliberately:
   fixture file too.
 
 ## SPL in reference docs
+
+The rules in this section, and the identifier provenance above, are checked
+in tracked `*.md` files only; the byte-level checks (ASCII, conflict markers,
+credential shapes) run on every tracked file. The query assets under
+[examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) -- Splunk `.conf`
+saved searches, `sentinel-rules.yaml`, `hunting.kql` -- therefore get only the
+byte-level checks, plus
+[scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py),
+which keeps `iocs.csv`, the ATT&CK Navigator layer and the reference doc's
+technique table consistent. A sourcetype or table written only in those files
+is not provenance-checked. Two things a markdown-style check would get wrong
+there: a saved search is time-bounded by `dispatch.earliest_time` in its
+stanza rather than in the search string, and `splunk-morpheus-native.conf`
+reads the Morpheus pipeline's per-layer score sourcetypes, which that
+pipeline's own TA defines and the Splunkbase catalogue does not list. (They
+cannot be written literally here: their colon shape would trip the prose
+provenance check on this file.)
 
 - In `| where`, quote boolean comparisons: `noise="true"`, not `noise=true`.
   `where` uses eval semantics, so a bare `true` is a *field reference* and the
@@ -355,10 +375,11 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   run; after a run by subagents, write it with `scripts/record_golden_run.py`.
   The hash folds CRLF to LF, so the marker written on Linux agrees with the
   CRLF checkout on windows-latest; a raw-bytes hash would have made the notice
-  fire on every CI run. Both runs so far found a fixture
-  that contradicted the skill rather than a skill that was wrong -- fixture 8,
-  then fixture 4 -- and only a model run could have shown that. When a fixture
-  fails, read the skill before assuming the answer is at fault.
+  fire on every CI run. Of six model runs so far, each one that failed did so
+  on a fixture that contradicted the skill, never on a skill that was wrong --
+  fixture 8, then 4, then 9, then 8 again -- and only a model run could have
+  shown that. When a fixture fails, read the skill before assuming the
+  answer is at fault.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
   tests a different thing on each platform: a Linux run only ever exercises LF,

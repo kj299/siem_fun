@@ -228,7 +228,9 @@ it is caught; also runs in CI):
 python3 scripts/tests/mutation-check.py
 ```
 
-Run the golden-prompt grader's unit tests (stdlib only, also in CI):
+Run the remaining unit tests under `scripts/tests` -- the golden-prompt grader
+and runner, the golden-run marker recorder, and the agentic-AI asset
+consistency suite (stdlib only, also in CI):
 
 ```bash
 python -m unittest discover -s scripts/tests -p "test_*.py"
@@ -322,6 +324,14 @@ What is deliberately **not** checked, and why, is recorded in
 [CLAUDE.md](CLAUDE.md): field names, because no exhaustive per-dataset
 registry exists; and lookup-null handling, because whether a filter *means* to
 keep unmatched rows cannot be read off the text.
+
+The checks above read the markdown documents. The detection assets in
+[examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (Splunk saved
+searches, Sentinel rules, hunting KQL) are outside them: they get the
+ASCII and credential checks, and
+[scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
+keeps the IOC list, the ATT&CK layer and the reference doc consistent, but no
+check reads the queries themselves. They ship marked `needs_validation`.
 
 ## Security
 
