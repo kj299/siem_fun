@@ -221,6 +221,7 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Uses one `tstats` query against `datamodel=Web.Web` instead of OR-ing vendor sourcetypes
+- A sourcetype filter inside that query, scoping it to the three named vendors, is fine in either syntax (an `OR` group or `IN (...)`); what fails is a raw search in place of the data model, which the `tstats` and `datamodel` assertions already reject
 - Groups by `sourcetype` or `vendor_product` so per-vendor gaps stay visible
 - Uses `summariesonly=true` only because the prompt confirms acceleration
 - Does not invent index names
@@ -238,7 +239,6 @@ Grader spec:
   "sections": ["Objective", "Query", "Assumptions"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
   "query_matches": ["^\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "\\bby\\b[^\\n]*\\b(sourcetype|vendor_product)\\b"],
-  "query_not_matches": ["\\bsourcetype\\s*=\\s*\\S+[^\\n]*\\bOR\\b[^\\n]*\\bsourcetype\\s*="],
   "indexes": [],
   "sourcetypes": ["zscalernss-web", "cloudflare:json", "pan:threat"]
 }

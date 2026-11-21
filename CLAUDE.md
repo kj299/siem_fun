@@ -375,10 +375,10 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   run; after a run by subagents, write it with `scripts/record_golden_run.py`.
   The hash folds CRLF to LF, so the marker written on Linux agrees with the
   CRLF checkout on windows-latest; a raw-bytes hash would have made the notice
-  fire on every CI run. Of six model runs so far, each one that failed did so
-  on a fixture that contradicted the skill, never on a skill that was wrong --
-  fixture 8, then 4, then 9, then 8 again -- and only a model run could have
-  shown that. When a fixture fails, read the skill before assuming the
+  fire on every CI run. Of seven model runs so far, each one that failed did
+  so on a fixture that contradicted the skill, never on a skill that was wrong
+  -- fixture 8, then 4, then 9, then 8 again, then 6 -- and only a model run
+  could have shown that. When a fixture fails, read the skill before assuming the
   answer is at fault.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
