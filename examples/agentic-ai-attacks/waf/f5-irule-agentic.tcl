@@ -16,9 +16,12 @@ when RULE_INIT {
     set static::agt_log_only 1
     # Largest request body inspected, in bytes. Bodies above it are not collected.
     set static::agt_max_body 65536
-    # 1 = refuse source maps and API specs to clients outside agt_internal_nets (W-AGT-020).
-    # Leave 0 if you publish your OpenAPI document on purpose.
+    # 1 = refuse source maps, API specs and Swagger UI to clients outside agt_internal_nets
+    # (W-AGT-020). Leave 0 if you publish your OpenAPI document on purpose.
     set static::agt_block_specs 0
+    # 1 = refuse management endpoints (Spring Boot Actuator, Go pprof) to clients outside
+    # agt_internal_nets (W-AGT-021). /actuator/health stays open for load balancers.
+    set static::agt_block_mgmt 1
 }
 
 proc agt_act { rule detail enforce } {
@@ -99,8 +102,25 @@ when HTTP_REQUEST {
         if { [call agt_act "W-AGT-008" $agt_path 1] } { return }
     }
 
-    # W-AGT-020: source maps and API specs to outside clients (exposure reduction).
-    if { $static::agt_block_specs && [class match $agt_path ends_with agt_spec_paths] && ![class match [IP::client_addr] equals agt_internal_nets] } {
+    # W-AGT-014: path traversal in the path or query. Checked on the raw URI (lower-cased)
+    # for the encoded forms and on the decoded one for the plain forms. A browser resolves
+    # dot-segments before it sends a request, so ../ in a path is never typed by a person.
+    # Amazon 2026-11-20: Cairn agents found traversal in a filename parameter in 11 minutes.
+    if { [class match [string tolower $agt_uri_raw] contains agt_traversal] || [class match $agt_uri contains agt_traversal] } {
+        if { [call agt_act "W-AGT-014" $agt_uri 1] } { return }
+    }
+
+    # W-AGT-021: files and endpoints that should never be served to the internet.
+    # Secret files (.env, .git) are refused to everyone; management endpoints to outsiders.
+    if { [class match $agt_path contains agt_secret_paths] } {
+        if { [call agt_act "W-AGT-021" $agt_path 1] } { return }
+    }
+    if { $static::agt_block_mgmt && [class match $agt_path contains agt_mgmt_paths] && !($agt_path ends_with "/actuator/health" || $agt_path contains "/actuator/health/") && ![class match [IP::client_addr] equals agt_internal_nets] } {
+        if { [call agt_act "W-AGT-021" $agt_path 1] } { return }
+    }
+
+    # W-AGT-020: source maps, API specs and Swagger UI to outside clients (exposure reduction).
+    if { $static::agt_block_specs && ([class match $agt_path ends_with agt_spec_paths] || $agt_path contains "/swagger-ui") && ![class match [IP::client_addr] equals agt_internal_nets] } {
         if { [call agt_act "W-AGT-020" $agt_path 1] } { return }
     }
 
@@ -131,6 +151,11 @@ when HTTP_REQUEST_DATA {
     }
     if { [regexp {i[0-9]{2,5}probe[0-9]{10}@} $agt_body] } {
         if { [call agt_act "W-AGT-007" "body-probe-account" 1] } { return }
+    }
+    # W-AGT-014 in a form body: a parameter value that climbs directories. Form bodies only;
+    # JSON and XML carry ../ legitimately too often (relative links, import paths).
+    if { [HTTP::header value "Content-Type"] starts_with "application/x-www-form-urlencoded" && [regexp {(^|[=&])[^&]*\.\.[/\\]} $agt_body] } {
+        if { [call agt_act "W-AGT-014" "body-traversal" 1] } { return }
     }
     # W-AGT-008 in an upload: multipart filename shaped like an agent task artifact.
     if { [regexp {filename="?i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)} $agt_body] } {
