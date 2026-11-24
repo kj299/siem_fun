@@ -64,6 +64,10 @@ Expected output:
 | tstats count where index=* by index, sourcetype
 ```
 
+- The data-model coverage starter from query-workflow.md
+  (`| tstats count from datamodel=Authentication.Authentication by index, sourcetype`)
+  is equally acceptable here: the task maps to one CIM model, and the skill
+  documents both starters without ranking them
 - States that exact index or sourcetype mapping is needed before productionizing
 
 Grader spec:
@@ -72,7 +76,7 @@ Grader spec:
 {
   "sections": ["Objective", "Discovery query", "Next step"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "query_matches": ["\\|\\s*tstats\\s+count\\s+where\\s+index=\\*[^\\n|]*\\bby\\s+index,\\s*sourcetype"],
+  "query_matches": ["\\|\\s*tstats\\s+(?:count\\s+where\\s+index=\\*|(?:summariesonly=true\\s+)?count\\s+from\\s+datamodel=Authentication\\.Authentication\\b)[^\\n|]*\\bby\\s+index,\\s*sourcetype"],
   "matches": ["(?i)re-?invoke"],
   "indexes": [],
   "sourcetypes": []

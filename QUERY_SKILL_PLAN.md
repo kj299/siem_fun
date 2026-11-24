@@ -592,8 +592,9 @@ that.
 A later change added [examples/agentic-ai-attacks/waf/](examples/agentic-ai-attacks/waf/README.md):
 the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
 ModSecurity. The same test file pins its address list and user-agent lists to
-`iocs.csv`; the rule syntax itself was not loaded on any device, and the
-Akamai JSON was written without access to Akamai's documentation.
+`iocs.csv`; the rule syntax itself was not loaded on any device. The Akamai
+JSON and the iRule's commands were later checked against the vendors' API
+references.
 
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
@@ -622,6 +623,36 @@ the prose bullet now says a vendor scope filter is fine. No skill changed and no
 prompt byte moved, so the ten answers were re-graded rather than re-run: 10 of
 10, and the marker records it. Five fixture defects across seven runs, in four
 fixtures, and still no skill defect found by a run.
+
+## What the eighth model run found
+
+Eighth run, 2026-11-24, same method, after the intelligence refresh added a
+dated section and 16 technique rows to agentic-ai-attacks.md. 9 of 10 before
+correction. Fixture 2 failed a correct answer. Asked for a detection of failed
+admin logons with no known dataset, the answer returned `discovery` in the
+right shape and led with the data-model coverage starter,
+`| tstats count from datamodel=Authentication.Authentication ... by index, sourcetype`,
+which query-workflow.md prints verbatim under "Data model coverage". It named
+the `index=*` enumeration as the fallback, but in an inline code span under
+`Assumptions` rather than in a second fenced block. The spec required the
+`index=*` form in a query block and nothing else.
+
+The skill was read first. query-workflow.md documents both starters and does
+not rank them, and the fixture's own prose bullet says "a starter such as",
+so the spec was stricter than both. Two more samples of the fixture were
+taken: both led with the same data-model query and passed only because they
+also put the `index=*` enumeration in a second fenced block. All three
+answers made the same choice; the rule was grading where the fallback was
+written, not whether discovery was done. The spec now accepts either
+documented starter, still as a `tstats` grouped by index and sourcetype, and a
+raw `index=*` search is still rejected. No skill changed and no prompt byte
+moved, so the ten answers were re-graded rather than re-run: 10 of 10, and the
+marker records it. Six fixture defects across eight runs, in five fixtures,
+and still no skill defect found by a run.
+
+No fixture exercises the agentic-AI reference, so this run says nothing about
+whether the refreshed section changes an answer; it shows only that the larger
+reference did not disturb the ten existing behaviors.
 
 ## For your own environment
 
