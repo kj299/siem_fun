@@ -1,10 +1,10 @@
 {
   "_comment": "Written by scripts/record_golden_run.py after a model run of every fixture. The validator compares these LF-normalised sha256 hashes to the tree and prints a NOTICE naming any file changed since. Do not edit by hand.",
-  "date": "2026-11-21",
+  "date": "2026-11-24",
   "method": "agents",
-  "result": "10 of 10",
+  "result": "11 of 11",
   "files": {
-    "examples/golden-prompts.md": "597f6ff4887303315198738ba4e2b1bcacce9086116f1a9c781d44d69bcfde3b",
+    "examples/golden-prompts.md": "8b954cec03efffda128961c266a43a4d584684c67c22fce0a47273e956236c1b",
     "splunk-data-dictionary-builder/SKILL.md": "f41e37ed6075f86d420121230a46b9b3e4e650f0d0d2500e6030a340d43c29cb",
     "splunk-data-dictionary-builder/references/workflow.md": "c70b9d9bbe3e38a00c3998f7b52a3cf0bf47bd30cb64c261d75d5eb60f569ba5",
     "splunk-enrichment-query-builder/SKILL.md": "27aac22d531102030e133f935e0333c40ec73dbe28c783951ced3a6799339ab3",
@@ -13,7 +13,7 @@
     "splunk-enrichment-query-builder/references/splunk-cloud-index-management.md": "5f83d841584bacd11c878593672a2fc4dbfc9901f13d82f835ee923e263ff5cd",
     "splunk-enrichment-query-builder/references/splunkbase-app-catalog.md": "196e2f823bd166b2bfc619fa063d04a84741fc44abe17016ee8fe161ad6ab545",
     "splunk-sentinel-query-builder/SKILL.md": "1df9ba26c6f7831c581d74cfa046c53c5bb8f3b60fcbd551619aece863bc0ee1",
-    "splunk-sentinel-query-builder/references/agentic-ai-attacks.md": "6890f2dfaf7378fa2761b6856a2ce775adeb3161456965371a136c2dd4ec6724",
+    "splunk-sentinel-query-builder/references/agentic-ai-attacks.md": "d5ae5d6cf5ecd817d92f4eef4c73625994d9535daf226e7ea1c485e21cc4ac25",
     "splunk-sentinel-query-builder/references/cim-vendor-alignment.md": "464415ae42d7a075529c4fa3ee9b9a236998f2d71d7036e7862a87de214aa1fe",
     "splunk-sentinel-query-builder/references/data-dictionary-integration.md": "99b20a27e1de404e912fe501159b530b68342e77098ac785de036ab538699729",
     "splunk-sentinel-query-builder/references/examples-and-troubleshooting.md": "f74d85862f43c968921d1f7e2df89a1ee2e4b948d29341ef8f07feeee58b6526",

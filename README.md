@@ -87,7 +87,16 @@ siem_fun/
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
 |   |   |-- splunk-morpheus-native.conf
-|   |   `-- splunk-savedsearches.conf
+|   |   |-- splunk-savedsearches.conf
+|   |   `-- waf/
+|   |       |-- README.md
+|   |       |-- akamai-custom-rules.json
+|   |       |-- blocklist-ipv4.txt
+|   |       |-- f5-data-groups.tmsh
+|   |       |-- f5-irule-agentic.tcl
+|   |       |-- modsecurity-agentic.conf
+|   |       |-- ua-alert.txt
+|   |       `-- ua-block.txt
 |   |-- golden-prompts.md
 |   `-- golden-run.json
 |-- CLAUDE.md
@@ -308,13 +317,13 @@ agree with each other; only a model run verifies that a model reading them
 produces a good query. Each fixture in
 [examples/golden-prompts.md](examples/golden-prompts.md) carries a grader
 spec, [scripts/run_golden_prompts.py](scripts/run_golden_prompts.py) drives a
-model through all ten with the skill loaded exactly as a client would load
+model through all of them with the skill loaded exactly as a client would load
 it, and [scripts/grade_golden_output.py](scripts/grade_golden_output.py)
 grades each answer against its spec and against the same rules the validator
 holds the documents to: sections present and in order, no invented identifier
 in query position, time bound first, no unquoted `| where` boolean, and never
 a request to paste a credential. The grader's checks are mutation-tested like
-the validator's. The first run passed all ten fixtures and its one real
+the validator's. The first run passed all ten of the fixtures that existed then and its one real
 finding was in a fixture, not a skill: it asserted `index IN (firewall,
 proxy)` and failed an answer that had correctly followed the skill's rule to
 filter per index when the sourcetypes' schemas differ. Details are in
@@ -518,8 +527,8 @@ To get the best results with either model:
 - [references/data-dictionary-integration.md](splunk-sentinel-query-builder/references/data-dictionary-integration.md): internal URL usage
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning
-- [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches, Sentinel rules, hunting KQL, lookups)
-- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other
+- [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches, Sentinel rules, hunting KQL, lookups, and [WAF rules](examples/agentic-ai-attacks/waf/README.md) for F5, Akamai and ModSecurity)
+- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other, and the WAF rule pack consistent with the IOC CSV
 - [splunk-enrichment-query-builder/SKILL.md](splunk-enrichment-query-builder/SKILL.md): multi-index enrichment skill instructions
 - [splunk-enrichment-query-builder/references/splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM mappings
 - [splunk-enrichment-query-builder/references/multi-index-patterns.md](splunk-enrichment-query-builder/references/multi-index-patterns.md): SPL patterns for multi-index search and iteration

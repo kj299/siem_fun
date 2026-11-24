@@ -17,6 +17,8 @@ DOC = ROOT / "splunk-sentinel-query-builder" / "references" / "agentic-ai-attack
 ASSETS = ROOT / "examples" / "agentic-ai-attacks"
 IOCS = ASSETS / "iocs.csv"
 LAYER = ASSETS / "attack-navigator-layer.json"
+WAF = ASSETS / "waf"
+WAF_PLATFORM_FILES = ("f5-data-groups.tmsh", "akamai-custom-rules.json")
 
 TECHNIQUE_ID = re.compile(r"T\d{4}(?:\.\d{3})?")
 IPV4 = re.compile(r"(?:\d{1,3}\.){3}\d{1,3}")
@@ -114,11 +116,109 @@ class ReferenceDocTests(unittest.TestCase):
         text = DOC.read_text()
         for name in ("ARTEX", "CAIRN", "CyberStrikeAI", "PentAGI", "STRIX", "HexStrike"):
             self.assertIn(name, text)
-        for asset in ("iocs.csv", "attack-navigator-layer.json", "splunk-savedsearches.conf", "sentinel-rules.yaml", "hunting.kql"):
+        for asset in ("iocs.csv", "attack-navigator-layer.json", "splunk-savedsearches.conf", "sentinel-rules.yaml", "hunting.kql",
+                      "waf/README.md"):
             self.assertIn(asset, text)
+
+    def test_user_agent_list_in_the_doc_is_exactly_ioc_rows(self):
+        # The skill loads only this doc at runtime, not iocs.csv, so the list is what a model can
+        # put in a query. A value here that is not an IOC row is an invented indicator.
+        text = DOC.read_text().replace("\r\n", "\n")
+        block = text.split("IOC file):\n\n", 1)[1].split("\n\n", 1)[0]
+        listed = re.findall(r"`([^`]+)`", block)
+        with open(IOCS, newline="") as fh:
+            ioc_uas = {r["value"]: r["framework"] for r in csv.DictReader(fh) if r["type"] == "user_agent"}
+        self.assertGreaterEqual(len(listed), 8)
+        for line in block.splitlines():
+            framework = line[2:].split(":", 1)[0]
+            for value in re.findall(r"`([^`]+)`", line):
+                self.assertEqual(ioc_uas.get(value), framework, value)
+        self.assertNotIn("- CAIRN:", block)
 
     def test_doc_technique_table_is_non_trivial(self):
         self.assertGreater(len(doc_technique_ids()), 30)
+
+
+class WafRulePackTests(unittest.TestCase):
+    """The WAF pack restates indicators from iocs.csv in three vendors' syntax; pin the copies to the source."""
+
+    def setUp(self):
+        with open(IOCS, newline="") as fh:
+            self.rows = list(csv.DictReader(fh))
+        self.ua_block = (WAF / "ua-block.txt").read_text().split("\n")[:-1]
+        self.ua_alert = (WAF / "ua-alert.txt").read_text().split("\n")[:-1]
+        self.blocklist = (WAF / "blocklist-ipv4.txt").read_text().split()
+
+    def test_blocklist_is_exactly_the_block_action_ipv4_rows(self):
+        # An address the IOC file marks hunt, alert or do-NOT-block must never reach a deny list.
+        expected = {r["value"] for r in self.rows if r["type"] == "ipv4" and r["action"].startswith("block")}
+        self.assertEqual(len(self.blocklist), len(set(self.blocklist)))
+        self.assertEqual(set(self.blocklist), expected)
+
+    def test_f5_ip_data_group_matches_the_blocklist(self):
+        line = next(l for l in (WAF / "f5-data-groups.tmsh").read_text().splitlines()
+                    if l.startswith("create ltm data-group internal agt_ip_block "))
+        self.assertEqual(set(re.findall(r"((?:\d{1,3}\.){3}\d{1,3})/32", line)), set(self.blocklist))
+
+    def test_every_inbound_user_agent_indicator_is_covered(self):
+        inbound = [r["value"] for r in self.rows
+                   if r["type"] == "user_agent" and r["action"].startswith("alert on inbound")]
+        self.assertGreater(len(inbound), 10)
+        for value in inbound:
+            self.assertTrue(any(s in value.lower() for s in self.ua_block + self.ua_alert), value)
+
+    def test_user_agent_substrings_are_lower_case_and_match_an_indicator(self):
+        # A substring matching no indicator is an invented fingerprint.
+        values = [r["value"].lower() for r in self.rows if r["type"] == "user_agent"]
+        for s in self.ua_block + self.ua_alert:
+            self.assertEqual(s, s.lower())
+            self.assertGreaterEqual(len(s), 8, s)
+            self.assertTrue(any(s in v for v in values), s)
+
+    def test_low_confidence_user_agents_are_not_on_the_deny_list(self):
+        for r in self.rows:
+            if r["type"] == "user_agent" and (r["confidence"] == "low" or "never block" in r["action"]):
+                if r["value"] == "ReconProbe/1.0":
+                    continue  # self-describing recon client: no legitimate visitor sends it
+                self.assertFalse(any(s in r["value"].lower() for s in self.ua_block), r["value"])
+
+    def test_each_platform_file_carries_every_user_agent_substring(self):
+        for name in WAF_PLATFORM_FILES:
+            text = (WAF / name).read_text()
+            for s in self.ua_block + self.ua_alert:
+                self.assertIn(s, text, f"{name} is missing {s!r}")
+
+    def test_akamai_file_is_json_with_named_rules(self):
+        doc = json.loads((WAF / "akamai-custom-rules.json").read_text())
+        for entry in doc["customRules"]:
+            self.assertIn(entry["action"], ("alert", "deny"))
+            self.assertRegex(entry["rule"]["name"], r"^W-AGT-\d{3}")
+            self.assertTrue(entry["rule"]["conditions"])
+        for entry in doc["ratePolicies"]:
+            # A rate threshold copied from someone else's traffic must not ship as a deny.
+            self.assertEqual(entry["action"], "alert")
+
+    def test_no_legitimate_service_or_do_not_block_indicator_in_a_rule_file(self):
+        forbidden = [r["value"] for r in self.rows
+                     if r["type"] in ("ipv4", "ipv6", "domain", "ja4") and not r["action"].startswith("block")]
+        forbidden += ["webhook.site", "kiota-dotnet", "python-requests", "curl/"]
+        for path in WAF.iterdir():
+            if path.suffix == ".md":
+                continue
+            text = path.read_text().lower()
+            for value in forbidden:
+                self.assertNotIn(value.lower(), text, f"{path.name} contains {value}")
+
+    def test_every_rule_id_in_a_rule_file_is_documented(self):
+        readme = (WAF / "README.md").read_text()
+        for path in WAF.iterdir():
+            if path.suffix in (".tcl", ".conf", ".json"):
+                for rule in set(re.findall(r"W-AGT-\d{3}", path.read_text())):
+                    self.assertIn(rule, readme, f"{path.name}: {rule} is not in README.md")
+
+    def test_ascii_only(self):
+        for path in WAF.iterdir():
+            self.assertTrue(all(b < 127 for b in path.read_bytes()), path.name)
 
 
 if __name__ == "__main__":

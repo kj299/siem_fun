@@ -1,0 +1,557 @@
+{
+  "_status": "needs_validation. Field names, condition types and enum values were checked on 2026-11-24 against Akamai's Application Security API reference (techdocs.akamai.com, 'Create a custom rule' and 'Create a rate policy'). Nothing here has been imported into an Akamai configuration. Two things the reference leaves open: it documents valueWildcard for requestHeaderMatch only, although its own example sets it on cookie, query and extension conditions, and its argsPostMatch example carries no wildcard flag at all - so validate the pathMatch, uriQueryMatch and argsPostMatch rules in alert before trusting them.",
+  "_usage": "Each entry under customRules has a recommended action and a rule body. POST the rule body, then set the action per security policy. operation AND requires every condition; values inside one condition are ORed. Start every rule in alert. The structured builder matches ? and * wildcards, not regular expressions, so W-AGT-007, W-AGT-008 and W-AGT-011 are approximations of the regex versions in the other files. Custom rules are active for 30 days by default: set effectiveTimePeriod or renew them.",
+  "_network_list": "W-AGT-010: load blocklist-ipv4.txt as a Network List and deny it in IP/Geo Firewall. No custom rule needed.",
+  "_tls_fingerprint": "The reference lists a clientTlsFingerprintMatch condition and a tls-fingerprint rate-policy client identifier. The three JA4 values in iocs.csv are deliberately not shipped as a rule: they identify an HTTP client library seen on a researcher's instance. Use them in an alert-only rule of your own if you want the signal.",
+  "_not_expressible": "W-AGT-009 (DTD in an XML body) and W-AGT-012 (upload filename traversal) inspect request bodies and multipart filenames, which structured custom rules do not expose. On Akamai they are covered by the Adaptive Security Engine attack groups (keep them in deny) rather than by a custom rule here.",
+  "_rate_policy_notes": "clientIdentifier is deprecated but still listed as required, so both it and clientIdentifiers are set; tls-fingerprint keeps counting one client as it rotates addresses. penaltyBoxDuration applies only with counterType region_aggregated. W-AGT-034 (repeat WAF violators) is not a rate policy on Akamai: turn on the security policy's penalty box instead.",
+  "customRules": [
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-001 agent framework user-agent",
+        "description": "User-agents compiled into ARTEX, CyberStrikeAI, PentAGI and HexStrike-AI. Mirrors ua-block.txt.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": [
+              "*artex-enrich/*",
+              "*artex-selfupdate*",
+              "*compatible; artex/*",
+              "*infra-hunt/*",
+              "*verify-911-probe/*",
+              "*spa-api-recon*",
+              "*security-testing; authorized*",
+              "*recon-audit*",
+              "*reconprobe/*",
+              "*hexstrike-*",
+              "*cyberstrikeai*",
+              "*pentagi/*",
+              "*tcp_beacon*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-003 agent-adjacent user-agent",
+        "description": "Tools with legitimate users (Norma agent library, ffuf, PentAGI installer). Context only, never deny. Mirrors ua-alert.txt.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": [
+              "*norma/0.*",
+              "*fuzz faster u fool*",
+              "*pentagi-installer*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-004a agent canary path",
+        "description": "Baseline-404 probes recorded by Wiz and Unit 42.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "/zzz-nonexistent*",
+              "/zzzrandom*",
+              "*artex-probe-*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-004b agent canary in query string",
+        "description": "Canary usernames, placeholder emails, junk OAuth state and metadata-service SSRF in the query string.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "uriQueryMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "*zz_no_such_user_*",
+              "*zzq.nonexistent*",
+              "*not-a-user@*",
+              "*@example.invalid*",
+              "notvalidb64",
+              "*169.254.169.254*",
+              "*metadata.google.internal*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-004c agent canary in POST body",
+        "description": "Same strings in form arguments: login, sign-up and account-recovery endpoints.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "argsPostMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "*zz_no_such_user_*",
+              "*zzq.nonexistent*",
+              "*not-a-user@*",
+              "*@example.invalid*",
+              "*169.254.169.254*",
+              "*metadata.google.internal*",
+              "*artexprobe*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-005 unsigned JWT in Authorization",
+        "description": "JWT whose header is alg none, in three casings and with typ first. Base64 is case-sensitive.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "Authorization",
+            "value": [
+              "*eyJhbGciOiJub25l*",
+              "*eyJhbGciOiJOb25l*",
+              "*eyJhbGciOiJOT05F*",
+              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJub25l*",
+              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJOb25l*"
+            ],
+            "valueCase": true,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-006 ARTEX-tagged SQL injection probe",
+        "description": "S-RM: injection strings tagged with the framework name. Query string; duplicate with argsPostMatch for bodies.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "uriQueryMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "*artex' union*",
+              "*artex'/\\**",
+              "*artex' and *",
+              "*artex' or *",
+              "*artex'--*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-007 agent probe-account identity",
+        "description": "Okta: i<intent>probe<10-digit unix time>@. Wildcard approximation (? is one character); current timestamps start with 1.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "argsPostMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "i??probe1?????????@*",
+              "i???probe1?????????@*",
+              "i????probe1?????????@*",
+              "i?????probe1?????????@*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-008 agent task-artifact script name",
+        "description": "S-RM: i<number>.<script ext>. Wildcard approximation is looser than the regex elsewhere, so alert first. The second shape (GTIG: cl1217.jsp, f1219a.jsp) needs a regex and is not expressible here.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "filenameMatch",
+            "positiveMatch": true,
+            "value": [
+              "i???",
+              "i????",
+              "i?????"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          },
+          {
+            "type": "extensionMatch",
+            "positiveMatch": true,
+            "value": [
+              "asp",
+              "aspx",
+              "ashx",
+              "jsp",
+              "jspx",
+              "php"
+            ],
+            "valueCase": false,
+            "valueWildcard": false
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-020 source map or API spec requested",
+        "description": "Exposure reduction. Move to deny (with an internal network-list exception) once nothing public depends on these.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "*.js.map",
+              "*/openapi.json",
+              "*/swagger.json",
+              "*/v3/api-docs",
+              "*/runtime-config.json"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-011 shell command in User-Agent",
+        "description": "Microsoft 2026-11-05: exploitation attempts by shell commands embedded in a user agent. Wildcard approximation of the regex in the other files.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": [
+              "*$(*",
+              "*`*",
+              "*;curl *",
+              "*; curl *",
+              "*;wget *",
+              "*; wget *",
+              "*|sh*",
+              "*| sh*",
+              "*|bash*",
+              "*| bash*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-013 isCliRequest header present",
+        "description": "Amazon: authentication bypass used against One API family LLM gateways. Matters only in front of such a gateway.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "isCliRequest",
+            "nameWildcard": false
+          }
+        ]
+      }
+    }
+  ],
+  "ratePolicies": [
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-030 error-rate enumeration",
+        "description": "Clients drawing not-found or denied responses at machine speed. Per the reference, averageThreshold is allowed hits per second during any two-minute interval and burstThreshold is hits per second during any five-second interval; derive yours from a baseline.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "requestType": "ForwardResponse",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 5,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "ResponseStatusCondition",
+            "values": [
+              "400",
+              "401",
+              "403",
+              "404",
+              "405"
+            ]
+          }
+        ],
+        "clientIdentifiers": [
+          "ip",
+          "tls-fingerprint"
+        ],
+        "burstWindow": 5,
+        "counterType": "region_aggregated",
+        "penaltyBoxDuration": "TEN_MINUTES",
+        "path": {
+          "positiveMatch": true,
+          "values": [
+            "/*"
+          ]
+        }
+      }
+    },
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-031 source-centric login failures",
+        "description": "Failed logins per client across any number of usernames. Set path values to your login and token endpoints.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "path": {
+          "positiveMatch": true,
+          "values": [
+            "/login",
+            "/signin",
+            "/oauth/token",
+            "/api/auth/login"
+          ]
+        },
+        "requestType": "ForwardResponse",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 3,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "RequestMethodCondition",
+            "values": [
+              "POST"
+            ]
+          },
+          {
+            "positiveMatch": true,
+            "type": "ResponseStatusCondition",
+            "values": [
+              "400",
+              "401",
+              "403"
+            ]
+          }
+        ],
+        "clientIdentifiers": [
+          "ip",
+          "tls-fingerprint"
+        ],
+        "burstWindow": 5,
+        "counterType": "region_aggregated",
+        "penaltyBoxDuration": "TEN_MINUTES"
+      }
+    },
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-032 self-registration rate",
+        "description": "Sign-up posts per client. Okta saw thousands of fraudulent self-service registrations. Set path values to your sign-up endpoints.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "path": {
+          "positiveMatch": true,
+          "values": [
+            "/signup",
+            "/register",
+            "/api/users",
+            "/dbconnections/signup"
+          ]
+        },
+        "requestType": "ClientRequest",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 2,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "RequestMethodCondition",
+            "values": [
+              "POST"
+            ]
+          }
+        ],
+        "clientIdentifiers": [
+          "ip",
+          "tls-fingerprint"
+        ],
+        "burstWindow": 5,
+        "counterType": "region_aggregated",
+        "penaltyBoxDuration": "TEN_MINUTES"
+      }
+    },
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-033 OAuth authorize probing",
+        "description": "Unit 42 and Okta: unregistered redirect URIs tried across many client IDs. Rate the authorize endpoint's error responses per client.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "path": {
+          "positiveMatch": true,
+          "values": [
+            "/authorize",
+            "/oauth/authorize",
+            "/oauth2/authorize",
+            "/oauth2/v1/authorize"
+          ]
+        },
+        "requestType": "ForwardResponse",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 3,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "ResponseStatusCondition",
+            "values": [
+              "400",
+              "401",
+              "403"
+            ]
+          }
+        ],
+        "clientIdentifiers": [
+          "ip",
+          "tls-fingerprint"
+        ],
+        "burstWindow": 5,
+        "counterType": "region_aggregated",
+        "penaltyBoxDuration": "TEN_MINUTES"
+      }
+    }
+  ]
+}

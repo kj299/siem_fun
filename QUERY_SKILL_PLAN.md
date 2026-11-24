@@ -180,7 +180,16 @@ siem_fun/
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
 |   |   |-- splunk-morpheus-native.conf
-|   |   `-- splunk-savedsearches.conf
+|   |   |-- splunk-savedsearches.conf
+|   |   `-- waf/
+|   |       |-- README.md
+|   |       |-- akamai-custom-rules.json
+|   |       |-- blocklist-ipv4.txt
+|   |       |-- f5-data-groups.tmsh
+|   |       |-- f5-irule-agentic.tcl
+|   |       |-- modsecurity-agentic.conf
+|   |       |-- ua-alert.txt
+|   |       `-- ua-block.txt
 |   |-- golden-prompts.md
 |   `-- golden-run.json
 |-- CLAUDE.md
@@ -576,9 +585,16 @@ own functions against them: every KQL table is catalogued and every hunt
 bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
 the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
 score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
-`lookups/sentinel_watchlist.csv` carry the same 169 indicators, each present
+`lookups/sentinel_watchlist.csv` carry the same 186 indicators, each present
 in `iocs.csv` with the same type, confidence and source, but no test pins
 that.
+
+A later change added [examples/agentic-ai-attacks/waf/](examples/agentic-ai-attacks/waf/README.md):
+the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
+ModSecurity. The same test file pins its address list and user-agent lists to
+`iocs.csv`; the rule syntax itself was not loaded on any device. The Akamai
+JSON and the iRule's commands were later checked against the vendors' API
+references.
 
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
@@ -607,6 +623,76 @@ the prose bullet now says a vendor scope filter is fine. No skill changed and no
 prompt byte moved, so the ten answers were re-graded rather than re-run: 10 of
 10, and the marker records it. Five fixture defects across seven runs, in four
 fixtures, and still no skill defect found by a run.
+
+## What the eighth model run found
+
+Eighth run, 2026-11-24, same method, after the intelligence refresh added a
+dated section and 16 technique rows to agentic-ai-attacks.md. 9 of 10 before
+correction. Fixture 2 failed a correct answer. Asked for a detection of failed
+admin logons with no known dataset, the answer returned `discovery` in the
+right shape and led with the data-model coverage starter,
+`| tstats count from datamodel=Authentication.Authentication ... by index, sourcetype`,
+which query-workflow.md prints verbatim under "Data model coverage". It named
+the `index=*` enumeration as the fallback, but in an inline code span under
+`Assumptions` rather than in a second fenced block. The spec required the
+`index=*` form in a query block and nothing else.
+
+The skill was read first. query-workflow.md documents both starters and does
+not rank them, and the fixture's own prose bullet says "a starter such as",
+so the spec was stricter than both. Two more samples of the fixture were
+taken: both led with the same data-model query and passed only because they
+also put the `index=*` enumeration in a second fenced block. All three
+answers made the same choice; the rule was grading where the fallback was
+written, not whether discovery was done. The spec now accepts either
+documented starter, still as a `tstats` grouped by index and sourcetype, and a
+raw `index=*` search is still rejected. No skill changed and no prompt byte
+moved, so the ten answers were re-graded rather than re-run: 10 of 10, and the
+marker records it. Six fixture defects across eight runs, in five fixtures,
+and still no skill defect found by a run.
+
+No fixture exercised the agentic-AI reference in this run, so it said nothing
+about whether the refreshed section changes an answer; it showed only that the
+larger reference did not disturb the ten existing behaviors. The ninth run
+closes that gap.
+
+## What the ninth model run found
+
+Ninth run, 2026-11-24, for new fixture 11: a Splunk hunt for inbound ARTEX
+and CAIRN requests by user-agent, with only the accelerated Web data model
+known. It is the first fixture to make the query builder load
+agentic-ai-attacks.md, and it is built around a fact the reference rests on:
+CAIRN has no user-agent indicator in any report used. The spec asks for a
+`tstats` against `Web.Web` filtered on `http_user_agent` with an ARTEX string,
+forbids any quoted string containing the name CAIRN inside a query block, and
+requires the answer to mention CAIRN and to carry the reference's caveat that
+these strings catch default builds only.
+
+Three samples before any content change: two passed and one failed, and all
+three showed the same gap. The failing answer wrote the framework name between
+wildcards into the query as a "name-based placeholder" and said so in
+`Assumptions`. The two that passed left CAIRN out, but every one of the three
+told the reader to fetch "the CAIRN user-agent rows" from `iocs.csv`, which
+has none. The skill was read first, as always, and this time the skill was the
+problem: agentic-ai-attacks.md listed user-agents only in passing, never said
+which frameworks have one, and had no rule against writing an unverified
+indicator into a query. A model run is the only thing that could have shown
+it; every document check was green.
+
+The reference now lists the verified inbound user-agents by framework
+(ARTEX, CyberStrikeAI, HexStrike-AI, PentAGI), states that CAIRN has none and
+that STRIX's one string is context only, and says to offer behavior instead
+of a guessed pattern.
+[scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
+pins that list to `iocs.csv` by framework, so the doc cannot gain a
+user-agent the IOC file lacks. Because the query builder's content changed,
+fixtures 1 to 7 and 11 were re-run; 8 to 10 exercise the other two skills,
+whose content did not move, so their answers from the eighth run stand. 11 of
+11, and three of three samples of fixture 11: each now matches the six
+verified ARTEX strings exactly, writes no CAIRN term, says why, and points to
+tempo and canary-probe hunts for CAIRN. The marker records it.
+
+Six fixture defects across nine runs, in five fixtures, and one skill-content
+gap, found by the first fixture written to exercise that content.
 
 ## For your own environment
 

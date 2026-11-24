@@ -44,6 +44,99 @@ identifiable markers from requests, so the user-agent fingerprints below catch
 default or careless deployments, not a determined operator -- treat their
 absence as nothing.
 
+Inbound user-agent fingerprints exist for four of the six frameworks, and only
+these values are verified (each is a row in the IOC file):
+
+- ARTEX: `artex-enrich/1.0`, `Mozilla/5.0 (spa-api-recon)`, `Mozilla/5.0 (compatible; ArtEx/1.0)`, `Mozilla/5.0 (compatible; infra-hunt/1.0)`, `verify-911-probe/1.0`, `Mozilla/5.0 (security-testing; authorized)`
+- CyberStrikeAI: `CyberStrikeAI/1.7.4`, `Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)`
+- HexStrike-AI: `HexStrike-HTTP-Framework/1.0 (Advanced Security Testing)`, `HexStrike-BrowserAgent/1.0 (Security Testing)`
+- PentAGI: `PentAGI/1.0`
+
+**CAIRN has no user-agent fingerprint** in any report used here, and STRIX's one
+string is a generic git client that is context, never a match by itself. When
+a request asks for a user-agent hunt covering a framework without one, say so
+and offer behavior instead (tempo, canary probes, the saved searches below).
+Never write a guessed pattern, such as a framework's name between wildcards,
+into a query: an indicator that is not in the IOC file is an invented one, and
+a clean result from it reads as coverage that does not exist.
+
+## Developments since 2026-11-07 (as of 2026-11-24)
+
+Added in a refresh on 2026-11-24. The indicators are in `iocs.csv`, and the
+ATT&CK table and Navigator layer below were re-derived for these reports: 37
+evidence rows, 16 of them techniques new to the table, every ID checked
+against the ATT&CK 20.1 catalogue.
+
+- **FBI FLASH-20261113-001 (2026-11-13, TLP CLEAR).** The FBI's first product on
+  ARTEX consolidates the vendor reporting above: in use since at least August
+  2026, some intrusions from initial targeting to privileged access in under
+  three hours, more than 1,600 exposed consoles. Its address list repeats
+  CrowdStrike's, Microsoft's Storm-0940 set and the Storm-3358 set below, and
+  it asks recipients to vet addresses before blocking because hosting addresses
+  are reassigned. New observables: agents querying `api.db-ip[.]com` to
+  geolocate victims, hardcoded administrator passwords in SPA JavaScript
+  bundles, and abuse of Kudu/SCM publishing endpoints. Its mitigations lead
+  with attack-surface inventory of peripheral systems (partner and supplier
+  portals, mobile backends, employee and sales-support applications), then
+  rate limits and transaction thresholds on high-impact APIs, alerts on
+  sequential lookups, and no stack traces or SQL errors to unauthenticated
+  users.
+- **Storm-3358 (Microsoft, 2026-11-06).** A financially motivated,
+  Cambodia-based cluster that began using ARTEX against financial
+  organizations in October, mainly in Southeast Asia. ARTEX agents fetched the
+  WISP, vshell and AdaptixC2 RATs with netcat and curl. Microsoft published
+  three WISP C2 nodes, four ARTEX servers and one C2 server, all active on
+  6 November; one address differs between its table and its hunting query
+  (the IOC file notes which). Microsoft says default user-agents are worth
+  alerting on but blocking them "will not stop an attack by an AI agent", and
+  reports that decoys and tarpits consumed the agents' time and budget.
+- **Cairn found a zero-day by itself (Amazon, 2026-11-20).** An exposed,
+  unauthenticated Cairn instance showed a Chinese-nexus operator giving agents
+  a list of East Asian university addresses and the goal "obtain shell
+  access". Two operations failed after 16 hours and 148 actions against an
+  open Redis server, and after 30,000 credential combinations built from about
+  80 usernames scraped from faculty pages. A third mapped an open-source
+  medical imaging application's API, found path traversal in an upload
+  endpoint's filename parameter and reached arbitrary file write in about 11
+  minutes, then wrote `sitecustomize.py` and triggered a training endpoint for
+  a root reverse shell. The maintainers have since published a fix and
+  advisory. Two addresses from the 8-10 September records are in the IOC file.
+- **CL-STA-1238 (Unit 42, November 2026; read through secondary coverage
+  only).** A suspected China-nexus actor ran 25 operations with a customized
+  Cairn fork against at least 19 semiconductor, defense and civil-society
+  organizations in August and September, with access or data retrieval
+  confirmed at 10. The primary report could not be retrieved, so its
+  indicators are not carried.
+- **ARTEX agents caught talking to decoy model APIs (Amazon, November 2026).**
+  From 3 October to 5 November, Amazon's MadPot sensors posing as LLM
+  inference APIs received ARTEX requests carrying the agents' full task
+  history. Campaign 1 stole AI provider keys at scale from exposed LLM
+  gateways and application builders (One API, New API, Sub2API, LiteLLM, Dify,
+  Langflow, RAGFlow, Open WebUI) through unclaimed installs, anonymous
+  management endpoints, default master keys, CVE-2025-3248, CVE-2026-28797 and
+  an `isCliRequest` header authentication bypass, feeding stolen keys back
+  into the framework's own model gateway. Campaign 2 attacked KYC liveness
+  checks at two cryptocurrency exchanges with real-time deepfakes; the vendor
+  rejected every recorded attempt. Amazon cannot verify the outcomes the
+  agents reported. Eleven source addresses were published for review, not for
+  blocking; three sit in a shared CDN range.
+- **F5 Labs' behavioral analysis (2026-11-23) and lab test (2026-11-13).** F5
+  describes ARTEX using a WAF as an oracle - enumerating allow and block
+  outcomes, then evading by keyword substitution and splitting, encoding
+  variants and payload padding - and pivoting to API discovery and
+  business-logic flaws once standard pages stay blocked. Two tells peculiar to
+  LLM-driven tooling: obtusely named probes and parameters, and naming
+  conventions that drift as the context window moves. In F5's lab a layered
+  stack (WAF, per-actor scoring keyed on JA4 and session as well as address,
+  bot telemetry, API schema enforcement) cut attack success by more than 90
+  percent; what still succeeded were endpoints returning data without an
+  authorization check. F5 counted 79 exit addresses for the first 100
+  identities from one proxy service on an exposed attacker server.
+- **Not retrieved in this refresh:** Sophos, CERT-EU (2026-11-05), the Cloud
+  Security Alliance notes, Censys's primary page and Akamai's blog posts. They
+  are named in the FBI FLASH's references or in search results but were not
+  read, and nothing here rests on them.
+
 ## Current developments (as of 2026-11-07)
 
 - **Correction: the WorkOS incident was not an attack.** WorkOS's 6 November update
@@ -252,6 +345,11 @@ absence as nothing.
   in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);
   the cloud-log and baseline indicators are deliberately kept out of the
   auto-block sweep.
+- **Edge filtering** -- [examples/agentic-ai-attacks/waf/](../../examples/agentic-ai-attacks/waf/README.md)
+  turns the edge-visible indicators into WAF rules for F5 BIG-IP, Akamai and
+  ModSecurity in three tiers (fingerprints, exposure reduction, tempo
+  controls), also `needs_validation`. It blocks only what the IOC file marks
+  block, and says plainly what a WAF cannot see.
 - **Build a query** -- when the request is to detect this activity in a specific
   SIEM, follow the query workflow in [query-workflow.md](query-workflow.md) and
   the CIM and table provenance in
@@ -295,11 +393,14 @@ tactic is an intelligence gap, not an assurance.
 | --- | --- | --- | --- | --- | --- |
 | T1590 | Gather Victim Network Information | Reconnaissance | PentAGI, STRIX | Target network and host information gathered at scale before any exploitation attempt | Gambit Security 2026-09-22 |
 | T1595.001 | Scanning IP Blocks | Reconnaissance | CyberStrikeAI | Scanning for management interfaces on ports 443, 8443, 10443 and 4443 of edge devices | Amazon Threat Intelligence 2026-02-20 |
-| T1595.002 | Vulnerability Scanning | Reconnaissance | ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX | Agents probe peripheral internet-facing applications (customer inquiry portals, mobile app backends) and shopping sites selected by traffic before ... | GTIG 2026-10-30; Gambit Security 2026-09-22; TrendAI via The Hacker News 2026-10-27; Zscaler ThreatLabz 2026-10-14 |
-| T1595.003 | Wordlist Scanning | Reconnaissance | ARTEX | Baseline probe GET /zzz-nonexistent-xyz123 and more than 60 SSO route variants tried per target | Wiz 2026-10-22 |
+| T1595.002 | Vulnerability Scanning | Reconnaissance | ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX | Agents probe peripheral internet-facing applications (customer inquiry portals, mobile app backends) and shopping sites selected by traffic before ... | GTIG 2026-10-30; Gambit Security 2026-09-22; TrendAI via The Hacker News 2026-10-27; Zscaler ThreatLabz 2026-10-14; Microsoft Threat Intelligence 2026-11-06 |
+| T1595.003 | Wordlist Scanning | Reconnaissance | ARTEX | Baseline probe GET /zzz-nonexistent-xyz123 and more than 60 SSO route variants tried per target | Wiz 2026-10-22; F5 Labs 2026-11-23 |
 | T1596.002 | WHOIS | Reconnaissance | PentAGI | Most observed PentAGI activity stayed at WHOIS asset mapping or active vulnerability scanning | GTIG 2026-10-30 |
-| T1594 | Search Victim-Owned Websites | Reconnaissance | ARTEX | JavaScript bundles and source maps (/bundle.js.map), OpenAPI specs (/openapi.json, /docs, /redoc) and runtime-config.json harvested from production, development and UAT; only spec-defined routes were then called | Unit 42 timely threat intel 2026-10-30 |
-| T1593.003 | Code Repositories | Reconnaissance | ARTEX | From August 2026 the framework submitted large volumes of GitHub queries combining target organization names, secret keywords, cloud-service keywords and AI-provider keywords to find exposed credentials | Microsoft Threat Intelligence 2026-11-05 |
+| T1594 | Search Victim-Owned Websites | Reconnaissance | ARTEX, CAIRN | JavaScript bundles and source maps (/bundle.js.map), OpenAPI specs (/openapi.json, /docs, /redoc) and runtime-config.json harvested from production, development and UAT; only spec-defined routes were then called | Unit 42 timely threat intel 2026-10-30; Amazon Threat Intelligence 2026-11-20 |
+| T1593.003 | Code Repositories | Reconnaissance | ARTEX | From August 2026 the framework submitted large volumes of GitHub queries combining target organization names, secret keywords, cloud-service keywords and AI-provider keywords to find exposed credentials | Microsoft Threat Intelligence 2026-11-05; Amazon Threat Intelligence 2026-11 (MadPot) |
+| T1589.003 | Employee Names | Reconnaissance | CAIRN | About 80 real usernames assembled from faculty directories, lab websites, archived pages and academic papers before the credential attack | Amazon Threat Intelligence 2026-11-20 |
+| T1596.005 | Scan Databases | Reconnaissance | ARTEX | Credential-theft agents found exposed AI applications and LLM gateways through internet scanning services | Amazon Threat Intelligence 2026-11 (MadPot) |
+| T1596.003 | Digital Certificates | Reconnaissance | ARTEX | Certificate transparency logs used alongside scanning services to discover targets | Amazon Threat Intelligence 2026-11 (MadPot) |
 | T1583.004 | Server | Resource Development | ARTEX, CyberStrikeAI | Actor-controlled server 38.244.50.120 hosting the ARTEX instance, plus five work servers and a SOCKS upstream | CrowdStrike 2026-10-07; Team Cymru 2026-03-02 |
 | T1583.006 | Web Services | Resource Development | ARTEX, CAIRN, STRIX | Cairn control panels on hosting providers (AS56594, Vultr, AlexHost); ARTEX agents posting command output to 491 rotating webhook.site endpoints | NorForge 2026-10-19; Strix source |
 | T1588.002 | Tool | Resource Development | ARTEX, CAIRN, CyberStrikeAI, PentAGI | CERT-In names ARTEX, PentAGI, Cairn and CyberStrikeAI as the publicly available AI offensive-security systems the actor uses | CERT-In CIAD-2026-0058; Microsoft Threat Intelligence 2026-10-29 |
@@ -309,9 +410,10 @@ tactic is an intelligence gap, not an assurance.
 | T1078 | Valid Accounts | Initial Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Stolen credentials used to connect to victim internal networks | Amazon Threat Intelligence 2026-02-20; CERT-In CIAD-2026-0058 via The Hacker News |
 | T1078.004 | Cloud Accounts | Initial Access | ARTEX | Sign-ins with compromised application identities across tenants; authentication keys exposed in a 2022 mail-server export reused for access | Microsoft |
 | T1133 | External Remote Services | Initial Access | CyberStrikeAI | Exposed management ports and weak single-factor credentials used for access | Amazon Threat Intelligence 2026-02-20 |
-| T1190 | Exploit Public-Facing Application | Initial Access | ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI | SQL injection and authentication bypass in peripheral web apps (Zscaler); two Zammad zero-days CVE-2026-102489/102490 (DIVD); unauthenticated image... | GTIG 2026-10-30; TrendAI via The Hacker News 2026-10-27; Zscaler |
+| T1190 | Exploit Public-Facing Application | Initial Access | ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI | SQL injection and authentication bypass in peripheral web apps (Zscaler); two Zammad zero-days CVE-2026-102489/102490 (DIVD); unauthenticated image... | GTIG 2026-10-30; TrendAI via The Hacker News 2026-10-27; Zscaler; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Amazon Threat Intelligence 2026-11 (MadPot) |
 | T1195.002 | Compromise Software Supply Chain | Initial Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Compromised ConnectWise Cloud Backup multi-tenant OAuth application identities used to sign in to more than 2,250 Microsoft 365 tenants | Badbyte via The Hacker News 2026-11-05; CERT-In CIAD-2026-0058 via The Hacker News; Microsoft 2026-10-21 |
 | T1199 | Trusted Relationship | Initial Access | ARTEX | After containment at a victim, agents compromised the victim's MSP, created their own virtual machines there and queried only that one customer's cloud and identity systems to regain access | S-RM Cyber Incident Response 2026-11-04 |
+| T1078.001 | Default Accounts | Initial Access | ARTEX | Default administrator credentials and the LiteLLM default master key used against exposed LLM gateways; uninitialized installs claimed | Amazon Threat Intelligence 2026-11 (MadPot) |
 | T1047 | Windows Management Instrumentation | Execution | CyberStrikeAI | WMI (Invoke-CimMethod and a second WMI method) and Impacket WMIExec used to distribute and run p1.ps1 | Kaspersky Securelist 2026-11-02 |
 | T1053.003 | Cron | Execution | CyberStrikeAI | Linux persistence via an @reboot crontab entry for the beacon | Kaspersky Securelist 2026-11-02 |
 | T1053.005 | Scheduled Task | Execution | CyberStrikeAI | Scheduled tasks as SYSTEM via schtasks (including remote /s) and the Schedule.Service COM object; persistence task SystemUpdate | Kaspersky Securelist 2026-11-02 |
@@ -320,16 +422,18 @@ tactic is an intelligence gap, not an assurance.
 | T1574.001 | DLL | Execution | ARTEX | Legitimate GameHook binary renamed svchost.exe loads graphics-hook-filter64.dll (BLOODALCHEMY loader); maps to T1574.002 DLL Side-Loading in ATT&CK... | CrowdStrike 2026-10-29 |
 | T1648 | Serverless Execution | Execution | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Lambda abused to run code and deploy files | CERT-In CIAD-2026-0058 |
 | T1651 | Cloud Administration Command | Execution | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Cloud management services such as AWS Systems Manager and Lambda abused to execute commands and deploy malicious files, blending into legitimate ma... | CERT-In CIAD-2026-0058 |
+| T1059.006 | Python | Execution | CAIRN | Reverse shell payload written in Python and executed by the application spawning a new interpreter | Amazon Threat Intelligence 2026-11-20 |
 | T1098.001 | Additional Cloud Credentials | Persistence | ARTEX | Application credential changes (credentials added to the application) for persistence after the original access | Microsoft 2026-10-21 |
 | T1098.003 | Additional Cloud Roles | Persistence | ARTEX | Changes involving identities, groups and privileged roles; an application self-assigning Global Administrator | Microsoft 2026-10-21 |
 | T1136.003 | Cloud Account | Persistence | ARTEX | Accounts named ArtexProbe created with is_admin=true; t3.micro jump instances created | GTIG 2026-10-30 |
-| T1505.003 | Web Shell | Persistence | ARTEX, CAIRN, HexStrike-AI | Operator transcripts directing agents to write web shells, JSP and PHP (CrowdStrike); uploader shell saved by move_uploaded_file as the Cairn task ... | Check Point Research 2025-09-02; CrowdStrike |
+| T1505.003 | Web Shell | Persistence | ARTEX, CAIRN, HexStrike-AI | Operator transcripts directing agents to write web shells, JSP and PHP (CrowdStrike); uploader shell saved by move_uploaded_file as the Cairn task ... | Check Point Research 2025-09-02; CrowdStrike; Microsoft Threat Intelligence 2026-11-06 |
 | T1546.004 | Unix Shell Configuration Modification | Persistence | CyberStrikeAI | Linux persistence via a nohup beacon launch appended to ~/.bashrc | Kaspersky Securelist 2026-11-02 |
 | T1547.001 | Registry Run Keys / Startup Folder | Persistence | CyberStrikeAI | Persistence via the SystemUpdate value under the HKCU Run key | Kaspersky Securelist 2026-11-02 |
 | T1136 | Create Account | Persistence | ARTEX | Self-registration of accounts in a production web application (HTTP 201) followed by reads of about 50 MB of API data and bulk approval / user record changes from those accounts | Unit 42 timely threat intel 2026-10-30 |
+| T1546.018 | Python Startup Hooks | Persistence | CAIRN | Python reverse shell written to sitecustomize.py through an upload path traversal, then a training API endpoint triggered to spawn a Python process that imported it as root | Amazon Threat Intelligence 2026-11-20 |
 | T1068 | Exploitation for Privilege Escalation | Privilege Escalation | ARTEX | Zammad local privilege escalation to root (CVE-2026-102490) chained after the session-hijack RCE; initial access to root in twelve minutes | DIVD 2026-10-31 |
 | T1134 | Access Token Manipulation | Privilege Escalation | ARTEX | Abused resource-based constrained delegation to impersonate a privileged account | CrowdStrike 2026-10-29 |
-| T1027 | Obfuscated Files or Information | Defense Evasion | CyberStrikeAI | Payload split across multiple files; SQL and LDAP queries obfuscated | Kaspersky Securelist 2026-11-02 |
+| T1027 | Obfuscated Files or Information | Defense Evasion | ARTEX, CyberStrikeAI | Payload split across multiple files; SQL and LDAP queries obfuscated | Kaspersky Securelist 2026-11-02; F5 Labs 2026-11-23 |
 | T1036.005 | Match Legitimate Resource Name or Location | Defense Evasion | ARTEX, CyberStrikeAI | Loader binary renamed svchost.exe outside the Windows system directory | CrowdStrike 2026-10-29; Kaspersky Securelist 2026-11-02 |
 | T1070 | Indicator Removal | Defense Evasion | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Log deletion after compromise | CERT-In CIAD-2026-0058 via The Hacker News |
 | T1140 | Deobfuscate/Decode Files or Information | Defense Evasion | CyberStrikeAI | certutil decodes a payload split into fragments (d3.b64) | Kaspersky Securelist 2026-11-02 |
@@ -338,13 +442,13 @@ tactic is an intelligence gap, not an assurance.
 | T1003.002 | Security Account Manager | Credential Access | CyberStrikeAI | reg.exe used to dump registry hives containing credentials | Kaspersky Securelist 2026-11-02 |
 | T1003.006 | DCSync | Credential Access | ARTEX, CyberStrikeAI | DCSync scripts executed to steal the domain krbtgt key and cloud AD-sync credentials after an offline cracking pause | GTIG 2026-10-30; Kaspersky Securelist 2026-11-02 |
 | T1110 | Brute Force | Credential Access | CyberStrikeAI | Authentication attempts against management interfaces after scanning | Amazon Threat Intelligence 2026-02-20 |
-| T1110.003 | Password Spraying | Credential Access | ARTEX | 151,000+ failed logons against 327 accounts across 8 organizations, peaking at 2,900 per minute (Microsoft); sprays with a 1-second median gap in 2... | Microsoft 2026-10-21 |
+| T1110.003 | Password Spraying | Credential Access | ARTEX, CAIRN | 151,000+ failed logons against 327 accounts across 8 organizations, peaking at 2,900 per minute (Microsoft); sprays with a 1-second median gap in 2... | Microsoft 2026-10-21; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20 |
 | T1528 | Steal Application Access Token | Credential Access | ARTEX | Abuse of trusted application access tokens to reach downstream customer environments | Microsoft 2026-10-21 |
-| T1552.001 | Credentials In Files | Credential Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | DPAPI-protected secret recovered from a config-derived file (Kaspersky); plaintext credentials in configs or code used for access (CERT-In via THN) | Kaspersky Securelist 2026-11-02 |
+| T1552.001 | Credentials In Files | Credential Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | DPAPI-protected secret recovered from a config-derived file (Kaspersky); plaintext credentials in configs or code used for access (CERT-In via THN) | Kaspersky Securelist 2026-11-02; Amazon Threat Intelligence 2026-11 (MadPot) |
 | T1552.004 | Private Keys | Credential Access | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Wallet keys stolen and funds siphoned from cryptocurrency wallets | CERT-In CIAD-2026-0058 |
-| T1552.005 | Cloud Instance Metadata API | Credential Access | ARTEX | Queried the cloud instance metadata service through the SAML/XXE chain to obtain cloud credentials | CrowdStrike 2026-10-29 |
+| T1552.005 | Cloud Instance Metadata API | Credential Access | ARTEX | Queried the cloud instance metadata service through the SAML/XXE chain to obtain cloud credentials | CrowdStrike 2026-10-29; Amazon Threat Intelligence 2026-11 (MadPot) |
 | T1555 | Credentials from Password Stores | Credential Access | ARTEX | Read Local Administrator Password Solution (LAPS) passwords | CrowdStrike 2026-10-29 |
-| T1555.006 | Cloud Secrets Management Stores | Credential Access | ARTEX | Enumerated cloud resources and read secrets at scale across multiple Azure Key Vaults; key enumeration and a key-unwrapping operation | Microsoft 2026-10-21 |
+| T1555.006 | Cloud Secrets Management Stores | Credential Access | ARTEX | Enumerated cloud resources and read secrets at scale across multiple Azure Key Vaults; key enumeration and a key-unwrapping operation | Microsoft 2026-10-21; Amazon Threat Intelligence 2026-11 (MadPot) |
 | T1558.001 | Golden Ticket | Credential Access | CyberStrikeAI | Renamed mimikatz used for a Golden Ticket attack | Kaspersky Securelist 2026-11-02 |
 | T1558.003 | Kerberoasting | Credential Access | ARTEX, CyberStrikeAI | Kerberoasting scripts run to harvest service tickets across compromised domains | GTIG 2026-10-30; Kaspersky Securelist 2026-11-02 |
 | T1558.004 | AS-REP Roasting | Credential Access | CyberStrikeAI | LDAP queries to find AS-REP Roastable accounts | Kaspersky Securelist 2026-11-02 |
@@ -352,18 +456,23 @@ tactic is an intelligence gap, not an assurance.
 | T1606.002 | SAML Tokens | Credential Access | ARTEX | Unsigned SAML assertion combined with an XXE flaw to query the cloud instance metadata service for credentials | CrowdStrike 2026-10-29 |
 | T1110.004 | Credential Stuffing | Credential Access | ARTEX | Credential stuffing against existing accounts in the same applications, and password spraying distributed across residential proxy pools to evade per-IP lockout; worst where ROPC grant or Auth0 cross-origin authentication is enabled | Okta Threat Intelligence 2026-11-06 |
 | T1556.006 | Multi-Factor Authentication | Credential Access | ARTEX | Okta Verify enrolled on three attacker-created accounts within about a minute of activation | Expel 2026-10-21 |
+| T1110.001 | Password Guessing | Credential Access | CAIRN | More than 30,000 credential combinations tried over six hours against SSH, an admin dashboard, network storage, a VPN server and a campus portal, using about 80 real usernames; no login found | Amazon Threat Intelligence 2026-11-20 |
+| T1557.001 | Name Resolution Poisoning and SMB Relay | Credential Access | ARTEX | Kerberos relay attempted during lateral movement to domain controllers (the FBI's mapping); blocked by endpoint protection | FBI FLASH-20261113-001 (consolidating vendor reporting) |
 | T1016 | System Network Configuration Discovery | Discovery | CyberStrikeAI | External IP lookup via the public dnslog.cn service | Kaspersky Securelist 2026-11-02 |
-| T1046 | Network Service Discovery | Discovery | ARTEX | Network scanning and reconnaissance after initial access; lateral movement and database exploitation automated by the frameworks | CrowdStrike |
+| T1046 | Network Service Discovery | Discovery | ARTEX, CAIRN | Network scanning and reconnaissance after initial access; lateral movement and database exploitation automated by the frameworks | CrowdStrike; Amazon Threat Intelligence 2026-11-20 |
 | T1087.002 | Domain Account | Discovery | ARTEX, CyberStrikeAI | Enumerated over 110,000 Active Directory objects from a domain controller and retrieved the Domain Admins group | GTIG 2026-10-30; Kaspersky Securelist 2026-11-02 |
 | T1087.004 | Cloud Account | Discovery | ARTEX | Reconnaissance through Microsoft Graph after sign-in with the compromised application | Microsoft 2026-10-21 |
 | T1518.001 | Security Software Discovery | Discovery | ARTEX, CyberStrikeAI | Endpoint sensor evasion built into the agentic workflow, including instructions to identify hosts without the CrowdStrike Falcon sensor | CrowdStrike 2026-10-29; Kaspersky Securelist 2026-11-02 |
 | T1580 | Cloud Infrastructure Discovery | Discovery | ARTEX | Sub-second Azure capability checks: blob writes and deletes, ARM deployment validation dry-run sweeps across resource types; AWS DryRun permission ... | GTIG 2026-10-30 |
-| T1526 | Cloud Service Discovery | Discovery | ARTEX | Enumeration of subscriptions, resource groups, permissions, AI model deployments and service configurations; credentials for AI services prioritised | Microsoft Threat Intelligence 2026-11-05 |
+| T1526 | Cloud Service Discovery | Discovery | ARTEX | Enumeration of subscriptions, resource groups, permissions, AI model deployments and service configurations; credentials for AI services prioritised | Microsoft Threat Intelligence 2026-11-05; Amazon Threat Intelligence 2026-11 (MadPot) |
+| T1069.003 | Cloud Groups | Discovery | ARTEX | Effective permissions of Azure credentials (SAS tokens, service principals, Kudu credentials, storage account keys) mapped with sub-second capability checks | FBI FLASH-20261113-001 (consolidating vendor reporting) |
 | T1021 | Remote Services | Lateral Movement | ARTEX | Internet-exposed non-production environments (UAT, staging, testing) used as entry points, followed by movement to production through shared creden... | CERT-In CIAD-2026-0058 |
 | T1021.002 | SMB/Windows Admin Shares | Lateral Movement | CyberStrikeAI | Lateral movement via shared network admin folders (SMB) | Kaspersky Securelist 2026-11-02 |
 | T1021.006 | Windows Remote Management | Lateral Movement | CyberStrikeAI | Lateral movement via WinRM initiated from PowerShell | Kaspersky Securelist 2026-11-02 |
 | T1534 | Internal Spearphishing | Lateral Movement | ARTEX | Forced an application's notification system to broadcast test emails to over 1,300 internal users | GTIG 2026-10-30 |
 | T1550.001 | Application Access Token | Lateral Movement | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Stolen long-lived static API tokens used for initial access | CERT-In CIAD-2026-0058 via The Hacker News |
+| T1550.002 | Pass the Hash | Lateral Movement | ARTEX | Pass-the-Hash attempted for lateral movement to domain controllers; blocked by endpoint protection | FBI FLASH-20261113-001 (consolidating vendor reporting) |
+| T1550.003 | Pass the Ticket | Lateral Movement | ARTEX | Pass-the-Ticket attempted for lateral movement to domain controllers; blocked by endpoint protection | FBI FLASH-20261113-001 (consolidating vendor reporting) |
 | T1005 | Data from Local System | Collection | CyberStrikeAI | Database export via PowerShell-generated SQL and a recursive scan for files of interest | Kaspersky Securelist 2026-11-02 |
 | T1113 | Screen Capture | Collection | CyberStrikeAI | Screenshots captured on Windows and Linux | Kaspersky Securelist 2026-11-02 |
 | T1185 | Browser Session Hijacking | Collection | CAIRN, STRIX | Card-stealing skimmer scripts installed on the websites of five retailers; loader shape new Function(atob(...)) with a junk prefix | Gambit Security 2026-09-22 |
@@ -372,13 +481,17 @@ tactic is an intelligence gap, not an assurance.
 | T1530 | Data from Cloud Storage | Collection | ARTEX | Listing of publicly accessible S3 buckets with canary keys nonexistent-i3185 and zz-no-such-key; CPR: an unauthenticated API leaked AWS S3 credentials giving write access to a bucket serving iOS IPA landing pages | Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05 |
 | T1114.002 | Remote Email Collection | Collection | ARTEX | Compromised apps accessed mailbox items and SharePoint/OneDrive files; Microsoft Graph searches in some tenants | Microsoft Threat Intelligence 2026-11-05 |
 | T1213.003 | Code Repositories | Collection | ARTEX | Azure DevOps searched for secrets after tenant access | Microsoft Threat Intelligence 2026-11-05 |
+| T1213.006 | Databases | Collection | ARTEX | Database dumping after exploitation of anonymous file upload and SSRF flaws in financial-sector web applications | Microsoft Threat Intelligence 2026-11-06 |
+| T1074.001 | Local Data Staging | Collection | ARTEX | Collected data staged locally before exfiltration (the FBI's mapping of the collection phase) | FBI FLASH-20261113-001 (consolidating vendor reporting) |
+| T1074.002 | Remote Data Staging | Collection | ARTEX | New 100GB cloud volumes created to prepare exfiltration | FBI FLASH-20261113-001 (consolidating vendor reporting) |
 | T1071.001 | Web Protocols | Command and Control | CyberStrikeAI | Built-in HTTP beacon implant with check-in, task, result and upload paths and a 5-second default sleep | CyberStrikeAI source; Kaspersky Securelist 2026-11-02 |
-| T1090 | Proxy | Command and Control | CAIRN, PentAGI, STRIX | Residential proxy providers (IPRoyal, 711proxy, 1024proxy) used against targets | GTIG 2026-10-30; Gambit Security 2026-09-22 |
-| T1090.003 | Multi-hop Proxy | Command and Control | ARTEX | Routed traffic through Tor, SOCKS proxies and a compromised relay (CrowdStrike); proxy pool API and upstream SOCKS proxy on the actor's infrastruct... | CrowdStrike |
+| T1090 | Proxy | Command and Control | ARTEX, CAIRN, PentAGI, STRIX | Residential proxy providers (IPRoyal, 711proxy, 1024proxy) used against targets | GTIG 2026-10-30; Gambit Security 2026-09-22; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Amazon Threat Intelligence 2026-11 (MadPot) |
+| T1090.003 | Multi-hop Proxy | Command and Control | ARTEX | Routed traffic through Tor, SOCKS proxies and a compromised relay (CrowdStrike); proxy pool API and upstream SOCKS proxy on the actor's infrastruct... | CrowdStrike; F5 Labs 2026-11-23 |
 | T1102 | Web Service | Command and Control | ARTEX, CAIRN | Agents call LLM APIs (api.deepseek.com, open.bigmodel.cn, api.x.ai, api.anthropic.com) and resellers such as xcai.pro; a compromised host turned in... | Zscaler ThreatLabz 2026-10-14 |
-| T1105 | Ingress Tool Transfer | Command and Control | ARTEX, CyberStrikeAI | Scripts fetched with curl onto the victim's internal Windows database server | GTIG 2026-10-30; Kaspersky Securelist 2026-11-02 |
+| T1105 | Ingress Tool Transfer | Command and Control | ARTEX, CyberStrikeAI | Scripts fetched with curl onto the victim's internal Windows database server | GTIG 2026-10-30; Kaspersky Securelist 2026-11-02; Microsoft Threat Intelligence 2026-11-06 |
 | T1572 | Protocol Tunneling | Command and Control | ARTEX | Tunneled traffic via Chisel and SoftEther | CrowdStrike 2026-10-29 |
 | T1090.002 | External Proxy | Command and Control | ARTEX | Operators configured agents to use residential proxies to get around WAF restrictions and IP blocks; one wrote a dedicated proxy skill | Check Point Research 2026-11-05 |
+| T1219 | Remote Access Tools | Command and Control | ARTEX | Storm-3358 ARTEX agents used netcat and curl to download the open-source WISP, vshell and AdaptixC2 RATs for persistence and lateral movement | Microsoft Threat Intelligence 2026-11-06 |
 | T1041 | Exfiltration Over C2 Channel | Exfiltration | ARTEX, CyberStrikeAI | Exfiltration of personally identifiable information belonging to approximately 67,000 individuals | Kaspersky Securelist 2026-11-02; Zscaler ThreatLabz 2026-10-14 |
 | T1048.003 | Exfiltration Over Unencrypted Non-C2 Protocol | Exfiltration | CAIRN, STRIX | DNS exfiltration, catch-all mail and HTTP listeners on the operator's infrastructure | Gambit Security 2026-09-22 |
 | T1567 | Exfiltration Over Web Service | Exfiltration | ARTEX | Investigation assets, data and source code archived to Backblaze B2 by the operator | Zscaler ThreatLabz 2026-10-21 |
@@ -386,6 +499,7 @@ tactic is an intelligence gap, not an assurance.
 | T1565 | Data Manipulation | Impact | ARTEX, CAIRN, CyberStrikeAI, PentAGI | Micro-value test transactions (such as Rs. 1) to validate unauthorized fund flows before large transfers; settlement API abuse | CERT-In CIAD-2026-0058 |
 | T1498 | Network Denial of Service | Impact | ARTEX | Operator goals included denial-of-service against gambling sites (goal observed in exposed consoles; impact not measured) | Check Point Research 2026-11-05 |
 | T1565.001 | Stored Data Manipulation | Impact | ARTEX | Agent rewrote manifest.plist download URLs and the production index.html in a victim's S3 bucket to replace the distributed IPA (restored by the owner; no funds moved) | Check Point Research 2026-11-05 |
+| T1496.004 | Cloud Service Hijacking | Impact | ARTEX | Stolen AI provider keys fed into the framework's own model gateway so that victims paid for the inference powering further credential hunting | Amazon Threat Intelligence 2026-11 (MadPot) |
 
 ## Intelligence gaps and caveats
 
@@ -433,6 +547,17 @@ tactic is an intelligence gap, not an assurance.
   one framework. Its probe-account and shared-mailbox patterns are behaviors, so the
   hunts match the shape, not literal addresses.
 - **Trellix's November 2026 report** could not be retrieved (HTTP 403) and is not used.
+- **How the 2026-11-24 reports were mapped.** Each report adds one evidence row
+  to every technique it evidences. The FBI FLASH is a consolidation of vendor
+  reporting already cited here, so it adds rows only for techniques the table
+  lacked and never raises the score of an existing one. Its mapping of LAPS
+  reads to Group Policy Preferences (T1552.006) was not carried, because the
+  activity it lists does not describe that technique, and its parent-level IDs
+  were skipped where a sub-technique is already present. F5 Labs' rows are
+  from its own lab and sensor analysis, not a named intrusion.
+- **No technique for the KYC deepfake campaign.** Amazon's second ARTEX campaign
+  (real-time deepfakes against exchange liveness checks) has no row: ATT&CK
+  20.1 revokes Impersonation (T1656) and nothing else fits without stretching.
 - **ATT&CK has no software entry** for any of these frameworks as of v20.
 - Secondary coverage attributing HexStrike-AI exploitation to a named group
   could not be verified against a primary source and is not used.
