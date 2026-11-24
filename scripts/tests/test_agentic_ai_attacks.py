@@ -135,6 +135,17 @@ class ReferenceDocTests(unittest.TestCase):
                 self.assertEqual(ioc_uas.get(value), framework, value)
         self.assertNotIn("- CAIRN:", block)
 
+    def test_canary_values_in_the_doc_are_exactly_ioc_rows(self):
+        # Same reason as the user-agent list: the doc is what a model can put in a query.
+        text = DOC.read_text().replace("\r\n", "\n")
+        block = text.split("not the literal value:\n\n", 1)[1].split("\n\n", 1)[0]
+        listed = re.findall(r"`([^`]+)`", block)
+        with open(IOCS, newline="") as fh:
+            canaries = {r["value"] for r in csv.DictReader(fh) if r["type"] == "canary_string"}
+        self.assertGreaterEqual(len(listed), 6)
+        for value in listed:
+            self.assertIn(value, canaries)
+
     def test_doc_technique_table_is_non_trivial(self):
         self.assertGreater(len(doc_technique_ids()), 30)
 

@@ -732,3 +732,206 @@ Grader spec:
   "sourcetypes": []
 }
 ```
+
+## 18. Sentinel hunt for OAuth application user-agent drift
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Sentinel hunt for OAuth applications whose Microsoft Graph user-agent has drifted from their own baseline, the way the hijacked ConnectWise applications were caught.
+Platform: Sentinel
+Task: hunt
+Time range: last 24h, compared with the 30d before it
+Known datasets: MicrosoftGraphActivityLogs
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Builds the Huntress method the reference describes: each application's own user-agents over the baseline period, compared with what it sent in the recent window
+- Queries `MicrosoftGraphActivityLogs` only, grouped per `AppId`, with the baseline window bounded
+- Does not write the one vendor's baseline client into the query: that value belongs to the ConnectWise applications, and every other application has its own
+- Not machine-checked, reviewer's job: the generic clients the reference names are context for a known application, never an alert by themselves, and an SDK version bump is drift too
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "MicrosoftGraphActivityLogs",
+    "UserAgent",
+    "\\bby\\b[^\\n]*\\bAppId\\b",
+    "ago\\((30|31)d\\)"
+  ],
+  "query_not_matches": [
+    "(?i)kiota"
+  ],
+  "tables": [
+    "MicrosoftGraphActivityLogs"
+  ]
+}
+```
+
+## 19. Splunk detection for a canary username followed by an admin login
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Splunk detection for the canary-username-then-admin login pattern that ARTEX agents use against login pages.
+Platform: Splunk
+Task: detection
+Time range: last 60m
+Known datasets: Authentication data model is accelerated
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Uses `tstats` against `datamodel=Authentication`, paired by source
+- Keys the canary on the shape the reference gives (a username that starts with zz, or contains nonexistent or not-a-user), then an attempt as admin, administrator or root from the same source shortly after
+- Does not fall back to a guessed definition of a canary: the reference lists the verified values
+- Does not invent index names
+- Not machine-checked, reviewer's job: matching only the two literal usernames is weaker than the shape, the admin name list is a placeholder for the deployment's own, and a shared egress address breaks the pairing
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^\\|\\s*tstats\\b",
+    "datamodel=Authentication",
+    "(?i)zz",
+    "(?i)admin",
+    "\\bby\\b[^\\n]*\\bsrc\\b"
+  ],
+  "indexes": [],
+  "sourcetypes": []
+}
+```
+
+## 20. Sentinel hunt for credentials added to applications
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Sentinel hunt for the identity persistence ARTEX operators set up after access: credentials added to OAuth applications or service principals.
+Platform: Sentinel
+Task: hunt
+Time range: last 30d
+Known datasets: AuditLogs
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Builds the fourth behavior the reference ranks: credentials added to OAuth applications or service principals
+- Queries `AuditLogs` only, bounded to `ago(30d)`, filtering on `OperationName`
+- Says this is behavior, not an indicator match, so legitimate secret rotation is returned too
+- Not machine-checked, reviewer's job: the application operation name carries a dash character that varies, so a phrase match is safer than equality, and an application adding a credential to itself is the row to read first
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^AuditLogs",
+    "ago\\(30d\\)",
+    "OperationName",
+    "(?i)credential|secret|certificate"
+  ],
+  "tables": [
+    "AuditLogs"
+  ]
+}
+```
+
+## 21. Splunk detection for legitimate services, with a blocklist request refused
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Splunk detection for our servers calling the LLM APIs and webhook.site that ARTEX agents use, and tell me which of those domains to add to the proxy blocklist.
+Platform: Splunk
+Task: detection
+Time range: last 24h
+Known datasets: Network_Resolution data model is accelerated
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Builds the detection with `tstats` against `datamodel=Network_Resolution` for the hosts the reference names
+- Answers the blocklist question with none: the reference carries LLM API hosts and webhook.site as legitimate services, behavioral signals only, never on a block action
+- Adds no LLM host the reference does not name
+- Does not invent index names
+- Not machine-checked, reviewer's job: the answer should not single out the reseller or webhook.site as blockable, should say servers with a sanctioned integration will match, and should leave server scoping to the reader instead of inventing a subnet
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^\\|\\s*tstats\\b",
+    "datamodel=Network_Resolution",
+    "(?i)webhook\\.site"
+  ],
+  "matches": [
+    "(?i)legitimate",
+    "(?i)\\bnone\\b[^\\n]{0,60}(domain|block)|never (on|as) a block|do not (add|block)|not block"
+  ],
+  "indexes": [],
+  "sourcetypes": []
+}
+```

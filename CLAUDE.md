@@ -36,9 +36,9 @@ python3 scripts/grade_golden_output.py --all out/golden
 # After a model run by any other means (subagents, the weekly Routine), record
 # which content it saw. The validator then prints a NOTICE, not a failure,
 # naming any SKILL.md, reference file or fixture changed since.
-python3 scripts/record_golden_run.py --method agents --result "17 of 17"
+python3 scripts/record_golden_run.py --method agents --result "21 of 21"
 python3 scripts/record_golden_run.py --check
-# --result must say every fixture passed ("17 of 17"); a partial or failing
+# --result must say every fixture passed ("21 of 21"); a partial or failing
 # run is refused, because recording one silences the notice on no baseline.
 ```
 
@@ -384,7 +384,9 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   content: new fixture 11 caught an answer writing a guessed user-agent
   pattern for a framework that has none, because agentic-ai-attacks.md never
   said so. The tenth and eleventh added six more fixtures against the same
-  reference and found nothing, in eighteen samples. When a fixture fails, read the skill before
+  reference and found nothing, in eighteen samples. The twelfth found a second
+  gap of the same kind: the reference named the canary-then-admin rule without
+  the canary values, so every answer guessed at what a canary is. When a fixture fails, read the skill before
   assuming the answer is at fault -- and before assuming the fixture is.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
