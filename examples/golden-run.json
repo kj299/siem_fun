@@ -4,7 +4,7 @@
   "method": "agents",
   "result": "21 of 21",
   "files": {
-    "examples/golden-prompts.md": "b776c079bedf058a2596d60eab013047654c1e3637b8fd880031419657198863",
+    "examples/golden-prompts.md": "d2ee52a06726eae90762c378d5c9453dacc810680576965190a71fffddc9cb7c",
     "splunk-data-dictionary-builder/SKILL.md": "f41e37ed6075f86d420121230a46b9b3e4e650f0d0d2500e6030a340d43c29cb",
     "splunk-data-dictionary-builder/references/workflow.md": "c70b9d9bbe3e38a00c3998f7b52a3cf0bf47bd30cb64c261d75d5eb60f569ba5",
     "splunk-enrichment-query-builder/SKILL.md": "27aac22d531102030e133f935e0333c40ec73dbe28c783951ced3a6799339ab3",

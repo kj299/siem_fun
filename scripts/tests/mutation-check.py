@@ -511,6 +511,18 @@ GRADER_MUTS = [
     ("grader: a fixture with no spec is an error",
      "        if len(specs) != 1:",
      "        if len(specs) > 1:"),
+    # never_block reads prose for advice to block a named service. Read a
+    # sentence at a time it is fooled by the very answer it exists for, one
+    # that refuses some hosts and recommends blocking others in one sentence.
+    ("grader: never_block reads clause by clause, so a refusal elsewhere in the sentence does not clear it",
+     "            for clause in _CLAUSE_SPLIT_RE.split(sentence):",
+     "            for clause in [sentence]:"),
+    ("grader: never_block is applied when a spec names it",
+     '        offending = block_recommendations(answer, spec["never_block"])',
+     "        offending = []"),
+    ("grader: never_block exempts a clause that negates, defers or explains",
+     "                if names_one(clause) and _BLOCK_WORD_RE.search(clause) and not _BLOCK_EXEMPT_RE.search(clause):",
+     "                if names_one(clause) and _BLOCK_WORD_RE.search(clause):"),
 ]
 for label, old, new in GRADER_MUTS:
     unit_mutation(label, GRADER, old, new, grader_suite)

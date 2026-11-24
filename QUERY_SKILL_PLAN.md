@@ -831,6 +831,18 @@ thing: the vendor's baseline client written into the drift query, a second
 table, the pre-fix canary answer, and a blocklist answer with the refusal
 removed. All were rejected.
 
+Fixture 21 was then tightened. Its refusal check was a required phrase, and
+an answer that refuses the LLM hosts while recommending a block on the
+reseller or webhook.site contains that phrase too. The grader gained a
+`never_block` spec key that reads the answer's prose clause by clause for
+advice to block a named service; sentence by sentence is not enough, because
+the answer it exists for carries its refusal and its recommendation in one
+sentence. The four real answers to fixture 21 pass it and no other answer in
+the run trips it; answers edited to recommend the block fail. It reads prose,
+so it has stated misses: advice by pronoun and advice hedged with a
+condition. No prompt and no skill content moved, so the twenty-one answers
+were re-graded, not re-run, and the marker was recorded again.
+
 Six fixture defects and two skill-content gaps across twelve runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that

@@ -906,7 +906,8 @@ Expected output:
 - Answers the blocklist question with none: the reference carries LLM API hosts and webhook.site as legitimate services, behavioral signals only, never on a block action
 - Adds no LLM host the reference does not name
 - Does not invent index names
-- Not machine-checked, reviewer's job: the answer should not single out the reseller or webhook.site as blockable, should say servers with a sanctioned integration will match, and should leave server scoping to the reader instead of inventing a subnet
+- Does not single out the reseller or webhook.site as the ones to block. The spec's `never_block` reads the answer clause by clause, because an answer can refuse the LLM hosts and recommend blocking these two in the same sentence, and a required phrase such as "do not block" would pass it
+- Not machine-checked, reviewer's job: the answer should say servers with a sanctioned integration will match, should leave server scoping to the reader instead of inventing a subnet, and should not recommend a block by pronoun ("block it") or as a condition ("block it if nobody uses it"), which the clause check cannot see
 
 Grader spec:
 
@@ -931,6 +932,7 @@ Grader spec:
     "(?i)legitimate",
     "(?i)\\bnone\\b[^\\n]{0,60}(domain|block)|never (on|as) a block|do not (add|block)|not block"
   ],
+  "never_block": ["xcai.pro", "webhook.site"],
   "indexes": [],
   "sourcetypes": []
 }
