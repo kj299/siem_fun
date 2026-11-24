@@ -41,7 +41,8 @@ proc agt_act { rule detail enforce } {
 
 when HTTP_REQUEST {
     # "HTTP::header value" returns only the LAST header of a name, so a client that sends
-    # the header twice chooses which one is read. Join every value instead.
+    # the header twice chooses which one is read. Join every value instead. (F5 notes that
+    # "HTTP::header values" can drop colons from what it returns; nothing matched here has one.)
     set agt_ua [string tolower [join [HTTP::header values "User-Agent"] " "]]
     # HTTP::path is the path as sent: still percent-encoded and still carrying ;parameters.
     # Decode it, or /%61ctuator/env and /.%65nv walk past the path rules below.
