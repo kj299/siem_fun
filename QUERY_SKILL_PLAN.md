@@ -594,7 +594,9 @@ the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
 ModSecurity. The same test file pins its address list and user-agent lists to
 `iocs.csv`; the rule syntax itself was not loaded on any device. The Akamai
 JSON and the iRule's commands were later checked against the vendors' API
-references.
+references. A later change added path rules: traversal sequences in a
+path or parameter, secret files, management endpoints such as Spring Boot
+Actuator, and Swagger UI.
 
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
@@ -732,9 +734,51 @@ it.
 
 That is a result, not an absence of one: the gap fixture 11 found was about a
 missing fact, and these three ask for things the reference does state. What
-is still not exercised by any fixture: the ATT&CK technique map, the OAuth
-user-agent drift hunt, the Splunk identity rules (source-centric spraying),
-and the reference's rule that legitimate services are never a block action.
+was still not exercised by any fixture after this run: the ATT&CK technique
+map, the OAuth user-agent drift hunt, the Splunk identity rules
+(source-centric spraying), and the reference's rule that legitimate services
+are never a block action. The eleventh run takes the first and third.
+
+## What the eleventh model run found
+
+Eleventh run, 2026-11-24, for three fixtures on the ATT&CK map and the Splunk
+identity side.
+
+- **Fixture 15**, a technique the map has: T1546.018, asked for by ID only,
+  with the Endpoint data model known. The spec wants a `tstats` against that
+  model for the one artifact the row evidences, and CAIRN named.
+- **Fixture 16**, a technique the map does not have: T1486, asked for "as
+  ARTEX operators have used it". This is the same kind of question as fixture
+  11's CAIRN user-agent, which found the reference gap: a request that
+  presupposes evidence the reference lacks. The spec wants the answer to say
+  the map has no row and forbids the framework's name inside the query.
+- **Fixture 17**, source-centric password spraying against the accelerated
+  Authentication data model. The spec wants a distinct count grouped by the
+  source and the word baseline next to the thresholds.
+
+Three samples of each, nine answers, nine passed, and reading them found
+nothing the specs missed. Every fixture 15 answer resolved the ID to Python
+Startup Hooks, matched only the file the row evidences, and said only CAIRN
+has reporting for it. Every fixture 16 answer opened by saying the map has no
+T1486 row, quoted the reference's own line that a blank is an intelligence
+gap and not an assurance, offered a generic bulk-file-rewrite hunt labelled as
+generic, and listed the Impact techniques the map does evidence. Fixture 11
+failed one sample in three on the same kind of question before the reference
+was fixed; the difference here is that the reference already states how to
+read a missing row. Every fixture 17 answer grouped by source, kept a
+per-user ceiling so the rule fires on many users failing a few times each,
+and said a spray spread over a residential proxy pool stays under it.
+
+Each spec was also checked the other way, against an answer edited to do the
+wrong thing: an invented extension carrying the framework's name in the query,
+the missing-row statement removed, grouping by user, and CAIRN removed. All
+four were rejected.
+
+No skill and no reference changed, so the fourteen earlier answers were
+re-graded rather than re-run: 17 of 17, and the marker records it. Still not
+exercised by any fixture: the OAuth user-agent drift hunt, the canary-username
+login rule, identity persistence in cloud audit logs, and the rule that
+legitimate services are never a block action.
 
 ## For your own environment
 

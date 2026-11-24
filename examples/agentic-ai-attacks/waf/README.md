@@ -85,6 +85,7 @@ may appear in a rule file.
 | W-AGT-010 | 44 source addresses, including the eight Storm-3358 ARTEX and C2 servers Microsoft published on 2026-11-06 | Client address | `iocs.csv` rows marked block (CrowdStrike, Zscaler, NorForge, Kaspersky, Microsoft and others) | Low today, decaying. The FBI FLASH of 2026-11-13 asks you to vet addresses before blocking because hosting addresses get reassigned. Review on every `iocs.csv` update; expire after 90 days. |
 | W-AGT-011 | Shell command syntax in the User-Agent (`$(`, a backtick, `; curl`, a pipe to `sh`) | User-Agent header | Microsoft 2026-11-05 (exploitation by shell commands embedded in a user agent) | None for browsers. |
 | W-AGT-012 | Upload filename containing `../`, or named `sitecustomize.py` or `usercustomize.py` | Multipart body | Amazon 2026-11-20: Cairn agents found a path-traversal zero-day in an upload filename parameter in about 11 minutes and wrote a Python auto-import file for a root shell | Low. On Akamai this is left to the managed attack groups. |
+| W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, double-encoded and overlong dots) | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
 | W-AGT-013 | `isCliRequest` request header | Header | Amazon, November 2026: authentication bypass in the ARTEX playbook against One API family LLM gateways | Log only. Relevant only in front of such a gateway. |
 
 Deliberately **not** blocked, because the IOC file says so and the test
@@ -108,10 +109,24 @@ WorkOS's root cause was an internal API reachable from the internet with a
 predictable development credential and no rate limiting.
 
 - **W-AGT-020**: refuse `*.js.map`, `/openapi.json`, `/swagger.json`,
-  `/v3/api-docs` and `/runtime-config.json` to clients outside your own
+  `/v2/api-docs`, `/v3/api-docs`, `/runtime-config.json`, Swagger UI
+  (`*/swagger-ui*`) and `/swagger-resources` to clients outside your own
   ranges. Shipped disabled or as alert, because some of you publish an API
   specification on purpose. Better still, stop deploying source maps to
   production.
+- **W-AGT-021**: refuse secret files to everyone (`*/.env`, `*/.env.*`,
+  `*/.git/*`) and management endpoints to clients outside your own ranges
+  (`*/actuator/*` for Spring Boot Actuator, `*/debug/pprof*` for Go). On by
+  default, unlike W-AGT-020, because nothing public should depend on these.
+  `/actuator/health` is exempt so an external load balancer or uptime monitor
+  keeps working; `/actuator/env`, `/actuator/heapdump` and the rest are not.
+  Evidence, stated plainly: Amazon reports ARTEX agents harvesting secrets
+  from "debug routes, and environment files", and Unit 42 reports them
+  fetching API documentation pages. No report read for this pack names
+  Actuator, pprof or Swagger UI specifically; those paths are the framework
+  defaults for that class, chosen by the maintainer. Set the internal ranges
+  (`agt_internal_nets`, or the address list in the other two files) to your
+  own before relying on the exemption.
 - Put non-production hosts (UAT, staging, test) behind an allowlist or
   identity-aware proxy. CERT-In names exposed non-production environments as
   the entry point, with shared credentials carrying the agent into production.
@@ -186,7 +201,8 @@ Platform notes:
   AI-powered WAF detections (announced 2026-08-13, manageable by API);
   Akamai's own example of one is a request whose User-Agent contains
   `PentestAgent`. Keep the managed attack groups in deny: W-AGT-009 and
-  W-AGT-012 rely on them here.
+  W-AGT-012 rely on them here, and W-AGT-014 is only a second line behind
+  the local-file-inclusion group.
   Pair the rate policies with Bot Manager on the same endpoints, and add a
   Client Reputation deny for the web-scanner and web-attacker categories at
   high scores.

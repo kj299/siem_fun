@@ -575,3 +575,160 @@ Grader spec:
   ]
 }
 ```
+
+## 15. ATT&CK technique lookup from the agentic framework map
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Splunk hunt for ATT&CK technique T1546.018 as the agentic attack frameworks' operators have used it.
+Platform: Splunk
+Task: hunt
+Time range: last 30d
+Known datasets: Endpoint data model is accelerated
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Resolves the technique ID through the map in agentic-ai-attacks.md: Python Startup Hooks, one row, CAIRN only, from one report
+- Hunts the artifact that row evidences, a write of `sitecustomize.py`, with `tstats` against the Endpoint data model the prompt supplies
+- Attributes it to CAIRN and not to the frameworks the row does not list
+- Does not invent index names
+- Not machine-checked, reviewer's job: widening to other startup-hook files is a choice the answer should label as beyond the evidence, and package installs write this file legitimately
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^\\|\\s*tstats\\b",
+    "datamodel=Endpoint\\.",
+    "(?i)sitecustomize"
+  ],
+  "matches": [
+    "(?i)cairn"
+  ],
+  "indexes": [],
+  "sourcetypes": []
+}
+```
+
+## 16. ATT&CK technique the map does not carry
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Splunk hunt for ATT&CK technique T1486 as ARTEX operators have used it.
+Platform: Splunk
+Task: hunt
+Time range: last 30d
+Known datasets: Endpoint data model is accelerated
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Says the map has no row for this technique: no report used ties these frameworks to encrypting data for impact, and the reference calls a blank an intelligence gap, not an assurance
+- Offers a hunt for the technique in general against the supplied Endpoint data model, and says that is what it is
+- Writes no ARTEX-specific indicator into the query (an extension, a note name, a tool name): none is reported, so any would be invented
+- Not machine-checked, reviewer's job: pointing to the Impact techniques the map does evidence is a good addition, and the answer must not claim a clean result says anything about ARTEX
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^\\|\\s*tstats\\b",
+    "datamodel=Endpoint\\."
+  ],
+  "query_not_matches": [
+    "(?i)artex"
+  ],
+  "matches": [
+    "(?i)intelligence gap|no T1486 row|absent from|no (row|evidence|entry|report)"
+  ],
+  "indexes": [],
+  "sourcetypes": []
+}
+```
+
+## 17. Splunk detection for source-centric password spraying
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Splunk detection for the source-centric password spraying that agentic attack frameworks such as ARTEX run.
+Platform: Splunk
+Task: detection
+Time range: last 60m
+Known datasets: Authentication data model is accelerated
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Builds the behavior the reference ranks second: one source failing many principals a few times each, below any per-principal rule
+- Uses `tstats` against `datamodel=Authentication`, with `summariesonly=true` because the prompt confirms acceleration
+- Counts distinct users and groups by the source, not by the user: a per-user threshold is the rule this behavior is built to stay under
+- Says the thresholds are starting points to derive from a baseline, as the reference does
+- Does not invent index names
+- Not machine-checked, reviewer's job: shared egress (NAT, VPN, proxy) trips a per-source rule, and a spray spread over a residential proxy pool stays under it
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^\\|\\s*tstats\\b",
+    "summariesonly=true",
+    "datamodel=Authentication",
+    "(?i)\\b(dc|distinct_count|estdc)\\(",
+    "\\bby\\b[^\\n]*\\bsrc\\b"
+  ],
+  "matches": [
+    "(?i)baseline"
+  ],
+  "indexes": [],
+  "sourcetypes": []
+}
+```

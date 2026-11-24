@@ -291,7 +291,7 @@
     {
       "action": "alert",
       "rule": {
-        "name": "W-AGT-020 source map or API spec requested",
+        "name": "W-AGT-020 source map, API spec or Swagger UI requested",
         "description": "Exposure reduction. Move to deny (with an internal network-list exception) once nothing public depends on these.",
         "operation": "AND",
         "structured": true,
@@ -308,7 +308,10 @@
               "*/openapi.json",
               "*/swagger.json",
               "*/v3/api-docs",
-              "*/runtime-config.json"
+              "*/runtime-config.json",
+              "*/v2/api-docs",
+              "*/swagger-ui*",
+              "*/swagger-resources*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -367,6 +370,130 @@
             "positiveMatch": true,
             "name": "isCliRequest",
             "nameWildcard": false
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-014a path traversal in path",
+        "description": "Traversal sequences in the path, plain and encoded. The Adaptive Security Engine local-file-inclusion group covers this class and should stay in deny; this custom rule is a second line. Whether the edge shows a custom rule the path before or after normalization is not stated in the API reference, so validate in alert.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "*../*",
+              "*..\\*",
+              "*%2e%2e*",
+              "*..%2f*",
+              "*..%5c*",
+              "*%252e*",
+              "*%c0%ae*",
+              "*%c0%af*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true,
+            "valueNormalize": false
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-014b path traversal in query string",
+        "description": "Amazon 2026-11-20: Cairn agents found traversal in a filename parameter in about 11 minutes.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "uriQueryMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "*../*",
+              "*..\\*",
+              "*%2e%2e*",
+              "*..%2f*",
+              "*..%5c*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-021a secret file requested",
+        "description": "Dotenv files and git metadata are never served to anyone.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "*/.env",
+              "*/.env.*",
+              "*/.git/*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-021b management endpoint to external client",
+        "description": "Spring Boot Actuator and Go pprof. The health endpoint is excluded for load balancers. Add an ipMatch or clientListMatch condition with positiveMatch false for your own ranges before moving to deny.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "*/actuator",
+              "*/actuator/*",
+              "*/debug/pprof*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          },
+          {
+            "type": "pathMatch",
+            "positiveMatch": false,
+            "value": [
+              "*/actuator/health",
+              "*/actuator/health/*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
           }
         ]
       }
