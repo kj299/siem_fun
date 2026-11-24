@@ -17,7 +17,8 @@ pwsh -NoProfile -File ./scripts/tests/validate-skill-pack.tests.ps1
 python -m unittest discover -s splunk-data-dictionary-builder/tests
 
 # Everything else under scripts/tests: the golden-prompt grader and runner,
-# the golden-run marker recorder, and the agentic-AI asset consistency suite.
+# the golden-run marker recorder, the agentic-AI asset consistency suite, and
+# the WAF engine tests (which skip unless the engines are installed; see below).
 # The grader's tests also read scripts/tests/shared-rule-cases.json, the cases
 # the validator's suite checks against too, so a rule that drifts between the
 # two tools fails here.
@@ -43,15 +44,15 @@ python3 scripts/record_golden_run.py --check
 ```
 
 CI runs everything except the model run on every pull request and on pushes
-to `main` (two jobs: `validate` on windows-latest, `python` on
-ubuntu-latest), plus weekly on a
+to `main` (three jobs: `validate` on windows-latest, `python` and
+`waf-engines` on ubuntu-latest), plus weekly on a
 schedule so runner-image and module drift surfaces on its own rather than as a
 mystery failure in whatever PR happens to come next. A push to a topic branch
 with no open PR runs nothing, so run them locally before pushing; several bugs
 in this repo's history reached CI only because a local run was skipped.
 
 The weekly schedule (and a manual `workflow_dispatch`) additionally runs a
-third job, `golden-run`, which does call a model: it needs `validate` and
+fourth job, `golden-run`, which does call a model: it needs `validate` and
 `python` green first, then runs every fixture against the `ANTHROPIC_API_KEY`
 repository secret. A full pass pushes the refreshed marker to `main` itself,
 so a stale NOTICE never has to wait on a person running
@@ -214,7 +215,18 @@ byte-level checks, plus
 which keeps `iocs.csv`, the ATT&CK Navigator layer and the reference doc's
 technique table consistent. The same test pins the WAF rule pack under
 `waf/` there (F5, Akamai, ModSecurity) to `iocs.csv`: only block-action
-addresses may be denied, and no legitimate service may appear in a rule file. A sourcetype or table written only in those files
+addresses may be denied, and no legitimate service may appear in a rule file.
+None of that runs a rule. [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py)
+does: it loads the SecLang file in Apache with ModSecurity v2 and in nginx
+with ModSecurity v3, alone and after the OWASP Core Rule Set, sends each rule
+a request that should match and one that should not, and runs the F5 iRule's
+logic in a Tcl stand-in (`scripts/tests/waf/irule_runtime.tcl`). Test a rule
+beside the software it is deployed beside: two defects showed only with the
+Core Rule Set loaded first. The engine suites skip when the
+engines are absent, and the `waf-engines` CI job sets `WAF_ENGINES_REQUIRED=1`
+so a skip there is a failure. **Change a WAF rule, add a request case, and run
+it in an engine**: the pack shipped with a file that did not load, because
+every check on it compared documents. A sourcetype or table written only in those files
 is not provenance-checked. Two things a markdown-style check would get wrong
 there: a saved search is time-bounded by `dispatch.earliest_time` in its
 stanza rather than in the search string, and `splunk-morpheus-native.conf`

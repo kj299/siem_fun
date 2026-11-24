@@ -1,10 +1,10 @@
 {
-  "_status": "needs_validation. Field names, condition types and enum values were checked on 2026-11-24 against Akamai's Application Security API reference (techdocs.akamai.com, 'Create a custom rule' and 'Create a rate policy'). Nothing here has been imported into an Akamai configuration. Two things the reference leaves open: it documents valueWildcard for requestHeaderMatch only, although its own example sets it on cookie, query and extension conditions, and its argsPostMatch example carries no wildcard flag at all - so validate the pathMatch, uriQueryMatch and argsPostMatch rules in alert before trusting them.",
+  "_status": "needs_validation. Field names, condition types and enum values were checked on 2026-11-24 against Akamai's Application Security API reference (techdocs.akamai.com, 'Create a custom rule' and 'Create a rate policy'). Nothing here has been imported into an Akamai configuration. Two things the reference leaves open: it documents valueWildcard for requestHeaderMatch only, although its own example sets it on cookie, query and extension conditions, and its argsPostMatch example carries no wildcard flag at all - so validate the pathMatch, uriQueryMatch and argsPostMatch rules in alert before trusting them. The same caution applies to name '*' with nameWildcard on uriQueryMatch and argsPostMatch (documented for requestHeaderMatch only: if it is not honoured those rules look for a parameter literally named '*' and never match), and to valueRecursive on the W-AGT-008 filenameMatch (documented, default not stated; set true here so files below the root folder match). Whether pathMatch sees the path as sent or normalized is not documented on the public pages, so the encoded and ';parameter' forms the other two files were tested against are unverified here.",
   "_usage": "Each entry under customRules has a recommended action and a rule body. POST the rule body, then set the action per security policy. operation AND requires every condition; values inside one condition are ORed. Start every rule in alert. The structured builder matches ? and * wildcards, not regular expressions, so W-AGT-007, W-AGT-008 and W-AGT-011 are approximations of the regex versions in the other files. Custom rules are active for 30 days by default: set effectiveTimePeriod or renew them.",
   "_network_list": "W-AGT-010: load blocklist-ipv4.txt as a Network List and deny it in IP/Geo Firewall. No custom rule needed.",
   "_tls_fingerprint": "The reference lists a clientTlsFingerprintMatch condition and a tls-fingerprint rate-policy client identifier. The three JA4 values in iocs.csv are deliberately not shipped as a rule: they identify an HTTP client library seen on a researcher's instance. Use them in an alert-only rule of your own if you want the signal.",
-  "_not_expressible": "W-AGT-009 (DTD in an XML body) and W-AGT-012 (upload filename traversal) inspect request bodies and multipart filenames, which structured custom rules do not expose. On Akamai they are covered by the Adaptive Security Engine attack groups (keep them in deny) rather than by a custom rule here.",
-  "_rate_policy_notes": "clientIdentifier is deprecated but still listed as required, so both it and clientIdentifiers are set; tls-fingerprint keeps counting one client as it rotates addresses. penaltyBoxDuration applies only with counterType region_aggregated. W-AGT-034 (repeat WAF violators) is not a rate policy on Akamai: turn on the security policy's penalty box instead.",
+  "_not_expressible": "W-AGT-009 (DTD in an XML body) and W-AGT-012 (upload filename traversal) are not shipped as custom rules. Akamai's condition-type list names argsPostJSONMatch, argsPostJSONNamesMatch and argsPostXMLMatch, but the type enum on the 'Create a custom rule' page omits all three, so a rule using them could not be checked against the schema; and none of them exposes a multipart filename or a DTD. On Akamai these two are covered by the Adaptive Security Engine attack groups (keep them in deny) rather than by a custom rule here.",
+  "_rate_policy_notes": "clientIdentifier is deprecated but still listed as required, so both it and clientIdentifiers are set; tls-fingerprint keeps counting one client as it rotates addresses. penaltyBoxDuration applies only with counterType region_aggregated. W-AGT-034 (repeat WAF violators) is not a rate policy on Akamai: turn on the security policy's penalty box instead. Thresholds are hits per SECOND and the minimum is 1: averageThreshold 1 means about 120 matching requests in two minutes, and burstThreshold N means N a second for five seconds. A rate policy therefore cannot express the low-and-slow thresholds the README gives for the other platforms (more than 10 failed logins in 5 minutes, more than 3 sign-ups an hour): W-AGT-031 and W-AGT-032 here catch only the machine-speed end of those behaviours. Use Account Protector or Bot Manager for the slow end.",
   "customRules": [
     {
       "action": "deny",
@@ -36,6 +36,33 @@
               "*cyberstrikeai*",
               "*pentagi/*",
               "*tcp_beacon*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-001b ARTEX named in the user-agent",
+        "description": "The framework's own name at the start of a word in the User-Agent. F5 Labs (2026-11-23) lists 46 user-agents it tied to ARTEX, made up by the agent per task; 44 carry the name. Alert, not deny: the wildcard builder can say 'at the start of the header, after a space or after an opening bracket' but cannot say what may follow, so this also matches a product such as ArtExpo. The regex versions in the other files can, and deny.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": [
+              "artex*",
+              "* artex*",
+              "*(artex*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -181,7 +208,8 @@
               "*eyJhbGciOiJOb25l*",
               "*eyJhbGciOiJOT05F*",
               "*eyJ0eXAiOiJKV1QiLCJhbGciOiJub25l*",
-              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJOb25l*"
+              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJOb25l*",
+              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJOT05F*"
             ],
             "valueCase": true,
             "valueWildcard": true
@@ -269,7 +297,8 @@
               "i?????"
             ],
             "valueCase": false,
-            "valueWildcard": true
+            "valueWildcard": true,
+            "valueRecursive": true
           },
           {
             "type": "extensionMatch",
@@ -397,7 +426,8 @@
               "*..%5c*",
               "*%252e*",
               "*%c0%ae*",
-              "*%c0%af*"
+              "*%c0%af*",
+              "*..;*"
             ],
             "valueCase": false,
             "valueWildcard": true,
@@ -454,7 +484,9 @@
             "value": [
               "*/.env",
               "*/.env.*",
-              "*/.git/*"
+              "*/.git/*",
+              "*/.env;*",
+              "*/.git"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -466,7 +498,7 @@
       "action": "deny",
       "rule": {
         "name": "W-AGT-021b management endpoint to external client",
-        "description": "Spring Boot Actuator and Go pprof. The health endpoint is excluded for load balancers. Add an ipMatch or clientListMatch condition with positiveMatch false for your own ranges before moving to deny.",
+        "description": "Spring Boot Actuator and Go pprof. The health endpoint is excluded for load balancers. Add an ipMatch or clientListMatch condition with positiveMatch false for your own ranges before moving to deny. The health exemption is an explicit list (health, health/liveness, health/readiness): a wildcard tail would also exempt /actuator/health/..;/env, which Tomcat and Spring serve as /actuator/env. Add your own health groups by name.",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -480,7 +512,8 @@
             "value": [
               "*/actuator",
               "*/actuator/*",
-              "*/debug/pprof*"
+              "*/debug/pprof*",
+              "*/actuator;*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -490,7 +523,33 @@
             "positiveMatch": false,
             "value": [
               "*/actuator/health",
-              "*/actuator/health/*"
+              "*/actuator/health/liveness",
+              "*/actuator/health/readiness"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-021c management endpoint reached through the health exemption",
+        "description": "W-AGT-021b exempts paths ending in /actuator/health. A path with a second /actuator segment before that ending (for example /actuator/jolokia/exec/x/actuator/health) is not the health endpoint; refuse it. Add the same ipMatch or clientListMatch condition you add to W-AGT-021b.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "*/actuator/*/actuator/*",
+              "*/actuator;*/actuator/*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -547,7 +606,7 @@
       "action": "alert",
       "policy": {
         "name": "W-AGT-031 source-centric login failures",
-        "description": "Failed logins per client across any number of usernames. Set path values to your login and token endpoints.",
+        "description": "Failed logins per client across any number of usernames. Set path values to your login and token endpoints. Fires at about one failure a second sustained (the lowest rate a rate policy can express), not at the 10-in-5-minutes threshold used on the other platforms.",
         "matchType": "path",
         "type": "WAF",
         "pathMatchType": "Custom",
@@ -598,7 +657,7 @@
       "action": "alert",
       "policy": {
         "name": "W-AGT-032 self-registration rate",
-        "description": "Sign-up posts per client. Okta saw thousands of fraudulent self-service registrations. Set path values to your sign-up endpoints.",
+        "description": "Sign-up posts per client. Okta saw thousands of fraudulent self-service registrations. Set path values to your sign-up endpoints. Fires at about one sign-up a second sustained (the lowest rate a rate policy can express), not at the 3-an-hour threshold used on the other platforms.",
         "matchType": "path",
         "type": "WAF",
         "pathMatchType": "Custom",

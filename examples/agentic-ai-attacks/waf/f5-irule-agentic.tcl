@@ -4,8 +4,11 @@
 # Needs the data groups in f5-data-groups.tmsh. Attach to the HTTP virtual server.
 #
 # Status: needs_validation. Command usage (class match, call/proc, HTTP::collect,
-# HTTP::respond with noserver) was checked against F5's iRules reference on clouddocs.f5.com
-# on 2026-11-24; the rule itself has not been loaded on a live device. Start with agt_log_only 1, read /var/log/ltm for "agt_waf", then switch.
+# HTTP::respond with noserver, HTTP::header values) was checked against F5's iRules
+# reference on clouddocs.f5.com on 2026-11-24, and the rule's logic was executed against
+# its data groups in a Tcl stand-in for the iRule runtime (README.md, "What was executed").
+# It has not been loaded on a live device. Start with agt_log_only 1, read /var/log/ltm
+# for "agt_waf", then switch.
 #
 # What this does NOT do: rate limiting and brute-force control. Use Advanced WAF
 # brute-force protection, Bot Defense and session tracking for those (README.md, tier 3);
@@ -14,7 +17,8 @@
 when RULE_INIT {
     # 1 = log only, 0 = respond 403. Flip per rule class below if you want a mixed mode.
     set static::agt_log_only 1
-    # Largest request body inspected, in bytes. Bodies above it are not collected.
+    # Bytes of request body inspected. A longer body has its first agt_max_body bytes
+    # inspected; the rest goes through unread.
     set static::agt_max_body 65536
     # 1 = refuse source maps, API specs and Swagger UI to clients outside agt_internal_nets
     # (W-AGT-020). Leave 0 if you publish your OpenAPI document on purpose.
@@ -36,20 +40,32 @@ proc agt_act { rule detail enforce } {
 }
 
 when HTTP_REQUEST {
-    set agt_ua [string tolower [HTTP::header value "User-Agent"]]
-    set agt_path [string tolower [HTTP::path]]
+    # "HTTP::header value" returns only the LAST header of a name, so a client that sends
+    # the header twice chooses which one is read. Join every value instead. (F5 notes that
+    # "HTTP::header values" can drop colons from what it returns; nothing matched here has one.)
+    set agt_ua [string tolower [join [HTTP::header values "User-Agent"] " "]]
+    # HTTP::path is the path as sent: still percent-encoded and still carrying ;parameters.
+    # Decode it, or /%61ctuator/env and /.%65nv walk past the path rules below.
+    set agt_path [string tolower [URI::decode [HTTP::path]]]
     set agt_uri_raw [HTTP::uri]
-    set agt_uri [string tolower [URI::decode $agt_uri_raw]]
-    set agt_auth [HTTP::header value "Authorization"]
+    # "+" is a space in a query string and URI::decode leaves it alone: map it first, or
+    # artex'+union+select is not the artex' union select that W-AGT-006 looks for.
+    set agt_uri [string tolower [URI::decode [string map {+ " "} $agt_uri_raw]]]
+    set agt_auth [join [HTTP::header values "Authorization"] " "]
 
     # W-AGT-010: verified hostile infrastructure (block-action IPv4 rows of iocs.csv).
     # If a CDN or proxy sits in front, match the trusted client-IP header instead.
-    if { [class match [IP::client_addr] equals agt_ip_block] } {
+    if { [class match -- [IP::client_addr] equals agt_ip_block] } {
         if { [call agt_act "W-AGT-010" "ioc-ip" 1] } { return }
     }
 
-    # W-AGT-001: user-agents compiled into the frameworks. Default builds only.
-    if { $agt_ua ne "" && [class match $agt_ua contains agt_ua_block] } {
+    # W-AGT-001: user-agents compiled into the frameworks (default builds only), and the
+    # framework's own name at the start of a word. F5 Labs (2026-11-23) lists 46 user-agents
+    # it tied to ARTEX; the agent makes them up per task and 44 carry the name. Matched as a
+    # word: not after a letter (SmartExchange), and followed by the end, a non-letter, or
+    # one of the two suffixes in F5's list, probe and bot (so ArtExpo is not a hit).
+    # The agent changes the header when blocked.
+    if { $agt_ua ne "" && ([class match -- $agt_ua contains agt_ua_block] || [regexp {(^|[^a-z])artex($|[^a-z]|probe|bot)} $agt_ua]) } {
         # A request from the CyberStrikeAI web-shell manager means a shell may already
         # be on this server: page someone, do not just block.
         if { $agt_ua contains "cyberstrikeai-webshell" } {
@@ -67,17 +83,17 @@ when HTTP_REQUEST {
         call agt_act "W-AGT-013" "iscli-header" 0
     }
     # W-AGT-003: agent-adjacent tooling with legitimate users. Never enforced here.
-    if { $agt_ua ne "" && [class match $agt_ua contains agt_ua_alert] } {
+    if { $agt_ua ne "" && [class match -- $agt_ua contains agt_ua_alert] } {
         call agt_act "W-AGT-003" $agt_ua 0
     }
 
     # W-AGT-004: canary probes, OAuth junk state, metadata-service SSRF, in path or query.
-    if { [class match $agt_uri contains agt_canary_strings] } {
+    if { [class match -- $agt_uri contains agt_canary_strings] } {
         if { [call agt_act "W-AGT-004" $agt_uri 1] } { return }
     }
 
     # W-AGT-005: unsigned JWT (header alg none). Base64 is case-sensitive: no tolower.
-    if { [class match $agt_auth contains agt_jwt_none] || [class match $agt_uri_raw contains agt_jwt_none] || [class match [HTTP::header value "Cookie"] contains agt_jwt_none] } {
+    if { [class match -- $agt_auth contains agt_jwt_none] || [class match -- $agt_uri_raw contains agt_jwt_none] || [class match -- [join [HTTP::header values "Cookie"] ";"] contains agt_jwt_none] } {
         if { [call agt_act "W-AGT-005" "jwt-alg-none" 1] } { return }
     }
 
@@ -92,13 +108,14 @@ when HTTP_REQUEST {
     }
 
     # W-AGT-008: request for a script named like an agent task artifact, i<number>.<ext>.
-    if { [regexp {/i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)$} $agt_path] } {
+    # The name may be followed by path info or a ;parameter: both still run the script.
+    if { [regexp {/i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)($|[/;])} $agt_path] } {
         if { [call agt_act "W-AGT-008" $agt_path 1] } { return }
     }
 
     # W-AGT-008 (second shape): JSP shells GTIG saw written by MySQL log poisoning
     # (cl1217.jsp, f1219a.jsp, z1219.jsp): 1-2 letters, 4 digits, optional letter.
-    if { [regexp {/[a-z]{1,2}[0-9]{4}[a-z]?\.jspx?$} $agt_path] } {
+    if { [regexp {/[a-z]{1,2}[0-9]{4}[a-z]?\.jspx?($|[/;])} $agt_path] } {
         if { [call agt_act "W-AGT-008" $agt_path 1] } { return }
     }
 
@@ -106,31 +123,54 @@ when HTTP_REQUEST {
     # for the encoded forms and on the decoded one for the plain forms. A browser resolves
     # dot-segments before it sends a request, so ../ in a path is never typed by a person.
     # Amazon 2026-11-20: Cairn agents found traversal in a filename parameter in 11 minutes.
-    if { [class match [string tolower $agt_uri_raw] contains agt_traversal] || [class match $agt_uri contains agt_traversal] } {
+    # "..;" is tested on the path alone: Tomcat and Spring resolve it as "..", and in a
+    # query string two dots and a semicolon are ordinary text.
+    if { [class match -- [string tolower $agt_uri_raw] contains agt_traversal] || [class match -- $agt_uri contains agt_traversal] || $agt_path contains "..;" } {
         if { [call agt_act "W-AGT-014" $agt_uri 1] } { return }
     }
 
     # W-AGT-021: files and endpoints that should never be served to the internet.
     # Secret files (.env, .git) are refused to everyone; management endpoints to outsiders.
-    if { [class match $agt_path contains agt_secret_paths] } {
+    # Anchored on purpose: a plain "contains /.env" also refuses /docs/.environment-setup,
+    # and "contains /actuator" refuses /actuators-catalogue. ";" counts as a boundary
+    # because Tomcat and Spring drop ;parameters (/actuator;x/env is /actuator/env).
+    if { [regexp {/\.env([.;]|$)|/\.git([/;]|$)} $agt_path] } {
         if { [call agt_act "W-AGT-021" $agt_path 1] } { return }
     }
-    if { $static::agt_block_mgmt && [class match $agt_path contains agt_mgmt_paths] && !($agt_path ends_with "/actuator/health" || $agt_path contains "/actuator/health/") && ![class match [IP::client_addr] equals agt_internal_nets] } {
+    # /actuator/health and its probe groups stay open for load balancers. The exemption
+    # accepts plain path segments only, so /actuator/health/..;/env does not ride through,
+    # and it must be the FIRST /actuator in the path, so
+    # /actuator/jolokia/exec/x/actuator/health does not either.
+    if { $static::agt_block_mgmt && [regexp {/actuator([/;]|$)|/debug/pprof} $agt_path] && ![regexp {^(/(?!actuator([/;]|$))[^/]*)*/actuator/health(/[a-z0-9_-]+)*/?$} $agt_path] && ![class match -- [IP::client_addr] equals agt_internal_nets] } {
         if { [call agt_act "W-AGT-021" $agt_path 1] } { return }
     }
 
     # W-AGT-020: source maps, API specs and Swagger UI to outside clients (exposure reduction).
-    if { $static::agt_block_specs && ([class match $agt_path ends_with agt_spec_paths] || $agt_path contains "/swagger-ui") && ![class match [IP::client_addr] equals agt_internal_nets] } {
+    # Tested on the path with any ;parameters removed, since ends_with would miss them.
+    regsub -all {;[^/]*} $agt_path "" agt_path_bare
+    if { $static::agt_block_specs && ([class match -- $agt_path_bare ends_with agt_spec_paths] || $agt_path_bare contains "/swagger-ui") && ![class match -- [IP::client_addr] equals agt_internal_nets] } {
         if { [call agt_act "W-AGT-020" $agt_path 1] } { return }
     }
 
-    # Inspect small form/JSON/XML bodies for the same strings (logins, sign-up, recovery).
+    # Inspect form/JSON/XML bodies for the same strings (logins, sign-up, recovery).
+    # Collect the declared length, capped at agt_max_body. A chunked body declares none, so
+    # ask for the cap, and test for chunked FIRST: it overrides Content-Length, and a
+    # request carrying "Content-Length: 0" beside it would otherwise go uninspected.
+    # The cap is a limit, not a fix: only the first agt_max_body bytes are read, so a
+    # payload behind that much padding is still unseen. Raise the cap, or use Advanced WAF,
+    # where whole bodies matter.
     set agt_len 0
-    if { [HTTP::header exists "Content-Length"] && [string is integer -strict [HTTP::header value "Content-Length"]] } {
-        set agt_len [HTTP::header value "Content-Length"]
+    set agt_cl [string trim [HTTP::header value "Content-Length"]]
+    if { [string tolower [HTTP::header value "Transfer-Encoding"]] contains "chunked" } {
+        set agt_len $static::agt_max_body
+    } elseif { [regexp {^[0-9]{1,15}$} $agt_cl] } {
+        # scan reads decimal. Used as a number directly, "029" is an invalid octal and "035"
+        # is 29, and "string is integer" rejects the first: either way the body was skipped.
+        scan $agt_cl %ld agt_len
+        if { $agt_len > $static::agt_max_body } { set agt_len $static::agt_max_body }
     }
     if { [HTTP::method] eq "POST" || [HTTP::method] eq "PUT" || [HTTP::method] eq "PATCH" } {
-        if { $agt_len > 0 && $agt_len <= $static::agt_max_body } {
+        if { $agt_len > 0 } {
             HTTP::collect $agt_len
         }
     }
@@ -138,12 +178,15 @@ when HTTP_REQUEST {
 
 when HTTP_REQUEST_DATA {
     set agt_body_raw [HTTP::payload]
-    set agt_body [string tolower [URI::decode $agt_body_raw]]
+    # "+" is a space in a form body; see the note on agt_uri above.
+    set agt_body [string tolower [URI::decode [string map {+ " "} $agt_body_raw]]]
+    # Media types are case-insensitive and the "contains" operator is not.
+    set agt_ctype [string tolower [join [HTTP::header values "Content-Type"] " "]]
 
-    if { [class match $agt_body contains agt_canary_strings] } {
+    if { [class match -- $agt_body contains agt_canary_strings] } {
         if { [call agt_act "W-AGT-004" "body-canary" 1] } { return }
     }
-    if { [class match $agt_body_raw contains agt_jwt_none] } {
+    if { [class match -- $agt_body_raw contains agt_jwt_none] } {
         if { [call agt_act "W-AGT-005" "body-jwt-alg-none" 1] } { return }
     }
     if { [regexp {artex'\s*(/\*|--|#|union\s|and\s|or\s)} $agt_body] } {
@@ -154,7 +197,7 @@ when HTTP_REQUEST_DATA {
     }
     # W-AGT-014 in a form body: a parameter value that climbs directories. Form bodies only;
     # JSON and XML carry ../ legitimately too often (relative links, import paths).
-    if { [HTTP::header value "Content-Type"] starts_with "application/x-www-form-urlencoded" && [regexp {(^|[=&])[^&]*\.\.[/\\]} $agt_body] } {
+    if { $agt_ctype starts_with "application/x-www-form-urlencoded" && [regexp {(^|[=&])[^&]*\.\.[/\\]} $agt_body] } {
         if { [call agt_act "W-AGT-014" "body-traversal" 1] } { return }
     }
     # W-AGT-008 in an upload: multipart filename shaped like an agent task artifact.
@@ -168,7 +211,7 @@ when HTTP_REQUEST_DATA {
     }
     # W-AGT-009: inline DTD in an XML body (the XXE half of the SAML chain, CrowdStrike).
     # A base64 SAMLResponse hides this from the edge: the fix for that is in the IdP/SP.
-    if { [HTTP::header value "Content-Type"] contains "xml" && ($agt_body contains "<!doctype" || $agt_body contains "<!entity") } {
+    if { $agt_ctype contains "xml" && ($agt_body contains "<!doctype" || $agt_body contains "<!entity") } {
         if { [call agt_act "W-AGT-009" "xml-dtd" 1] } { return }
     }
     HTTP::release

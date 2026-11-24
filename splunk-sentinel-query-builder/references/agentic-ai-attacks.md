@@ -8,10 +8,11 @@ install nothing on the victim. What a defender sees is (1) machine-speed tempo
 against the edge, (2) ordinary post-exploitation artifacts the agents leave
 behind, and (3) the frameworks' own fingerprints when a host of yours is turned
 into agent infrastructure. Six are covered here, all reported in use or exposed
-between September and November 2026:
+by November 2026. Most of that reporting is dated September to November 2026;
+a few sources are older, and the FBI puts ARTEX in use since at least August:
 
 - **ARTEX** (Go + Next.js; author handle Autumn-27). Multi-agent pentest system.
-  Used by VAPOR PANDA, Storm-0940 (tracked by GTIG as UNC7228), an unattributed
+  Used by VAPOR PANDA, Storm-0940 (GTIG says its UNC7228 overlaps with it), an unattributed
   actor against South Korean banks, CRAFTY FALCON (CERT-In), and -- since late
   October 2026 -- the North Korean groups Onyx Sleet (Andariel, ATT&CK G0138)
   and Pearl Sleet (Microsoft, 2026-10-29). GTIG describes six specialized
@@ -44,21 +45,32 @@ identifiable markers from requests, so the user-agent fingerprints below catch
 default or careless deployments, not a determined operator -- treat their
 absence as nothing.
 
-Inbound user-agent fingerprints exist for four of the six frameworks, and only
-these values are verified (each is a row in the IOC file):
+Inbound user-agent fingerprints exist for four of the six frameworks. These
+are the compiled-in values (each is a row in the IOC file):
 
 - ARTEX: `artex-enrich/1.0`, `Mozilla/5.0 (spa-api-recon)`, `Mozilla/5.0 (compatible; ArtEx/1.0)`, `Mozilla/5.0 (compatible; infra-hunt/1.0)`, `verify-911-probe/1.0`, `Mozilla/5.0 (security-testing; authorized)`
 - CyberStrikeAI: `CyberStrikeAI/1.7.4`, `Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)`
 - HexStrike-AI: `HexStrike-HTTP-Framework/1.0 (Advanced Security Testing)`, `HexStrike-BrowserAgent/1.0 (Security Testing)`
 - PentAGI: `PentAGI/1.0`
 
+ARTEX agents also make up a user-agent per task. F5 Labs (2026-11-23) lists 46
+it tied to ARTEX (`artex-i776/0.2`, `Mozilla/5.0 (compatible; ARTEX-Phase8-Validation/1.0)`
+and the like) and 44 of them carry the framework's name. That list is evidence
+for one pattern, not a list to match: the name `artex`, in any letter case, at
+the start of a word in the user-agent. Match it there and not as a bare
+substring, which also hits unrelated product names that happen to contain the
+letters. F5's own caveat applies: the agent changes the header when it is
+blocked, so treat a hit as a lead and the absence of one as nothing.
+
 **CAIRN has no user-agent fingerprint** in any report used here, and STRIX's one
 string is a generic git client that is context, never a match by itself. When
 a request asks for a user-agent hunt covering a framework without one, say so
 and offer behavior instead (tempo, canary probes, the saved searches below).
 Never write a guessed pattern, such as a framework's name between wildcards,
-into a query: an indicator that is not in the IOC file is an invented one, and
-a clean result from it reads as coverage that does not exist.
+into a query: an indicator that no source supports is an invented one, and a
+clean result from it reads as coverage that does not exist. The ARTEX name
+pattern above is the one exception, because a published list supports it; no
+such list exists for the other five.
 
 Probe and canary values the agents were seen sending are verified the same way
 (each is a row in the IOC file). They are throwaway strings, so a hunt should
@@ -71,7 +83,9 @@ match the shape, not the literal value:
 
 The canary-then-admin rule (H-AGT-018, R-D-AGT-018) keys on the login shape
 above: a failed login for such a username, then an attempt as admin,
-administrator or root from the same source within about a minute. For a probe
+administrator or root from the same source within about a minute. The second
+login counts whether it fails or succeeds, and a success is the urgent row, so
+do not filter the whole query to failures. For a probe
 pattern that is not listed here, define it by behavior and say that no
 verified value exists.
 
@@ -96,15 +110,16 @@ ATT&CK table and Navigator layer below were re-derived for these reports: 37
 evidence rows, 16 of them techniques new to the table, every ID checked
 against the ATT&CK 20.1 catalogue.
 
-- **FBI FLASH-20261113-001 (2026-11-13, TLP CLEAR).** The FBI's first product on
-  ARTEX consolidates the vendor reporting above: in use since at least August
+- **FBI FLASH-20261113-001 (2026-11-13, TLP CLEAR).** The FLASH consolidates
+  the vendor reporting above: in use since at least August
   2026, some intrusions from initial targeting to privileged access in under
   three hours, more than 1,600 exposed consoles. Its address list repeats
   CrowdStrike's, Microsoft's Storm-0940 set and the Storm-3358 set below, and
   it asks recipients to vet addresses before blocking because hosting addresses
   are reassigned. New observables: agents querying `api.db-ip[.]com` to
-  geolocate victims, hardcoded administrator passwords in SPA JavaScript
-  bundles, and abuse of Kudu/SCM publishing endpoints. Its mitigations lead
+  geolocate victims and hardcoded administrator passwords in SPA JavaScript
+  bundles. It also repeats the abuse of Kudu/SCM publishing endpoints that
+  GTIG reported on 2026-10-30. Its mitigations lead
   with attack-surface inventory of peripheral systems (partner and supplier
   portals, mobile backends, employee and sales-support applications), then
   rate limits and transaction thresholds on high-impact APIs, alerts on
@@ -147,20 +162,24 @@ against the ATT&CK 20.1 catalogue.
   into the framework's own model gateway. Campaign 2 attacked KYC liveness
   checks at two cryptocurrency exchanges with real-time deepfakes; the vendor
   rejected every recorded attempt. Amazon cannot verify the outcomes the
-  agents reported. Eleven source addresses were published for review, not for
-  blocking; three sit in a shared CDN range.
-- **F5 Labs' behavioral analysis (2026-11-23) and lab test (2026-11-13).** F5
+  agents reported. Eleven source addresses were published as indicators.
+  Amazon does not say how to use them; this pack keeps them review-only, its
+  own choice, because four sit in a range that a CDN announces.
+- **F5 Labs' behavioral analysis (2026-11-23) and F5's product-blog lab test (2026-11-13).** F5
   describes ARTEX using a WAF as an oracle - enumerating allow and block
   outcomes, then evading by keyword substitution and splitting, encoding
   variants and payload padding - and pivoting to API discovery and
   business-logic flaws once standard pages stay blocked. Two tells peculiar to
   LLM-driven tooling: obtusely named probes and parameters, and naming
-  conventions that drift as the context window moves. In F5's lab a layered
+  conventions that drift as the context window moves. Its appendix lists the
+  46 user-agents described above. In F5's lab a layered
   stack (WAF, per-actor scoring keyed on JA4 and session as well as address,
   bot telemetry, API schema enforcement) cut attack success by more than 90
   percent; what still succeeded were endpoints returning data without an
-  authorization check. F5 counted 79 exit addresses for the first 100
-  identities from one proxy service on an exposed attacker server.
+  authorization check. The lab figure is the vendor's own, on its own
+  products, with no published method. F5 also cites an analysis of an exposed
+  attacker server, without saying whose, in which one proxy service handed out
+  79 exit addresses for the first 100 identities.
 - **Not retrieved in this refresh:** Sophos, CERT-EU (2026-11-05), the Cloud
   Security Alliance notes, Censys's primary page and Akamai's blog posts. They
   are named in the FBI FLASH's references or in search results but were not
@@ -348,8 +367,9 @@ against the ATT&CK 20.1 catalogue.
 - **IOCs** -- [examples/agentic-ai-attacks/iocs.csv](../../examples/agentic-ai-attacks/iocs.csv)
   carries every indicator with a `framework` column, a named source, a
   confidence, and a recommended action. Network, host-hash, user-agent and
-  cloud/identity indicators are included. Each was verified against its primary
-  source or against the framework's own source code; the literal values (ports,
+  cloud/identity indicators are included. Each row has a `status` saying how it
+  was checked: most were verified against the primary source or the framework's
+  own source code, and the rest are marked as reported and not re-verified; the literal values (ports,
   image tags, panel titles, config paths) live there rather than in this prose.
   **Legitimate services** (LLM API hosts, webhook.site, dnslog.cn, public
   callback services) appear only as behavioral signals and are never on a block
@@ -370,15 +390,21 @@ against the ATT&CK 20.1 catalogue.
   many client IDs), plus H-AGT-021 (probe-account, shared-mailbox and disposable-mail
   registrations, the Okta pattern) and H-AGT-022 (one source signing in as many
   service principals with leaked secrets, the Microsoft pattern). The saved searches
-  add the same logic as scheduled rules R-D-AGT-017 to R-D-AGT-020. Lookups the rules read are
+  schedule four of these, and the numbers do not line up: R-D-AGT-017 is H-AGT-017,
+  R-D-AGT-018 is H-AGT-018, R-D-AGT-019 is H-AGT-021 and R-D-AGT-020 is H-AGT-022.
+  H-AGT-019 and H-AGT-020 are hunts only. Lookups the rules read are
   in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);
   the cloud-log and baseline indicators are deliberately kept out of the
   auto-block sweep.
 - **Edge filtering** -- [examples/agentic-ai-attacks/waf/](../../examples/agentic-ai-attacks/waf/README.md)
   turns the edge-visible indicators into WAF rules for F5 BIG-IP, Akamai and
   ModSecurity in three tiers (fingerprints, exposure reduction, tempo
-  controls), also `needs_validation`. It blocks only what the IOC file marks
-  block, and says plainly what a WAF cannot see.
+  controls), also `needs_validation`. It denies an address only where the IOC
+  file marks it block. Its user-agent and probe-string rules deny on the
+  fingerprints above, which the IOC file marks alert, on the reasoning that no
+  legitimate visitor sends them; its README says which rules ship as alert and
+  what a WAF cannot see. The ModSecurity file was run in two engines and the
+  F5 rule's logic in a stand-in; the Akamai file was only read against its schema.
 - **Build a query** -- when the request is to detect this activity in a specific
   SIEM, follow the query workflow in [query-workflow.md](query-workflow.md) and
   the CIM and table provenance in
@@ -535,7 +561,9 @@ tactic is an intelligence gap, not an assurance.
 - Most in-the-wild ATT&CK evidence attaches to **ARTEX** and, since Kaspersky's
   report, **CyberStrikeAI** operators; STRIX, PentAGI and HexStrike-AI are
   thinner and several rows are capability-level (read from source) rather than
-  observed in an intrusion. Those are marked in the evidence file.
+  observed in an intrusion. The table does not mark which, and the working file
+  it was derived from is not in this repository, so read a row for one of those
+  three as capability-level unless its evidence names an incident.
 - **CyberStrikeAI's FortiGate link** is Team Cymru's, via a shared server carrying
   the CyberStrikeAI banner; Amazon did not name the framework. Kaspersky could
   not attribute its education-sector campaign to a known group.
@@ -564,9 +592,11 @@ tactic is an intelligence gap, not an assurance.
   task counter and the `example.invalid` / `example.com` placeholder emails are
   patterns, so the detections hunt the shape rather than the literal string.
 - **WorkOS was a researcher's agent, not an attacker.** Its published indicators (IPs,
-  IPv6, JA4, user-agents) describe a benchmark ARTEX instance; they are carried
-  alert-only and low confidence because they fingerprint default ARTEX, not a hostile
-  operator. The Chainstack, Northflank and Trigger.dev links to the campaign remain
+  IPv6, JA4, user-agents) describe a benchmark ARTEX instance. Its addresses
+  identify the researcher and are carried alert-only at low confidence, and its JA4
+  values identify an HTTP client library and are hunt-only. Its three user-agents
+  are ARTEX defaults, carried at medium confidence; they fingerprint a default
+  build, hostile or not. The Chainstack, Northflank and Trigger.dev links to the campaign remain
   overlap assessments, not confirmed attribution.
 - **Microsoft's 2026-11-05 and Censys's 2026-11-05 pages** block scripted download, so
   their values were read through a fetch tool and are marked `primary-reported (fetch
@@ -590,7 +620,8 @@ tactic is an intelligence gap, not an assurance.
 - **ATT&CK has no software entry** for any of these frameworks as of v20.
 - Secondary coverage attributing HexStrike-AI exploitation to a named group
   could not be verified against a primary source and is not used.
-- **HexStrike-AI** reporting is largely vendor and dark-web chatter; the
+- **HexStrike-AI**: GTIG (2026-10-30) says it observed HexStrike in incident
+  response engagements, without detail. Beyond that the reporting is largely vendor and dark-web chatter; the
   speed-of-exploitation claims are threat-actor claims, not measured, and
   exploitation success is unverified.
 - No vendor detection signature exists for **STRIX** beyond the exposed-panel

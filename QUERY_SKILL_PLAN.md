@@ -202,6 +202,11 @@ siem_fun/
 |   |   |-- test_agentic_ai_attacks.py
 |   |   |-- test_grade_golden_output.py
 |   |   |-- test_record_golden_run.py
+|   |   |-- test_waf_engines.py
+|   |   |-- waf/
+|   |   |   |-- f5labs-artex-user-agents.txt
+|   |   |   |-- irule_cases.tcl
+|   |   |   `-- irule_runtime.tcl
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
 |   |-- record_golden_run.py
@@ -598,6 +603,61 @@ references. A later change added path rules: traversal sequences in a
 path or parameter, secret files, management endpoints such as Spring Boot
 Actuator, and Swagger UI.
 
+A retrospective on 2026-11-24 executed the pack for the first time, and the
+sentence above about the rule syntax not being loaded turned out to be the
+whole story. On Apache with ModSecurity v2 the SecLang file did not load: a
+doubled backslash inside a quoted directive reached the regex compiler as an
+unterminated character class. Once it loaded, the XML rule could not see an
+XML body on v2, the counters were opened after the rules that should have fed
+them, every window slid instead of ending, the repeat-violator rule counted
+the application's own 403s, the sign-up limit refused every request from the
+address, and a percent-encoded or `;parameter` path walked past the path
+rules. The iRule, run in a Tcl stand-in for its runtime, failed 25 of 97
+cases: bodies over 64 KB and chunked bodies were never inspected, `+` was not
+a space, and the path was matched as sent. None of this was visible to
+thirteen golden runs, the validator or its mutation harness, because none of
+them runs a rule: they prove the documents agree with each other.
+
+What checks it now: [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py)
+loads the SecLang file in Apache with ModSecurity v2 and in nginx with
+ModSecurity v3, sends each rule a request that should match and one that
+should not, drives the counters from separate source addresses, and runs the
+iRule's logic against its real data groups. A `waf-engines` CI job installs
+the engines and treats a skipped suite as a failure. Limits, stated where the
+rules live: no BIG-IP and no Akamai account were available, so the tmsh file
+is unloaded and the Akamai JSON is checked against its schema only.
+
+An independent review of that work then did what the first pass had not:
+it loaded the corrected file after the OWASP Core Rule Set, which is how the
+file's own header says to deploy it. Two more defects were waiting there.
+The counters sat in the collection the Core Rule Set opens first and keys on
+the User-Agent, so on v2 a client that rotated that header was never boxed;
+and a comment recommended a way of counting Core Rule Set blocks that, on v3,
+switched them off. It also showed that eleven changes to the rule file left
+every test green, among them deleting three of the four rules that end a
+window. The tests now load the Core Rule Set too, check every counter's
+window and every response inside it, read the log for the rules that only
+log, and each defect in this section, twenty-two in all, was put back in turn
+to see a test fail for it. Doing that found one more hole, in a test written
+that same hour: the window check looked only at the end of its run, after a
+one-second penalty had already expired, and caught one counter of four.
+Eleven of the mutations are in the harness, against the static tests, since
+the harness runs where no engine is installed.
+
+The lesson is narrower than "run the code". The first pass ran the code and
+stopped at the rule file's own edge. A rule that is deployed beside other
+software has to be tested beside it, and a test has to be shown to fail.
+
+The same retrospective read the vendors' references and the published
+reporting again. From the references: two columns in `hunting.kql` that their
+tables do not have, an operation match that also caught Privileged Identity
+Management activations, and Akamai rate thresholds that are per second and so
+cannot express the low thresholds the README gave. From the reporting: F5
+Labs' list of 46 ARTEX user-agents, of which the pack matched 4, and a set of
+statements in the reference that went further than their sources. The
+canary-then-admin rule filtered to failures and so missed the successful
+admin login, which is the case that matters.
+
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
 marker went stale; the seventh model run, below, recorded it again.
@@ -871,7 +931,17 @@ distinguished syntax, not behavior, so the spec now asks only that a 30 or
 31 day window appears in the query. No prompt or skill moved after the run,
 so the answers were re-graded: 21 of 21, and the marker records it.
 
-Seven fixture defects and two skill-content gaps across thirteen runs. Both gaps
+Fourteenth run, 2026-11-24, because the retrospective corrected the
+reference: fixtures 1 to 7 and 11 to 21 re-run, 21 of 21, and the marker
+records it. Two answers show the corrections arriving. Fixture 11's hunt now
+matches the ARTEX name at the start of a word, the pattern F5 Labs' published
+list supports, beside the compiled-in strings; fixture 19's answer keeps the
+admin login whatever its result and says why. The run found nothing, which is
+what the first thirteen also said about the WAF pack: a fixture grades an
+answer's shape against the reference, so it cannot tell that the reference,
+or a rule file the reference points to, is wrong.
+
+Seven fixture defects and two skill-content gaps across fourteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still

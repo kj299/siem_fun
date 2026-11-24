@@ -100,17 +100,19 @@ union isfuzzy=true
 // used Python-urllib/3.12, one request per tenant a few minutes apart. Baseline each watched app's
 // user-agent over the prior 14 days and alert when a new one appears in the last 24 hours. Needs
 // the Microsoft Graph activity logs connector. App IDs are the compromised ConnectWise ones.
+// Tenants counts AadTenantId: TenantId in this table is the Log Analytics workspace ID, so it is
+// always 1. In a single-tenant workspace AadTenantId is 1 as well; read Requests and IPs there.
 let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827"]);
 let baseline = MicrosoftGraphActivityLogs
     | where TimeGenerated between (ago(14d) .. ago(1d)) and AppId in (watched)
     | summarize KnownAgents = make_set(UserAgent) by AppId;
 MicrosoftGraphActivityLogs
 | where TimeGenerated > ago(1d) and AppId in (watched)
-| summarize Requests = count(), Tenants = dcount(TenantId), IPs = make_set(IPAddress, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by AppId, UserAgent
+| summarize Requests = count(), Tenants = dcount(AadTenantId), IPs = make_set(IPAddress, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by AppId, UserAgent
 | join kind=leftouter baseline on AppId
 | where isnull(KnownAgents) or UserAgent !in (KnownAgents)
 | project AppId, NewUserAgent = UserAgent, Requests, Tenants, IPs, FirstSeen, LastSeen
-| order by Tenants desc
+| order by Tenants desc, Requests desc
 
 
 // --- H-AGT-017  Spec-driven API targeting (Unit 42 2026-10-30) ---------------------------------
@@ -132,16 +134,24 @@ _Im_WebSession(starttime=ago(7d))
 // The agent logs in as a generated nonexistent user (zz_no_such_user_9f3a, zzq.nonexistent9x7) to
 // baseline the error response, then one second later as admin. Entra sign-ins shown; the same
 // shape applies to any IdP or web login log.
-SigninLogs
-| where TimeGenerated > ago(30d) and ResultType != "0"
-| extend u = tolower(UserPrincipalName)
-| extend Kind = case(u startswith "zz" or u contains "nonexistent" or u contains "not-a-user", "canary",
-                     u startswith "admin" or u startswith "root@", "admin", "")
-| where Kind != ""
-| summarize CanaryTime = minif(TimeGenerated, Kind == "canary"), AdminTime = minif(TimeGenerated, Kind == "admin"),
-            CanaryUsers = make_set_if(UserPrincipalName, Kind == "canary", 5), AdminUsers = make_set_if(UserPrincipalName, Kind == "admin", 5) by IPAddress
-| where isnotnull(CanaryTime) and isnotnull(AdminTime) and AdminTime >= CanaryTime and AdminTime - CanaryTime <= 1m
-| project IPAddress, CanaryTime, SecondsToAdmin = datetime_diff("second", AdminTime, CanaryTime), CanaryUsers, AdminUsers
+// The canary leg is a failure by construction; the admin leg is kept whatever its result, because
+// the admin login that SUCCEEDS is the row that matters most and a failures-only filter drops it.
+// Each canary is paired with the admin attempts that follow it within a minute, so an unrelated
+// admin sign-in earlier in the 30 days does not hide a later canary-then-admin pair.
+let signins = SigninLogs
+    | where TimeGenerated > ago(30d)
+    | extend u = tolower(UserPrincipalName);
+let canaries = signins
+    | where ResultType != "0" and (u startswith "zz" or u contains "nonexistent" or u contains "not-a-user")
+    | project CanaryTime = TimeGenerated, IPAddress, CanaryUser = UserPrincipalName;
+signins
+| where u startswith "admin" or u startswith "root@"
+| project AdminTime = TimeGenerated, IPAddress, AdminUser = UserPrincipalName, AdminResult = ResultType
+| join kind=inner canaries on IPAddress
+| where AdminTime >= CanaryTime and AdminTime - CanaryTime <= 1m
+| summarize CanaryTime = min(CanaryTime), SecondsToAdmin = min(datetime_diff("second", AdminTime, CanaryTime)),
+            AdminSuccesses = dcountif(AdminTime, AdminResult == "0"), CanaryUsers = make_set(CanaryUser, 5), AdminUsers = make_set(AdminUser, 5) by IPAddress
+| order by AdminSuccesses desc, CanaryTime desc
 
 // --- H-AGT-019  ARTEX task artifacts on a compromised host (S-RM 2026-11-04) -------------------
 // S-RM found /opt/artex/data/task/<task>/i4028/i4028.asp on a victim, disposable GitHub branches
@@ -192,12 +202,16 @@ union
 // Microsoft's behavioral pattern for the exposed-secrets campaign: one IP authenticating to three or more
 // service principals, with invalid/expired-secret failures (AADSTS7000215 / 7000222) and a failure followed
 // by a success from the same IP being urgent. 199.19.77.84 was the primary source; hunt the shape.
+// This table has no AppDisplayName column (that one belongs to SigninLogs); the name is in
+// ServicePrincipalName. Microsoft's table reference and its own sample query disagree on whether the
+// error number sits in ResultType or ResultSignature, so both are read.
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(30d)
+| extend Ok = ResultType in ("0", "Success")
 | summarize ServicePrincipals = dcount(ServicePrincipalId), Attempts = count(),
-            InvalidSecret = countif(ResultType in ("7000215", "7000222")), Successes = countif(ResultType == "0"),
-            FirstFailure = minif(TimeGenerated, ResultType != "0"), FirstSuccess = minif(TimeGenerated, ResultType == "0"),
-            Apps = make_set(AppDisplayName, 10) by IPAddress
+            InvalidSecret = countif(ResultType in ("7000215", "7000222") or ResultSignature in ("7000215", "7000222")), Successes = countif(Ok),
+            FirstFailure = minif(TimeGenerated, not(Ok)), FirstSuccess = minif(TimeGenerated, Ok),
+            Apps = make_set(ServicePrincipalName, 10) by IPAddress
 | where ServicePrincipals >= 3 or (InvalidSecret > 0 and Successes > 0)
 | extend FailureThenSuccess = isnotnull(FirstFailure) and isnotnull(FirstSuccess) and FirstSuccess > FirstFailure
 | order by FailureThenSuccess desc, ServicePrincipals desc
