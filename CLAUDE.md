@@ -386,7 +386,9 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   said so. The tenth and eleventh added six more fixtures against the same
   reference and found nothing, in eighteen samples. The twelfth found a second
   gap of the same kind: the reference named the canary-then-admin rule without
-  the canary values, so every answer guessed at what a canary is. When a fixture fails, read the skill before
+  the canary values, so every answer guessed at what a canary is. The
+  thirteenth failed on a fixture again (18, a time window demanded as a
+  literal when the answer bound it through a variable). When a fixture fails, read the skill before
   assuming the answer is at fault -- and before assuming the fixture is.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness

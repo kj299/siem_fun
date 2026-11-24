@@ -852,7 +852,26 @@ application operation's full name typed with a plain hyphen, which matches
 nothing because the real name carries a different dash. Re-graded, not
 re-run.
 
-Six fixture defects and two skill-content gaps across twelve runs. Both gaps
+The operation names then went into the reference, so that fixture 20 no
+longer rests on what a model happens to know: the operations the pack's own
+rule matches, the advice to match the application one by its ending, and the
+note that it records removals too. A test pins the list to the rule in
+`sentinel-rules.yaml`. Writing it exposed a defect in that rule: it compared
+`OperationName` to the list with an exact-match operator, and one entry is
+only the ending of a longer name, so that entry could never match. The rule
+now uses a phrase match, and the test forbids the exact form.
+
+Thirteenth run, 2026-11-24, because the query builder's content changed:
+fixtures 1 to 7 and 11 to 21 re-run, 20 of 21 before correction. Fixture 20
+passed twice and both answers now give the reference's reasons. Fixture 18
+failed a correct answer, the seventh fixture defect: the answer bound its
+baseline through a variable, `let baselineDays = 30d`, and the spec demanded
+the window written as a literal inside the time function. The rule
+distinguished syntax, not behavior, so the spec now asks only that a 30 or
+31 day window appears in the query. No prompt or skill moved after the run,
+so the answers were re-graded: 21 of 21, and the marker records it.
+
+Seven fixture defects and two skill-content gaps across thirteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still

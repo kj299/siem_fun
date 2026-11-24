@@ -193,7 +193,7 @@ query: |
                      "Add owner to service principal", "Add app role assignment to service principal", "Add member to role", "Consent to application"]);
   let writes = AuditLogs
       | where TimeGenerated > ago(14d)
-      | where OperationName in (ops)
+      | where OperationName has_any (ops)
       | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
                Target = tostring(TargetResources[0].displayName), TargetId = tostring(TargetResources[0].id);
   let envelope = writes

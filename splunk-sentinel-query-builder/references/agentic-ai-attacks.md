@@ -75,6 +75,20 @@ administrator or root from the same source within about a minute. For a probe
 pattern that is not listed here, define it by behavior and say that no
 verified value exists.
 
+Identity persistence in Microsoft Entra is read from `AuditLogs` by
+`OperationName`. These are the operations the pack's own rule for that
+behavior matches (R-B-AGT-008):
+
+- A credential added: `Add service principal credentials` for a service principal, and for an application the operation whose name ends `Certificates and secrets management`.
+- Ownership, roles and consent: `Add owner to application`, `Add owner to service principal`, `Add app role assignment to service principal`, `Add member to role`, `Consent to application`.
+
+Match the application credential operation by that ending, with `has` or
+`has_any`. Its full name is longer and carries a dash character that varies,
+so the full name typed with a plain hyphen, or an equality test against the
+ending, matches nothing. That operation also records removals; the modified
+properties say which it was. These are behaviors, not indicators: legitimate
+secret rotation and role changes produce the same events.
+
 ## Developments since 2026-11-07 (as of 2026-11-24)
 
 Added in a refresh on 2026-11-24. The indicators are in `iocs.csv`, and the

@@ -774,7 +774,7 @@ Grader spec:
     "MicrosoftGraphActivityLogs",
     "UserAgent",
     "\\bby\\b[^\\n]*\\bAppId\\b",
-    "ago\\((30|31)d\\)"
+    "\\b3[01]d\\b"
   ],
   "query_not_matches": [
     "(?i)kiota"
