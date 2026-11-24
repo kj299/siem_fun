@@ -44,6 +44,81 @@ identifiable markers from requests, so the user-agent fingerprints below catch
 default or careless deployments, not a determined operator -- treat their
 absence as nothing.
 
+## Developments since 2026-11-07 (as of 2026-11-24)
+
+Added in a refresh on 2026-11-24. The indicators are in `iocs.csv`; the ATT&CK
+table below was not re-derived for this refresh.
+
+- **FBI FLASH-20261113-001 (2026-11-13, TLP CLEAR).** The FBI's first product on
+  ARTEX consolidates the vendor reporting above: in use since at least August
+  2026, some intrusions from initial targeting to privileged access in under
+  three hours, more than 1,600 exposed consoles. Its address list repeats
+  CrowdStrike's, Microsoft's Storm-0940 set and the Storm-3358 set below, and
+  it asks recipients to vet addresses before blocking because hosting addresses
+  are reassigned. New observables: agents querying `api.db-ip[.]com` to
+  geolocate victims, hardcoded administrator passwords in SPA JavaScript
+  bundles, and abuse of Kudu/SCM publishing endpoints. Its mitigations lead
+  with attack-surface inventory of peripheral systems (partner and supplier
+  portals, mobile backends, employee and sales-support applications), then
+  rate limits and transaction thresholds on high-impact APIs, alerts on
+  sequential lookups, and no stack traces or SQL errors to unauthenticated
+  users.
+- **Storm-3358 (Microsoft, 2026-11-06).** A financially motivated,
+  Cambodia-based cluster that began using ARTEX against financial
+  organizations in October, mainly in Southeast Asia. ARTEX agents fetched the
+  WISP, vshell and AdaptixC2 RATs with netcat and curl. Microsoft published
+  three WISP C2 nodes, four ARTEX servers and one C2 server, all active on
+  6 November; one address differs between its table and its hunting query
+  (the IOC file notes which). Microsoft says default user-agents are worth
+  alerting on but blocking them "will not stop an attack by an AI agent", and
+  reports that decoys and tarpits consumed the agents' time and budget.
+- **Cairn found a zero-day by itself (Amazon, 2026-11-20).** An exposed,
+  unauthenticated Cairn instance showed a Chinese-nexus operator giving agents
+  a list of East Asian university addresses and the goal "obtain shell
+  access". Two operations failed after 16 hours and 148 actions against an
+  open Redis server, and after 30,000 credential combinations built from about
+  80 usernames scraped from faculty pages. A third mapped an open-source
+  medical imaging application's API, found path traversal in an upload
+  endpoint's filename parameter and reached arbitrary file write in about 11
+  minutes, then wrote `sitecustomize.py` and triggered a training endpoint for
+  a root reverse shell. The maintainers have since published a fix and
+  advisory. Two addresses from the 8-10 September records are in the IOC file.
+- **CL-STA-1238 (Unit 42, November 2026; read through secondary coverage
+  only).** A suspected China-nexus actor ran 25 operations with a customized
+  Cairn fork against at least 19 semiconductor, defense and civil-society
+  organizations in August and September, with access or data retrieval
+  confirmed at 10. The primary report could not be retrieved, so its
+  indicators are not carried.
+- **ARTEX agents caught talking to decoy model APIs (Amazon, November 2026).**
+  From 3 October to 5 November, Amazon's MadPot sensors posing as LLM
+  inference APIs received ARTEX requests carrying the agents' full task
+  history. Campaign 1 stole AI provider keys at scale from exposed LLM
+  gateways and application builders (One API, New API, Sub2API, LiteLLM, Dify,
+  Langflow, RAGFlow, Open WebUI) through unclaimed installs, anonymous
+  management endpoints, default master keys, CVE-2025-3248, CVE-2026-28797 and
+  an `isCliRequest` header authentication bypass, feeding stolen keys back
+  into the framework's own model gateway. Campaign 2 attacked KYC liveness
+  checks at two cryptocurrency exchanges with real-time deepfakes; the vendor
+  rejected every recorded attempt. Amazon cannot verify the outcomes the
+  agents reported. Eleven source addresses were published for review, not for
+  blocking; three sit in a shared CDN range.
+- **F5 Labs' behavioral analysis (2026-11-23) and lab test (2026-11-13).** F5
+  describes ARTEX using a WAF as an oracle - enumerating allow and block
+  outcomes, then evading by keyword substitution and splitting, encoding
+  variants and payload padding - and pivoting to API discovery and
+  business-logic flaws once standard pages stay blocked. Two tells peculiar to
+  LLM-driven tooling: obtusely named probes and parameters, and naming
+  conventions that drift as the context window moves. In F5's lab a layered
+  stack (WAF, per-actor scoring keyed on JA4 and session as well as address,
+  bot telemetry, API schema enforcement) cut attack success by more than 90
+  percent; what still succeeded were endpoints returning data without an
+  authorization check. F5 counted 79 exit addresses for the first 100
+  identities from one proxy service on an exposed attacker server.
+- **Not retrieved in this refresh:** Sophos, CERT-EU (2026-11-05), the Cloud
+  Security Alliance notes, Censys's primary page and Akamai's blog posts. They
+  are named in the FBI FLASH's references or in search results but were not
+  read, and nothing here rests on them.
+
 ## Current developments (as of 2026-11-07)
 
 - **Correction: the WorkOS incident was not an attack.** WorkOS's 6 November update

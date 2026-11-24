@@ -3,8 +3,9 @@
 # Rule IDs (W-AGT-nnn) and the evidence behind each are in README.md next to this file.
 # Needs the data groups in f5-data-groups.tmsh. Attach to the HTTP virtual server.
 #
-# Status: needs_validation. Written against the BIG-IP iRules API (v13+), not loaded on a
-# live device. Start with agt_log_only 1, read /var/log/ltm for "agt_waf", then switch.
+# Status: needs_validation. Command usage (class match, call/proc, HTTP::collect,
+# HTTP::respond with noserver) was checked against F5's iRules reference on clouddocs.f5.com
+# on 2026-11-24; the rule itself has not been loaded on a live device. Start with agt_log_only 1, read /var/log/ltm for "agt_waf", then switch.
 #
 # What this does NOT do: rate limiting and brute-force control. Use Advanced WAF
 # brute-force protection, Bot Defense and session tracking for those (README.md, tier 3);
@@ -25,7 +26,7 @@ proc agt_act { rule detail enforce } {
     set d [string range [string map [list "\r" " " "\n" " "] $detail] 0 160]
     log local0.warn "agt_waf rule=$rule client=[IP::client_addr] host=[HTTP::host] detail=\"$d\""
     if { $enforce && !$static::agt_log_only } {
-        HTTP::respond 403 content "Forbidden" "Connection" "close"
+        HTTP::respond 403 content "Forbidden" noserver "Connection" "close"
         return 1
     }
     return 0
@@ -52,6 +53,15 @@ when HTTP_REQUEST {
             log local0.crit "agt_waf rule=W-AGT-002 client=[IP::client_addr] host=[HTTP::host] path=[HTTP::path] webshell-manager-inbound"
         }
         if { [call agt_act "W-AGT-001" $agt_ua 1] } { return }
+    }
+    # W-AGT-011: shell command syntax inside the User-Agent (Microsoft 2026-11-05: exploitation
+    # "by embedded shell commands in a user agent"). No browser sends these characters.
+    if { [regexp {(\$\(|`|;\s*(curl|wget|bash|sh|nc|python[0-9.]*)\s|\|\s*(sh|bash)($|\s))} $agt_ua] } {
+        if { [call agt_act "W-AGT-011" $agt_ua 1] } { return }
+    }
+    # W-AGT-013: One API family auth-bypass header (Amazon). Log only: only LLM gateways care.
+    if { [HTTP::header exists "isCliRequest"] } {
+        call agt_act "W-AGT-013" "iscli-header" 0
     }
     # W-AGT-003: agent-adjacent tooling with legitimate users. Never enforced here.
     if { $agt_ua ne "" && [class match $agt_ua contains agt_ua_alert] } {
@@ -80,6 +90,12 @@ when HTTP_REQUEST {
 
     # W-AGT-008: request for a script named like an agent task artifact, i<number>.<ext>.
     if { [regexp {/i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)$} $agt_path] } {
+        if { [call agt_act "W-AGT-008" $agt_path 1] } { return }
+    }
+
+    # W-AGT-008 (second shape): JSP shells GTIG saw written by MySQL log poisoning
+    # (cl1217.jsp, f1219a.jsp, z1219.jsp): 1-2 letters, 4 digits, optional letter.
+    if { [regexp {/[a-z]{1,2}[0-9]{4}[a-z]?\.jspx?$} $agt_path] } {
         if { [call agt_act "W-AGT-008" $agt_path 1] } { return }
     }
 
@@ -119,6 +135,11 @@ when HTTP_REQUEST_DATA {
     # W-AGT-008 in an upload: multipart filename shaped like an agent task artifact.
     if { [regexp {filename="?i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)} $agt_body] } {
         if { [call agt_act "W-AGT-008" "upload-task-artifact" 1] } { return }
+    }
+    # W-AGT-012: upload filename that climbs out of the upload directory, or names a Python
+    # auto-import file (Amazon 2026-11-20: Cairn agents wrote sitecustomize.py this way).
+    if { [regexp {filename="?[^"\r\n]*(\.\./|\.\.\\|sitecustomize\.py|usercustomize\.py)} $agt_body] } {
+        if { [call agt_act "W-AGT-012" "upload-traversal" 1] } { return }
     }
     # W-AGT-009: inline DTD in an XML body (the XXE half of the SAML chain, CrowdStrike).
     # A base64 SAMLResponse hides this from the edge: the fix for that is in the IdP/SP.
