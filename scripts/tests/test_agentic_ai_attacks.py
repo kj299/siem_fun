@@ -120,6 +120,21 @@ class ReferenceDocTests(unittest.TestCase):
                       "waf/README.md"):
             self.assertIn(asset, text)
 
+    def test_user_agent_list_in_the_doc_is_exactly_ioc_rows(self):
+        # The skill loads only this doc at runtime, not iocs.csv, so the list is what a model can
+        # put in a query. A value here that is not an IOC row is an invented indicator.
+        text = DOC.read_text().replace("\r\n", "\n")
+        block = text.split("IOC file):\n\n", 1)[1].split("\n\n", 1)[0]
+        listed = re.findall(r"`([^`]+)`", block)
+        with open(IOCS, newline="") as fh:
+            ioc_uas = {r["value"]: r["framework"] for r in csv.DictReader(fh) if r["type"] == "user_agent"}
+        self.assertGreaterEqual(len(listed), 8)
+        for line in block.splitlines():
+            framework = line[2:].split(":", 1)[0]
+            for value in re.findall(r"`([^`]+)`", line):
+                self.assertEqual(ioc_uas.get(value), framework, value)
+        self.assertNotIn("- CAIRN:", block)
+
     def test_doc_technique_table_is_non_trivial(self):
         self.assertGreater(len(doc_technique_ids()), 30)
 

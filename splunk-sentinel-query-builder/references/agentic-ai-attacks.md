@@ -44,6 +44,22 @@ identifiable markers from requests, so the user-agent fingerprints below catch
 default or careless deployments, not a determined operator -- treat their
 absence as nothing.
 
+Inbound user-agent fingerprints exist for four of the six frameworks, and only
+these values are verified (each is a row in the IOC file):
+
+- ARTEX: `artex-enrich/1.0`, `Mozilla/5.0 (spa-api-recon)`, `Mozilla/5.0 (compatible; ArtEx/1.0)`, `Mozilla/5.0 (compatible; infra-hunt/1.0)`, `verify-911-probe/1.0`, `Mozilla/5.0 (security-testing; authorized)`
+- CyberStrikeAI: `CyberStrikeAI/1.7.4`, `Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)`
+- HexStrike-AI: `HexStrike-HTTP-Framework/1.0 (Advanced Security Testing)`, `HexStrike-BrowserAgent/1.0 (Security Testing)`
+- PentAGI: `PentAGI/1.0`
+
+**CAIRN has no user-agent fingerprint** in any report used here, and STRIX's one
+string is a generic git client that is context, never a match by itself. When
+a request asks for a user-agent hunt covering a framework without one, say so
+and offer behavior instead (tempo, canary probes, the saved searches below).
+Never write a guessed pattern, such as a framework's name between wildcards,
+into a query: an indicator that is not in the IOC file is an invented one, and
+a clean result from it reads as coverage that does not exist.
+
 ## Developments since 2026-11-07 (as of 2026-11-24)
 
 Added in a refresh on 2026-11-24. The indicators are in `iocs.csv`, and the

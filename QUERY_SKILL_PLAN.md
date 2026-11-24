@@ -650,9 +650,49 @@ moved, so the ten answers were re-graded rather than re-run: 10 of 10, and the
 marker records it. Six fixture defects across eight runs, in five fixtures,
 and still no skill defect found by a run.
 
-No fixture exercises the agentic-AI reference, so this run says nothing about
-whether the refreshed section changes an answer; it shows only that the larger
-reference did not disturb the ten existing behaviors.
+No fixture exercised the agentic-AI reference in this run, so it said nothing
+about whether the refreshed section changes an answer; it showed only that the
+larger reference did not disturb the ten existing behaviors. The ninth run
+closes that gap.
+
+## What the ninth model run found
+
+Ninth run, 2026-11-24, for new fixture 11: a Splunk hunt for inbound ARTEX
+and CAIRN requests by user-agent, with only the accelerated Web data model
+known. It is the first fixture to make the query builder load
+agentic-ai-attacks.md, and it is built around a fact the reference rests on:
+CAIRN has no user-agent indicator in any report used. The spec asks for a
+`tstats` against `Web.Web` filtered on `http_user_agent` with an ARTEX string,
+forbids any quoted string containing the name CAIRN inside a query block, and
+requires the answer to mention CAIRN and to carry the reference's caveat that
+these strings catch default builds only.
+
+Three samples before any content change: two passed and one failed, and all
+three showed the same gap. The failing answer wrote the framework name between
+wildcards into the query as a "name-based placeholder" and said so in
+`Assumptions`. The two that passed left CAIRN out, but every one of the three
+told the reader to fetch "the CAIRN user-agent rows" from `iocs.csv`, which
+has none. The skill was read first, as always, and this time the skill was the
+problem: agentic-ai-attacks.md listed user-agents only in passing, never said
+which frameworks have one, and had no rule against writing an unverified
+indicator into a query. A model run is the only thing that could have shown
+it; every document check was green.
+
+The reference now lists the verified inbound user-agents by framework
+(ARTEX, CyberStrikeAI, HexStrike-AI, PentAGI), states that CAIRN has none and
+that STRIX's one string is context only, and says to offer behavior instead
+of a guessed pattern.
+[scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
+pins that list to `iocs.csv` by framework, so the doc cannot gain a
+user-agent the IOC file lacks. Because the query builder's content changed,
+fixtures 1 to 7 and 11 were re-run; 8 to 10 exercise the other two skills,
+whose content did not move, so their answers from the eighth run stand. 11 of
+11, and three of three samples of fixture 11: each now matches the six
+verified ARTEX strings exactly, writes no CAIRN term, says why, and points to
+tempo and canary-probe hunts for CAIRN. The marker records it.
+
+Six fixture defects across nine runs, in five fixtures, and one skill-content
+gap, found by the first fixture written to exercise that content.
 
 ## For your own environment
 

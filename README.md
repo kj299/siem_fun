@@ -317,13 +317,13 @@ agree with each other; only a model run verifies that a model reading them
 produces a good query. Each fixture in
 [examples/golden-prompts.md](examples/golden-prompts.md) carries a grader
 spec, [scripts/run_golden_prompts.py](scripts/run_golden_prompts.py) drives a
-model through all ten with the skill loaded exactly as a client would load
+model through all of them with the skill loaded exactly as a client would load
 it, and [scripts/grade_golden_output.py](scripts/grade_golden_output.py)
 grades each answer against its spec and against the same rules the validator
 holds the documents to: sections present and in order, no invented identifier
 in query position, time bound first, no unquoted `| where` boolean, and never
 a request to paste a credential. The grader's checks are mutation-tested like
-the validator's. The first run passed all ten fixtures and its one real
+the validator's. The first run passed all ten of the fixtures that existed then and its one real
 finding was in a fixture, not a skill: it asserted `index IN (firewall,
 proxy)` and failed an answer that had correctly followed the skill's rule to
 filter per index when the sourcetypes' schemas differ. Details are in

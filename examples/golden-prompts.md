@@ -383,3 +383,43 @@ Grader spec:
   "matches": ["SPLUNK_TOKEN|SPLUNK_PASSWORD|\\$env:|--token|--password", "(?i)permission"]
 }
 ```
+
+## 11. Agentic framework user-agent hunt from the reference
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to hunt for inbound requests from the ARTEX and CAIRN agentic attack frameworks by their user-agent strings.
+Platform: Splunk
+Task: hunt
+Time range: last 24h
+Known datasets: Web data model is accelerated
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Loads agentic-ai-attacks.md, because the request names two of the frameworks it covers
+- Uses one `tstats` query against `datamodel=Web.Web`, with `summariesonly=true` because the prompt confirms acceleration
+- Filters on `http_user_agent` using ARTEX user-agents the reference names (`artex-enrich/1.0`, `Mozilla/5.0 (compatible; ArtEx/1.0)` and the like)
+- Invents no user-agent for CAIRN: the reference gives none, so the answer says so instead of writing one into the query
+- Says what the reference says about these strings: they catch default or careless deployments, any operator can change them, and their absence proves nothing
+- Does not invent index names
+- Not machine-checked, reviewer's job: generic clients (`python-requests`, `curl`) are context in the reference, never a standalone match, and the answer should not present the user-agents as a blocklist
+
+Grader spec:
+
+```json
+{
+  "sections": ["Objective", "Query", "Assumptions"],
+  "forbid_sections": ["Why efficient", "Tuning", "Validate"],
+  "query_matches": ["^\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "http_user_agent", "(?i)artex"],
+  "query_not_matches": ["(?i)\"[^\"\\n]*cairn[^\"\\n]*\""],
+  "matches": ["(?i)cairn", "(?i)default|careless|absence|absent|chang|strip|spoof"],
+  "indexes": [],
+  "sourcetypes": []
+}
+```

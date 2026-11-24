@@ -36,9 +36,9 @@ python3 scripts/grade_golden_output.py --all out/golden
 # After a model run by any other means (subagents, the weekly Routine), record
 # which content it saw. The validator then prints a NOTICE, not a failure,
 # naming any SKILL.md, reference file or fixture changed since.
-python3 scripts/record_golden_run.py --method agents --result "10 of 10"
+python3 scripts/record_golden_run.py --method agents --result "11 of 11"
 python3 scripts/record_golden_run.py --check
-# --result must say every fixture passed ("10 of 10"); a partial or failing
+# --result must say every fixture passed ("11 of 11"); a partial or failing
 # run is refused, because recording one silences the notice on no baseline.
 ```
 
@@ -377,11 +377,14 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   run; after a run by subagents, write it with `scripts/record_golden_run.py`.
   The hash folds CRLF to LF, so the marker written on Linux agrees with the
   CRLF checkout on windows-latest; a raw-bytes hash would have made the notice
-  fire on every CI run. Of eight model runs so far, each one that failed did
+  fire on every CI run. Of the first eight model runs, each one that failed did
   so on a fixture that contradicted the skill, never on a skill that was wrong
   -- fixture 8, then 4, then 9, then 8 again, then 6, then 2 -- and only a model run
-  could have shown that. When a fixture fails, read the skill before assuming the
-  answer is at fault.
+  could have shown that. The ninth was the first to find a gap in skill
+  content: new fixture 11 caught an answer writing a guessed user-agent
+  pattern for a framework that has none, because agentic-ai-attacks.md never
+  said so. When a fixture fails, read the skill before assuming the answer is
+  at fault -- and before assuming the fixture is.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
   tests a different thing on each platform: a Linux run only ever exercises LF,
