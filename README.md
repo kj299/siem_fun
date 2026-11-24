@@ -109,6 +109,11 @@ siem_fun/
 |   |   |-- test_agentic_ai_attacks.py
 |   |   |-- test_grade_golden_output.py
 |   |   |-- test_record_golden_run.py
+|   |   |-- test_waf_engines.py
+|   |   |-- waf/
+|   |   |   |-- f5labs-artex-user-agents.txt
+|   |   |   |-- irule_cases.tcl
+|   |   |   `-- irule_runtime.tcl
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
 |   |-- record_golden_run.py
@@ -245,9 +250,20 @@ consistency suite (stdlib only, also in CI):
 python -m unittest discover -s scripts/tests -p "test_*.py"
 ```
 
-Run the golden prompts against a model and grade the answers. `validate` and
-`python`, the two jobs that run on every pull request, cannot run this: a
-pull_request or a push holds no model credential. A third job, `golden-run`,
+That command also runs [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py),
+the only tests that execute the WAF rule pack rather than compare its files
+with each other. Its engine suites skip unless Apache with mod_security2,
+nginx with the ModSecurity v3 connector, and `tclsh` are installed; a third
+CI job, `waf-engines`, installs them and treats a skip as a failure:
+
+```bash
+sudo apt-get install apache2 libapache2-mod-security2 nginx-light libnginx-mod-http-modsecurity tcl
+WAF_ENGINES_REQUIRED=1 python -m unittest discover -s scripts/tests -p "test_waf_engines.py" -v
+```
+
+Run the golden prompts against a model and grade the answers. `validate`,
+`python` and `waf-engines`, the jobs that run on every pull request, cannot run this: a
+pull_request or a push holds no model credential. A fourth job, `golden-run`,
 runs it weekly (and on a manual dispatch) with a repository secret instead,
 pushing the refreshed marker on a full pass or opening an issue on a real
 failure; run it locally too after changing a `SKILL.md` or reference file

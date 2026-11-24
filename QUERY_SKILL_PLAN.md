@@ -202,6 +202,11 @@ siem_fun/
 |   |   |-- test_agentic_ai_attacks.py
 |   |   |-- test_grade_golden_output.py
 |   |   |-- test_record_golden_run.py
+|   |   |-- test_waf_engines.py
+|   |   |-- waf/
+|   |   |   |-- f5labs-artex-user-agents.txt
+|   |   |   |-- irule_cases.tcl
+|   |   |   `-- irule_runtime.tcl
 |   |   `-- validate-skill-pack.tests.ps1
 |   |-- grade_golden_output.py
 |   |-- record_golden_run.py
@@ -597,6 +602,40 @@ JSON and the iRule's commands were later checked against the vendors' API
 references. A later change added path rules: traversal sequences in a
 path or parameter, secret files, management endpoints such as Spring Boot
 Actuator, and Swagger UI.
+
+A retrospective on 2026-11-24 executed the pack for the first time, and the
+sentence above about the rule syntax not being loaded turned out to be the
+whole story. On Apache with ModSecurity v2 the SecLang file did not load: a
+doubled backslash inside a quoted directive reached the regex compiler as an
+unterminated character class. Once it loaded, the XML rule could not see an
+XML body on v2, the counters were opened after the rules that should have fed
+them, every window slid instead of ending, the repeat-violator rule counted
+the application's own 403s, the sign-up limit refused every request from the
+address, and a percent-encoded or `;parameter` path walked past the path
+rules. The iRule, run in a Tcl stand-in for its runtime, failed 25 of 97
+cases: bodies over 64 KB and chunked bodies were never inspected, `+` was not
+a space, and the path was matched as sent. None of this was visible to
+thirteen golden runs, the validator or its mutation harness, because none of
+them runs a rule: they prove the documents agree with each other.
+
+What checks it now: [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py)
+loads the SecLang file in Apache with ModSecurity v2 and in nginx with
+ModSecurity v3, sends each rule a request that should match and one that
+should not, drives the counters from separate source addresses, and runs the
+iRule's logic against its real data groups. A `waf-engines` CI job installs
+the engines and treats a skipped suite as a failure. Limits, stated where the
+rules live: no BIG-IP and no Akamai account were available, so the tmsh file
+is unloaded and the Akamai JSON is checked against its schema only.
+
+The same retrospective read the vendors' references and the published
+reporting again. From the references: two columns in `hunting.kql` that their
+tables do not have, an operation match that also caught Privileged Identity
+Management activations, and Akamai rate thresholds that are per second and so
+cannot express the low thresholds the README gave. From the reporting: F5
+Labs' list of 46 ARTEX user-agents, of which the pack matched 4, and a set of
+statements in the reference that went further than their sources. The
+canary-then-admin rule filtered to failures and so missed the successful
+admin login, which is the case that matters.
 
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
