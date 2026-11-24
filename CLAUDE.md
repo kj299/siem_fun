@@ -212,7 +212,9 @@ saved searches, `sentinel-rules.yaml`, `hunting.kql` -- therefore get only the
 byte-level checks, plus
 [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py),
 which keeps `iocs.csv`, the ATT&CK Navigator layer and the reference doc's
-technique table consistent. A sourcetype or table written only in those files
+technique table consistent. The same test pins the WAF rule pack under
+`waf/` there (F5, Akamai, ModSecurity) to `iocs.csv`: only block-action
+addresses may be denied, and no legitimate service may appear in a rule file. A sourcetype or table written only in those files
 is not provenance-checked. Two things a markdown-style check would get wrong
 there: a saved search is time-bounded by `dispatch.earliest_time` in its
 stanza rather than in the search string, and `splunk-morpheus-native.conf`

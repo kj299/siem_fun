@@ -252,6 +252,11 @@ absence as nothing.
   in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);
   the cloud-log and baseline indicators are deliberately kept out of the
   auto-block sweep.
+- **Edge filtering** -- [examples/agentic-ai-attacks/waf/](../../examples/agentic-ai-attacks/waf/README.md)
+  turns the edge-visible indicators into WAF rules for F5 BIG-IP, Akamai and
+  ModSecurity in three tiers (fingerprints, exposure reduction, tempo
+  controls), also `needs_validation`. It blocks only what the IOC file marks
+  block, and says plainly what a WAF cannot see.
 - **Build a query** -- when the request is to detect this activity in a specific
   SIEM, follow the query workflow in [query-workflow.md](query-workflow.md) and
   the CIM and table provenance in

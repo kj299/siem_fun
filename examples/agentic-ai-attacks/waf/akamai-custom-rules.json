@@ -1,0 +1,360 @@
+{
+  "_status": "needs_validation - UNVERIFIED SCHEMA. Field names follow the Akamai Application Security API custom-rule and rate-policy objects as the author recalls them; Akamai's documentation could not be reached when this was written. Create one rule in the Custom Rule Builder UI, export it, and diff before importing these.",
+  "_usage": "Each entry under customRules has a recommended action and a rule body. POST the rule body, then set the action per security policy. Conditions inside one rule are ANDed; values inside one condition are ORed. Start every rule in alert. The builder matches wildcards, not regular expressions, so W-AGT-007 and W-AGT-008 are approximations of the regex versions in the other files.",
+  "_network_list": "W-AGT-010: load blocklist-ipv4.txt as a Network List and deny it in IP/Geo Firewall. No custom rule needed.",
+  "customRules": [
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-001 agent framework user-agent",
+        "description": "User-agents compiled into ARTEX, CyberStrikeAI, PentAGI and HexStrike-AI. Mirrors ua-block.txt.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": [
+              "*artex-enrich/*",
+              "*artex-selfupdate*",
+              "*compatible; artex/*",
+              "*infra-hunt/*",
+              "*verify-911-probe/*",
+              "*spa-api-recon*",
+              "*security-testing; authorized*",
+              "*recon-audit*",
+              "*reconprobe/*",
+              "*hexstrike-*",
+              "*cyberstrikeai*",
+              "*pentagi/*",
+              "*tcp_beacon*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-003 agent-adjacent user-agent",
+        "description": "Tools with legitimate users (Norma agent library, ffuf, PentAGI installer). Context only, never deny. Mirrors ua-alert.txt.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": ["*norma/0.*", "*fuzz faster u fool*", "*pentagi-installer*"],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-004a agent canary path",
+        "description": "Baseline-404 probes recorded by Wiz and Unit 42.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": ["/zzz-nonexistent*", "/zzzrandom*"],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-004b agent canary in query string",
+        "description": "Canary usernames, placeholder emails, junk OAuth state and metadata-service SSRF in the query string.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "uriQueryMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "*zz_no_such_user_*",
+              "*zzq.nonexistent*",
+              "*not-a-user@*",
+              "*@example.invalid*",
+              "notvalidb64",
+              "*169.254.169.254*",
+              "*metadata.google.internal*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-004c agent canary in POST body",
+        "description": "Same strings in form arguments: login, sign-up and account-recovery endpoints.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "argsPostMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "*zz_no_such_user_*",
+              "*zzq.nonexistent*",
+              "*not-a-user@*",
+              "*@example.invalid*",
+              "*169.254.169.254*",
+              "*metadata.google.internal*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-005 unsigned JWT in Authorization",
+        "description": "JWT whose header is alg none, in three casings and with typ first. Base64 is case-sensitive.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "Authorization",
+            "value": [
+              "*eyJhbGciOiJub25l*",
+              "*eyJhbGciOiJOb25l*",
+              "*eyJhbGciOiJOT05F*",
+              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJub25l*",
+              "*eyJ0eXAiOiJKV1QiLCJhbGciOiJOb25l*"
+            ],
+            "valueCase": true,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-006 ARTEX-tagged SQL injection probe",
+        "description": "S-RM: injection strings tagged with the framework name. Query string; duplicate with argsPostMatch for bodies.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "uriQueryMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": ["*artex' union*", "*artex'/\\**", "*artex' and *", "*artex' or *", "*artex'--*"],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-007 agent probe-account identity",
+        "description": "Okta: i<intent>probe<10-digit unix time>@. Wildcard approximation (? is one character); current timestamps start with 1.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "argsPostMatch",
+            "positiveMatch": true,
+            "name": "*",
+            "nameWildcard": true,
+            "value": [
+              "i??probe1?????????@*",
+              "i???probe1?????????@*",
+              "i????probe1?????????@*",
+              "i?????probe1?????????@*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-008 agent task-artifact script name",
+        "description": "S-RM: i<number>.<script ext>. Wildcard approximation is looser than the regex elsewhere, so alert first.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "filenameMatch",
+            "positiveMatch": true,
+            "value": ["i???", "i????", "i?????"],
+            "valueCase": false,
+            "valueWildcard": true
+          },
+          {
+            "type": "extensionMatch",
+            "positiveMatch": true,
+            "value": ["asp", "aspx", "ashx", "jsp", "jspx", "php"],
+            "valueCase": false,
+            "valueWildcard": false
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-020 source map or API spec requested",
+        "description": "Exposure reduction. Move to deny (with an internal network-list exception) once nothing public depends on these.",
+        "version": 1,
+        "tag": ["agentic-ai"],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": ["*.js.map", "*/openapi.json", "*/swagger.json", "*/v3/api-docs", "*/runtime-config.json"],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    }
+  ],
+  "ratePolicies": [
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-030 error-rate enumeration",
+        "description": "Clients drawing not-found or denied responses at machine speed. Thresholds are requests per second averaged over 2 minutes (average) and 5 seconds (burst); derive yours from a baseline.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "AllRequests",
+        "pathUriPositiveMatch": true,
+        "requestType": "ForwardResponse",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 5,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "ResponseStatusCondition",
+            "values": ["400", "401", "403", "404", "405"]
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-031 source-centric login failures",
+        "description": "Failed logins per client across any number of usernames. Set path values to your login and token endpoints.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "path": {
+          "positiveMatch": true,
+          "values": ["/login", "/signin", "/oauth/token", "/api/auth/login"]
+        },
+        "requestType": "ForwardResponse",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 3,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "RequestMethodCondition",
+            "values": ["POST"]
+          },
+          {
+            "positiveMatch": true,
+            "type": "ResponseStatusCondition",
+            "values": ["400", "401", "403"]
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-032 self-registration rate",
+        "description": "Sign-up posts per client. Okta saw thousands of fraudulent self-service registrations. Set path values to your sign-up endpoints.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "path": {
+          "positiveMatch": true,
+          "values": ["/signup", "/register", "/api/users", "/dbconnections/signup"]
+        },
+        "requestType": "ClientRequest",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 2,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "RequestMethodCondition",
+            "values": ["POST"]
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "policy": {
+        "name": "W-AGT-033 OAuth authorize probing",
+        "description": "Unit 42 and Okta: unregistered redirect URIs tried across many client IDs. Rate the authorize endpoint's error responses per client.",
+        "matchType": "path",
+        "type": "WAF",
+        "pathMatchType": "Custom",
+        "pathUriPositiveMatch": true,
+        "path": {
+          "positiveMatch": true,
+          "values": ["/authorize", "/oauth/authorize", "/oauth2/authorize", "/oauth2/v1/authorize"]
+        },
+        "requestType": "ForwardResponse",
+        "sameActionOnIpv6": true,
+        "averageThreshold": 1,
+        "burstThreshold": 3,
+        "clientIdentifier": "ip-useragent",
+        "useXForwardForHeaders": false,
+        "additionalMatchOptions": [
+          {
+            "positiveMatch": true,
+            "type": "ResponseStatusCondition",
+            "values": ["400", "401", "403"]
+          }
+        ]
+      }
+    }
+  ]
+}

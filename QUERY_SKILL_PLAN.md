@@ -180,7 +180,16 @@ siem_fun/
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
 |   |   |-- splunk-morpheus-native.conf
-|   |   `-- splunk-savedsearches.conf
+|   |   |-- splunk-savedsearches.conf
+|   |   `-- waf/
+|   |       |-- README.md
+|   |       |-- akamai-custom-rules.json
+|   |       |-- blocklist-ipv4.txt
+|   |       |-- f5-data-groups.tmsh
+|   |       |-- f5-irule-agentic.tcl
+|   |       |-- modsecurity-agentic.conf
+|   |       |-- ua-alert.txt
+|   |       `-- ua-block.txt
 |   |-- golden-prompts.md
 |   `-- golden-run.json
 |-- CLAUDE.md
@@ -579,6 +588,12 @@ score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lo
 `lookups/sentinel_watchlist.csv` carry the same 169 indicators, each present
 in `iocs.csv` with the same type, confidence and source, but no test pins
 that.
+
+A later change added [examples/agentic-ai-attacks/waf/](examples/agentic-ai-attacks/waf/README.md):
+the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
+ModSecurity. The same test file pins its address list and user-agent lists to
+`iocs.csv`; the rule syntax itself was not loaded on any device, and the
+Akamai JSON was written without access to Akamai's documentation.
 
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
