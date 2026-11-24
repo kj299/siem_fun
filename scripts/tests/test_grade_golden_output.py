@@ -317,6 +317,95 @@ class GenericRuleTests(unittest.TestCase):
         self.assertTrue(r.success, r.failed)
 
 
+NEVER_BLOCK = ["xcai.pro", "webhook.site"]
+# Each of these recommends blocking one of the two names. Several also refuse
+# to block something else in the same sentence, which is the case a required
+# phrase such as "do not block" lets through.
+RECOMMENDS_BLOCKING = [
+    "Blocklist answer: add xcai.pro and webhook.site to the proxy blocklist; the LLM API hosts are legitimate services, so do not block those.",
+    "Add webhook.site and xcai.pro to the blocklist, but do not block the LLM API hosts.",
+    "Block webhook.site at the proxy.",
+    "Only xcai.pro belongs on the blocklist.",
+    "The only domain I would add to the blocklist is xcai.pro.",
+    "The LLM APIs are legitimate, so none of them should be blocked. webhook.site can be blocked safely.",
+    "- `xcai.pro`: block\n- `api.x.ai`: do not block",
+    "Blocklist:\n- xcai.pro\n- webhook.site\n",
+    "Proxy blocklist candidates:\n\n* `webhook.site`\n",
+    "I recommend blocking xcai.pro, which is a reseller with little legitimate use.",
+    "Do not block the LLM providers, however webhook.site should be denied at the proxy.",
+    "xcai.pro is safe to blocklist.",
+    "Leave the four LLM API hosts alone. Blocklist `xcai.pro`, since a reseller has few sanctioned users.",
+    "Deny webhook.site and xcai.pro at the proxy; alert on the rest.",
+    # A negation in the reason, or in a second instruction, belongs to that clause.
+    "Add xcai.pro and webhook.site to the proxy blocklist, since neither has a business use here.",
+    "Block xcai.pro because no sanctioned application uses it.",
+    "Block xcai.pro, and do not block the LLM APIs.",
+    "The LLM APIs are legitimate so do not block them, and add xcai.pro to the blocklist.",
+]
+# Each of these names a service next to a block word without recommending it.
+DOES_NOT_RECOMMEND_BLOCKING = [
+    "Do not add api.x.ai, xcai.pro, or webhook.site to the blocklist.",
+    "Blocklist answer: none of these domains.",
+    "None of them: the LLM API hosts, xcai.pro and webhook.site are legitimate services and are never on a block action.",
+    "Blocking webhook.site would break developer tooling and would not stop an operator.",
+    "Blocking webhook.site breaks legitimate use.",
+    "`xcai.pro` is a reseller named in the same reporting; I have no block action recorded for it.",
+    "| xcai.pro | alert, do not block |",
+    "webhook.site is alert-only.",
+    "Do not block these at the proxy:\n- xcai.pro\n- webhook.site\n",
+    "Nothing here belongs on a blocklist:\n- xcai.pro\n",
+    "Rather than block webhook.site, alert when a server resolves it.",
+    "Neither xcai.pro nor webhook.site should be blocked.",
+    "Treat xcai.pro the same way; it isn't a block indicator.",
+    "- Blocklist: the LLM API hosts and webhook.site are legitimate services and stay alert-only.",
+    "webhook.site and the LLM hosts stay off the blocklist.",
+    "Whether xcai.pro should be blocked depends on its row in the IOC file.",
+    "Detect servers calling the LLM APIs and webhook.site, and say which of those domains to add to the proxy blocklist.",
+    "Keep xcai.pro and webhook.site out of the blocklist.",
+    "Blocking webhook.site is not recommended.",
+    "Adding xcai.pro to the blocklist is not something the reference supports.",
+    "Do not add api.x.ai, xcai.pro, and webhook.site to the blocklist.",
+    "Do not block xcai.pro, since legitimate customers are possible.",
+]
+
+
+class NeverBlockTests(unittest.TestCase):
+    def test_a_recommendation_to_block_a_named_service_is_found(self):
+        for text in RECOMMENDS_BLOCKING:
+            self.assertTrue(g.block_recommendations(text, NEVER_BLOCK), text)
+
+    def test_naming_a_service_beside_a_block_word_is_not_a_recommendation(self):
+        for text in DOES_NOT_RECOMMEND_BLOCKING:
+            self.assertEqual(g.block_recommendations(text, NEVER_BLOCK), [], text)
+
+    def test_a_refusal_elsewhere_in_the_sentence_does_not_clear_it(self):
+        # The reason the check exists. Read as one sentence this carries "do
+        # not block", so only a clause-level read sees the recommendation.
+        text = "Add webhook.site and xcai.pro to the blocklist, but do not block the LLM API hosts."
+        self.assertEqual(g.block_recommendations(text, NEVER_BLOCK), ["Add webhook.site and xcai.pro to the blocklist,"])
+
+    def test_a_query_that_searches_for_the_service_is_not_advice(self):
+        text = "## Query\n```spl\n| tstats count where DNS.query=\"webhook.site\" by DNS.src | eval action=\"block\"\n```\n"
+        self.assertEqual(g.block_recommendations(text, NEVER_BLOCK), [])
+
+    def test_only_the_named_services_are_read(self):
+        self.assertEqual(g.block_recommendations("Block evil.example at the proxy.", NEVER_BLOCK), [])
+
+    def test_the_spec_key_fails_an_answer_and_passes_a_refusal(self):
+        spec = dict(never_block=NEVER_BLOCK, code_block=False)
+        bad = g.grade(fx(**spec), "## Objective\nBlock webhook.site at the proxy.\n", DECLARED)
+        self.assertFalse(bad.success)
+        self.assertTrue(any("never recommends blocking" in m for m in bad.failed), bad.failed)
+        good = g.grade(fx(**spec), "## Objective\nBlocklist answer: none. webhook.site is alert-only.\n", DECLARED)
+        self.assertTrue(good.success, good.failed)
+
+    def test_the_blocklist_fixture_carries_the_check(self):
+        # Without this the key could be dropped from the fixture and every test above would still pass.
+        specs = [f.spec for f in g.load_fixtures() if "blocklist" in f.prompt.lower()]
+        self.assertEqual(len(specs), 1)
+        self.assertEqual(sorted(specs[0].get("never_block", [])), sorted(NEVER_BLOCK))
+
+
 class CliTests(unittest.TestCase):
     def _run(self, argv):
         out, err = io.StringIO(), io.StringIO()

@@ -135,6 +135,28 @@ class ReferenceDocTests(unittest.TestCase):
                 self.assertEqual(ioc_uas.get(value), framework, value)
         self.assertNotIn("- CAIRN:", block)
 
+    def test_canary_values_in_the_doc_are_exactly_ioc_rows(self):
+        # Same reason as the user-agent list: the doc is what a model can put in a query.
+        text = DOC.read_text().replace("\r\n", "\n")
+        block = text.split("not the literal value:\n\n", 1)[1].split("\n\n", 1)[0]
+        listed = re.findall(r"`([^`]+)`", block)
+        with open(IOCS, newline="") as fh:
+            canaries = {r["value"] for r in csv.DictReader(fh) if r["type"] == "canary_string"}
+        self.assertGreaterEqual(len(listed), 6)
+        for value in listed:
+            self.assertIn(value, canaries)
+
+    def test_entra_operation_names_in_the_doc_are_those_of_the_rule(self):
+        # The doc tells a model which AuditLogs operations to match; the Sentinel rule is what ships.
+        text = DOC.read_text().replace("\r\n", "\n")
+        block = text.split("behavior matches (R-B-AGT-008):\n\n", 1)[1].split("\n\n", 1)[0]
+        listed = set(re.findall(r"`([^`]+)`", block))
+        rules = (ASSETS / "sentinel-rules.yaml").read_text()
+        ops = re.search(r"let ops = dynamic\(\[(.*?)\]\);", rules, re.S).group(1)
+        self.assertEqual(listed, set(re.findall(r'"([^"]+)"', ops)))
+        # One entry is the ending of a longer name, so an equality test against the list matches nothing.
+        self.assertNotIn("OperationName in (ops)", rules)
+
     def test_doc_technique_table_is_non_trivial(self):
         self.assertGreater(len(doc_technique_ids()), 30)
 

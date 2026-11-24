@@ -776,9 +776,106 @@ four were rejected.
 
 No skill and no reference changed, so the fourteen earlier answers were
 re-graded rather than re-run: 17 of 17, and the marker records it. Still not
-exercised by any fixture: the OAuth user-agent drift hunt, the canary-username
-login rule, identity persistence in cloud audit logs, and the rule that
-legitimate services are never a block action.
+exercised by any fixture after this run: the OAuth user-agent drift hunt, the
+canary-username login rule, identity persistence in cloud audit logs, and the
+rule that legitimate services are never a block action. The twelfth run takes
+all four.
+
+## What the twelfth model run found
+
+Twelfth run, 2026-11-24, for the four items left over.
+
+- **Fixture 18**, OAuth application user-agent drift, with
+  `MicrosoftGraphActivityLogs` known. The spec wants that table only, grouped
+  per `AppId` against a bounded baseline, and forbids the one vendor's baseline
+  client in the query.
+- **Fixture 19**, a canary username followed by an admin login, against the
+  accelerated Authentication data model.
+- **Fixture 20**, credentials added to applications or service principals,
+  with `AuditLogs` known.
+- **Fixture 21**, a detection for servers calling the LLM APIs and
+  webhook.site the agents use, with a request to say which of those domains to
+  blocklist. The spec wants the detection and wants the blocklist refused.
+
+Ten samples were taken before any spec was written. Fixtures 18, 20 and 21
+needed nothing: both drift answers built a per-application baseline and said
+the generic clients are context only; both persistence answers matched the
+operation name as a phrase because its dash character varies; and all three
+blocklist answers opened with "none", cited the reference's rule, and treated
+the reseller the same way.
+
+Fixture 19 was the second skill-content gap a run has found, and the same
+kind as the first. The reference named the canary-then-admin rule in its list
+of hunts and nowhere said what a canary username looks like. All three
+answers said so in almost the same words, that the loaded material carries no
+verified canary login name, and then defined a canary as any failed non-admin
+username with no success in the window. That is the honest move the reference
+asks for since the ninth run, and it is also a worse detection than the
+repo's own rule: a person mistyping a username before signing in as an
+administrator matches it. The IOC file has the verified values, and the saved
+search R-D-AGT-018 keys on their shape; a client just never loads either.
+
+The reference now carries the verified probe and canary values (login
+canaries, the path canary, the cloud-storage key canaries and the artifact
+names) with the shape each hunt should match, and says to define an unlisted
+pattern by behavior. A test pins every value in that list to a canary row of
+`iocs.csv`. Because the query builder's content changed, all eighteen
+fixtures that exercise it were re-run (1 to 7 and 11 to 21); 8 to 10 use the
+other two skills and stand. 21 of 21, and three of three samples of fixture
+19, each keyed on a username that starts with zz or contains nonexistent or
+not-a-user, followed by admin, administrator or root from the same source
+within a minute. The three pre-fix answers fail the spec, as they should.
+
+Each new spec was also checked against an answer edited to do the wrong
+thing: the vendor's baseline client written into the drift query, a second
+table, the pre-fix canary answer, and a blocklist answer with the refusal
+removed. All were rejected.
+
+Fixture 21 was then tightened. Its refusal check was a required phrase, and
+an answer that refuses the LLM hosts while recommending a block on the
+reseller or webhook.site contains that phrase too. The grader gained a
+`never_block` spec key that reads the answer's prose clause by clause for
+advice to block a named service; sentence by sentence is not enough, because
+the answer it exists for carries its refusal and its recommendation in one
+sentence. The four real answers to fixture 21 pass it and no other answer in
+the run trips it; answers edited to recommend the block fail. It reads prose,
+so it has stated misses: advice by pronoun and advice hedged with a
+condition. No prompt and no skill content moved, so the twenty-one answers
+were re-graded, not re-run, and the marker was recorded again.
+
+Fixture 20 was tightened the same day. It had checked only that the filter
+was on the operation name and concerned credentials. It now requires both
+operations that add one, the service principal operation and the application
+operation matched by its ending, which are the two the pack's own Sentinel
+rule matches and the two all three real answers chose. It also forbids the
+application operation's full name typed with a plain hyphen, which matches
+nothing because the real name carries a different dash. Re-graded, not
+re-run.
+
+The operation names then went into the reference, so that fixture 20 no
+longer rests on what a model happens to know: the operations the pack's own
+rule matches, the advice to match the application one by its ending, and the
+note that it records removals too. A test pins the list to the rule in
+`sentinel-rules.yaml`. Writing it exposed a defect in that rule: it compared
+`OperationName` to the list with an exact-match operator, and one entry is
+only the ending of a longer name, so that entry could never match. The rule
+now uses a phrase match, and the test forbids the exact form.
+
+Thirteenth run, 2026-11-24, because the query builder's content changed:
+fixtures 1 to 7 and 11 to 21 re-run, 20 of 21 before correction. Fixture 20
+passed twice and both answers now give the reference's reasons. Fixture 18
+failed a correct answer, the seventh fixture defect: the answer bound its
+baseline through a variable, `let baselineDays = 30d`, and the spec demanded
+the window written as a literal inside the time function. The rule
+distinguished syntax, not behavior, so the spec now asks only that a 30 or
+31 day window appears in the query. No prompt or skill moved after the run,
+so the answers were re-graded: 21 of 21, and the marker records it.
+
+Seven fixture defects and two skill-content gaps across thirteen runs. Both gaps
+were a hunt the reference named while leaving its key values in a file the
+skill does not load, and both were found by the first fixture to ask for that
+hunt. Nothing on the list of uncovered items remains; what a fixture still
+cannot show is whether a hunt returns anything on real data.
 
 ## For your own environment
 

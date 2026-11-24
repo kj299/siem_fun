@@ -60,6 +60,35 @@ Never write a guessed pattern, such as a framework's name between wildcards,
 into a query: an indicator that is not in the IOC file is an invented one, and
 a clean result from it reads as coverage that does not exist.
 
+Probe and canary values the agents were seen sending are verified the same way
+(each is a row in the IOC file). They are throwaway strings, so a hunt should
+match the shape, not the literal value:
+
+- Login canaries (Unit 42 2026-10-30): `zz_no_such_user_9f3a` and `zzq.nonexistent9x7`, usernames that cannot exist, submitted to baseline the identity provider's error response about a second before the attempt on an admin account, and reused across organizations; `precheck.not-a-user@example.invalid` at account-recovery endpoints. Shape: a username that starts with zz, or contains nonexistent or not-a-user.
+- Path canary (Unit 42 2026-10-30): a request for `zzzrandom12345`, to baseline how the application answers a page that is not there.
+- Object-key canaries in cloud storage (Unit 42 2026-10-30): `nonexistent-i3185` and `zz-no-such-key-1a2b3c.html`.
+- Artifact names (GTIG 2026-10-30): files prefixed `artex-probe-` followed by a five-digit number, and accounts whose name contains `ArtexProbe`.
+
+The canary-then-admin rule (H-AGT-018, R-D-AGT-018) keys on the login shape
+above: a failed login for such a username, then an attempt as admin,
+administrator or root from the same source within about a minute. For a probe
+pattern that is not listed here, define it by behavior and say that no
+verified value exists.
+
+Identity persistence in Microsoft Entra is read from `AuditLogs` by
+`OperationName`. These are the operations the pack's own rule for that
+behavior matches (R-B-AGT-008):
+
+- A credential added: `Add service principal credentials` for a service principal, and for an application the operation whose name ends `Certificates and secrets management`.
+- Ownership, roles and consent: `Add owner to application`, `Add owner to service principal`, `Add app role assignment to service principal`, `Add member to role`, `Consent to application`.
+
+Match the application credential operation by that ending, with `has` or
+`has_any`. Its full name is longer and carries a dash character that varies,
+so the full name typed with a plain hyphen, or an equality test against the
+ending, matches nothing. That operation also records removals; the modified
+properties say which it was. These are behaviors, not indicators: legitimate
+secret rotation and role changes produce the same events.
+
 ## Developments since 2026-11-07 (as of 2026-11-24)
 
 Added in a refresh on 2026-11-24. The indicators are in `iocs.csv`, and the

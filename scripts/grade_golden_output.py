@@ -36,6 +36,9 @@ Spec keys, all optional:
   sourcetypes      every sourcetype= value in a code block must be one of these
   tables           every leading KQL table in a kql block must be one of these
   code_block       whether a fenced block is required at all (default true)
+  never_block      names the answer must not recommend blocking, for a request
+                   that asks which services to blocklist when the reference
+                   says none of them (see block_recommendations)
 
 Generic checks run on every answer regardless of spec: no unquoted boolean in
 '| where', every raw-event spl block is time-bound, every kql block names
@@ -131,6 +134,77 @@ def asks_for_secret(text: str) -> bool:
     return False
 
 
+# A request can ask which named services to blocklist when the reference says
+# none of them. `never_block` names services the answer must not recommend
+# blocking. A phrase the answer must contain ("none", "do not block") is not
+# enough: "block the reseller; the LLM hosts are legitimate, so do not block
+# those" contains it and still gives the recommendation. So the text is read
+# clause by clause, and a clause that names one of the services together with
+# a block word, and carries nothing that negates, defers or explains, counts.
+_BLOCK_WORD_RE = re.compile(
+    r"(?i)\b(?:block(?:s|ed|ing|list(?:ed|ing)?)?|deny(?:list(?:ed|ing)?)?|denied)\b"
+)
+_BLOCK_EXEMPT_RE = re.compile(
+    r"(?i)(?:\b(?:"
+    r"not|never|none|no|nor|neither|nothing|without|instead|rather"  # negates it
+    r"|break|breaks|breaking"                 # says what blocking would cost
+    r"|alert-only|alert only|off|out of"      # states the alternative
+    r"|whether|unless|until|depends"          # defers the decision
+    r"|which of"                              # restates the question asked
+    r")\b|n't)"
+)
+# A period inside a host name is followed by a letter, not by a space, so
+# splitting on a stop followed by whitespace leaves `webhook.site` whole.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;])\s+")
+# Where one clause ends inside a sentence. A contrast ("but", "however") turns
+# the advice around, and a reason ("since", "because") is not part of it: in
+# "add X to the blocklist, since neither has a business use" the negation
+# belongs to the reason and must not clear the advice. "and" splits only when
+# a new instruction follows it, so the "and" inside a list of hosts does not.
+_CLAUSE_SPLIT_RE = re.compile(
+    r"(?i)\b(?:but|while|whereas|however|though|except|since|because)\b"
+    r"|\band\b(?=\s+(?:do not|don't|never|leave|keep|alert|only|block|blocklist|deny|add)\b)"
+)
+_BULLET_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
+_BLOCKLIST_HEADING_RE = re.compile(r"(?i)\b(?:block|deny) ?list\b[^\n]*:\s*$")
+
+
+def block_recommendations(text: str, names: list[str]) -> list[str]:
+    """The clauses of `text` that recommend blocking one of `names`.
+
+    Fenced blocks are skipped: a query that searches for a host is not advice
+    about it. Two forms are read. A clause that names a service and a block
+    word with no exempting word is one. The other is a list: a line that ends
+    in a colon and mentions a blocklist, followed by bullets naming a service.
+
+    This is a reading of prose, so it has limits, and they are deliberate
+    misses rather than false alarms: advice given by pronoun ("block it"),
+    and advice hedged with an exempting word ("block it unless someone uses
+    it"), are not seen. A fixture using this key should say so in its prose.
+    """
+    lowered = [n.lower() for n in names]
+
+    def names_one(s: str) -> bool:
+        return any(n in s.lower() for n in lowered)
+
+    offending: list[str] = []
+    under_heading = False
+    for line in _FENCE_RE.sub("", text).split("\n"):
+        if not line.strip():
+            continue
+        if under_heading and _BULLET_RE.match(line):
+            if names_one(line) and not _BLOCK_EXEMPT_RE.search(line):
+                offending.append(line.strip())
+                continue
+        else:
+            under_heading = bool(_BLOCKLIST_HEADING_RE.search(line)) and not _BLOCK_EXEMPT_RE.search(line)
+        for sentence in _SENTENCE_SPLIT_RE.split(line):
+            for clause in _CLAUSE_SPLIT_RE.split(sentence):
+                if names_one(clause) and _BLOCK_WORD_RE.search(clause) and not _BLOCK_EXEMPT_RE.search(clause):
+                    offending.append(clause.strip())
+    return offending
+
+
 def spl_is_raw_event_search(body: str) -> bool:
     """True when the time rule applies to this spl block.
 
@@ -161,6 +235,7 @@ SPEC_KEYS = frozenset({
     "sections", "forbid_sections", "contains", "not_contains", "matches",
     "not_matches", "query_matches", "query_not_matches", "query_lang",
     "assumed_if_used", "indexes", "sourcetypes", "tables", "code_block",
+    "never_block",
 })
 
 # Table names the catalogue itself lists as placeholders, so a discovery answer
@@ -508,6 +583,13 @@ def grade(fixture: Fixture, answer: str, declared: set[str]) -> Result:
                 seen |= kql_tables(body)
         invented = sorted(seen - allowed)
         (r.bad if invented else r.ok)(f"KQL tables within {sorted(allowed)}" + (f": invented {invented}" if invented else ""))
+
+    if spec.get("never_block"):
+        offending = block_recommendations(answer, spec["never_block"])
+        (r.bad if offending else r.ok)(
+            f"never recommends blocking {sorted(spec['never_block'])}"
+            + (f": {offending[0][:120]!r}" if offending else "")
+        )
 
     # Generic rules, the same ones the validator holds the docs to.
     if spec.get("code_block", True):
