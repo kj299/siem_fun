@@ -423,3 +423,155 @@ Grader spec:
   "sourcetypes": []
 }
 ```
+
+## 12. Sentinel identity hunt for leaked application secrets
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Sentinel hunt for the ARTEX exposed-secrets campaign: one source signing in as many service principals with leaked application secrets.
+Platform: Sentinel
+Task: hunt
+Time range: last 30d
+Known datasets: AADServicePrincipalSignInLogs
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Loads agentic-ai-attacks.md and builds the hunt it describes in prose (the reference names H-AGT-022 but does not carry its KQL)
+- Queries `AADServicePrincipalSignInLogs` and no other table, bounded to `ago(30d)`
+- Counts distinct service principals per `IPAddress` and keeps three or more, the threshold the reference gives
+- Uses both error codes the reference gives for an invalid and an expired client secret, 7000215 and 7000222
+- Hunts the shape: the addresses Microsoft published are context, not the filter
+- Not machine-checked, reviewer's job: `ResultType` holds the bare number, so a comparison against the `AADSTS`-prefixed form matches nothing; and a failure followed by a success from one source is the urgent case
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "^AADServicePrincipalSignInLogs",
+    "ago\\(30d\\)",
+    "dcount\\(",
+    "IPAddress",
+    "7000215",
+    "7000222",
+    ">=\\s*3|>\\s*2"
+  ],
+  "tables": [
+    "AADServicePrincipalSignInLogs"
+  ]
+}
+```
+
+## 13. Sentinel hunt for agent probe accounts by naming shape
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Sentinel hunt for the probe accounts ARTEX agents self-register, as Okta Threat Intelligence described them.
+Platform: Sentinel
+Task: hunt
+Time range: last 30d
+Known datasets: AuditLogs, SigninLogs (Microsoft Entra ID)
+Output style: short
+```
+
+Expected output:
+
+- `Objective`
+- `Query`
+- `Assumptions`
+- Uses only the two supplied tables
+- Matches the naming shape the reference gives, the letter i, an intent number, the word probe and a ten-digit UNIX time, with a digit class rather than a fixed string
+- Does not hard-code the reference's one example address: the reference says these patterns are behaviors and the hunts match the shape
+- Not machine-checked, reviewer's job: the shared-mailbox prefixes and disposable mail domains the reference lists are a reasonable addition, and the answer should say the pattern was reported against Okta and Auth0 tenants, so Entra coverage is an adaptation
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Query",
+    "Assumptions"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "(?i)probe",
+    "\\[0-9\\]|\\\\d"
+  ],
+  "query_not_matches": [
+    "1792451568"
+  ],
+  "tables": [
+    "AuditLogs",
+    "SigninLogs"
+  ]
+}
+```
+
+## 14. Sentinel discovery when the identity provider's table is unknown
+
+Prompt:
+
+```text
+Use $splunk-sentinel-query-builder to build a Sentinel hunt for the probe accounts that ARTEX agents self-register in our Okta tenant.
+Platform: Sentinel
+Task: hunt
+Time range: last 30d
+Known datasets: unknown; Okta logs are ingested but I do not know the table name
+Output style: full
+```
+
+Expected output:
+
+- Returns `discovery`, not a production hunt
+- Uses the discovery shape: `Objective`, `Discovery query`, `Next step`
+- Starts from `Usage` or `getschema`, as sentinel-table-catalog.md says to
+- Names no Okta table in query position: none is catalogued, and the user said the name is unknown
+- Does not substitute an Entra query (`AuditLogs`, `SigninLogs`) for the Okta one the user asked for, even though the reference's own hunt for this pattern is written against Entra
+
+Grader spec:
+
+```json
+{
+  "sections": [
+    "Objective",
+    "Discovery query",
+    "Next step"
+  ],
+  "forbid_sections": [
+    "Why efficient",
+    "Tuning",
+    "Validate"
+  ],
+  "query_matches": [
+    "(?i)\\bUsage\\b|getschema"
+  ],
+  "matches": [
+    "(?i)re-?invoke"
+  ],
+  "tables": [
+    "Usage"
+  ]
+}
+```

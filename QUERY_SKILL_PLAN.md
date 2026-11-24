@@ -694,6 +694,48 @@ tempo and canary-probe hunts for CAIRN. The marker records it.
 Six fixture defects across nine runs, in five fixtures, and one skill-content
 gap, found by the first fixture written to exercise that content.
 
+## What the tenth model run found
+
+Tenth run, 2026-11-24, for three more fixtures against agentic-ai-attacks.md,
+covering what fixture 11 left out: the Sentinel side and the identity hunts.
+The reference names its hunts (H-AGT-021, H-AGT-022) but does not carry their
+KQL, which lives in an asset file a client does not load, so each of these
+asks the model to build the hunt from the reference's prose and the table
+catalogue.
+
+- **Fixture 12**, leaked application secrets: one source signing in as many
+  service principals. Known table `AADServicePrincipalSignInLogs`. The spec
+  wants that table only, a 30-day bound, a distinct count per `IPAddress` with
+  the reference's threshold of three, and both error codes the reference
+  gives.
+- **Fixture 13**, probe accounts by naming shape, with `AuditLogs` and
+  `SigninLogs` supplied. The spec wants a digit class around the word probe
+  and forbids the reference's one example address, because the reference says
+  to match the shape.
+- **Fixture 14**, the same probe accounts but in an Okta tenant whose table is
+  unknown. The spec wants `discovery` from `Usage`, and its table allowlist
+  rejects both a guessed Okta table and an Entra query substituted for the one
+  asked for. The reference's own hunt for this pattern is written against
+  Entra, which is the temptation the fixture is there to test.
+
+Three samples of each, nine answers: nine passed, and reading them found
+nothing the specs missed. Every fixture 12 answer compared `ResultType` to the
+bare number, not the prefixed code that would match nothing, and used
+Microsoft's published addresses only to flag and sort rows. Every fixture 13
+answer wrote the shape as a regular expression, said the pattern was reported
+against Okta and Auth0 so Entra coverage is an adaptation, and one widened the
+match for the `#EXT#` rewrite of external users. Every fixture 14 answer went
+to `Usage`, named no Okta table, and carried the registration shapes forward
+into its next step. No skill and no reference changed, so the eleven earlier
+answers were re-graded rather than re-run: 14 of 14, and the marker records
+it.
+
+That is a result, not an absence of one: the gap fixture 11 found was about a
+missing fact, and these three ask for things the reference does state. What
+is still not exercised by any fixture: the ATT&CK technique map, the OAuth
+user-agent drift hunt, the Splunk identity rules (source-centric spraying),
+and the reference's rule that legitimate services are never a block action.
+
 ## For your own environment
 
 1. Run `splunk-data-dictionary-builder` against your instance and pass its JSON
