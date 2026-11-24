@@ -910,7 +910,17 @@ distinguished syntax, not behavior, so the spec now asks only that a 30 or
 31 day window appears in the query. No prompt or skill moved after the run,
 so the answers were re-graded: 21 of 21, and the marker records it.
 
-Seven fixture defects and two skill-content gaps across thirteen runs. Both gaps
+Fourteenth run, 2026-11-24, because the retrospective corrected the
+reference: fixtures 1 to 7 and 11 to 21 re-run, 21 of 21, and the marker
+records it. Two answers show the corrections arriving. Fixture 11's hunt now
+matches the ARTEX name at the start of a word, the pattern F5 Labs' published
+list supports, beside the compiled-in strings; fixture 19's answer keeps the
+admin login whatever its result and says why. The run found nothing, which is
+what the first thirteen also said about the WAF pack: a fixture grades an
+answer's shape against the reference, so it cannot tell that the reference,
+or a rule file the reference points to, is wrong.
+
+Seven fixture defects and two skill-content gaps across fourteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still

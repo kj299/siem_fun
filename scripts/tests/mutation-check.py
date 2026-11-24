@@ -69,9 +69,22 @@ def sh(cmd: str, cwd: str = WORK) -> subprocess.CompletedProcess:
 PY_EXE = f'"{sys.executable}"'
 
 
+def unittest_green(stderr: str) -> bool:
+    """True when unittest's verdict line says every test that ran passed.
+
+    The line is "OK", or "OK (skipped=N)" when a suite skipped something. The
+    WAF engine tests skip wherever Apache, nginx and tclsh are not installed,
+    which includes the Windows runner this harness runs on; reading only a
+    bare trailing "OK" would call that a failure, and then every mutation
+    below would be CAUGHT by a suite that was never green to begin with.
+    """
+    lines = stderr.strip().splitlines()
+    return bool(lines) and re.fullmatch(r"OK(?: \(skipped=\d+\))?", lines[-1]) is not None
+
+
 def py_suite() -> str:
     r = sh(f"{PY_EXE} -m unittest discover -s splunk-data-dictionary-builder/tests")
-    return "OK" if r.stderr.strip().endswith("OK") else "FAILED"
+    return "OK" if unittest_green(r.stderr) else "FAILED"
 
 
 GRADER = "scripts/grade_golden_output.py"
@@ -79,7 +92,7 @@ GRADER = "scripts/grade_golden_output.py"
 
 def grader_suite() -> str:
     r = sh(f'{PY_EXE} -m unittest discover -s scripts/tests -p "test_*.py"')
-    return "OK" if r.stderr.strip().endswith("OK") else "FAILED"
+    return "OK" if unittest_green(r.stderr) else "FAILED"
 
 
 def ps_suite() -> str:
