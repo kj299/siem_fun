@@ -114,13 +114,19 @@ set fh [open [file join [file dirname [info script]] f5labs-artex-user-agents.tx
 set named 0
 foreach ua [split [read $fh] "\n"] {
     if {$ua eq "" || [string index $ua 0] eq "#"} continue
-    if {![regexp -nocase {(^|[^a-z])artex} $ua]} continue
+    if {![regexp -nocase {(^|[^a-z])artex($|[^a-z]|probe|bot)} $ua]} continue
     incr named
     t "F5 Labs list: $ua" [list headers [list User-Agent $ua]] 403 W-AGT-001
 }
 close $fh
 if {$named != 44} { incr fail; puts "FAIL F5 Labs list: $named name-bearing user-agents, want 44" }
 t "a product name that only contains the letters" {headers {User-Agent "SmartExchange/2.1"}} pass {}
+t "a product name that starts with the letters" {headers {User-Agent "ArtExpo/3.2 CFNetwork/1410.0.3 Darwin/22.6.0"}} pass {}
+t "ev: dots and a semicolon in a query" {uri "/search?q=wait..;then"} pass {}
+t "ev: second /actuator/health later in the path" {uri /actuator/jolokia/exec/x/actuator/health} 403 W-AGT-021
+t "ev: Content-Length with a leading zero" {method POST uri /login headers {Content-Length 029} body "username=zz_no_such_user_9f3a"} 403 W-AGT-004
+t "ev: Content-Length 0 beside chunked" {method POST uri /login headers {Content-Length 0 Transfer-Encoding chunked} body "username=zz_no_such_user_9f3a"} 403 W-AGT-004
+t "ev: text/XML in upper case" {method POST uri /saml headers {Content-Type APPLICATION/XML} body "<!DOCTYPE x><a/>"} 403 W-AGT-009
 # log-only mode
 set static::agt_log_only 1
 t "log-only: nothing is refused" {headers {User-Agent artex-enrich/1.0}} pass W-AGT-001

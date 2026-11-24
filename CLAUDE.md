@@ -218,9 +218,11 @@ technique table consistent. The same test pins the WAF rule pack under
 addresses may be denied, and no legitimate service may appear in a rule file.
 None of that runs a rule. [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py)
 does: it loads the SecLang file in Apache with ModSecurity v2 and in nginx
-with ModSecurity v3, sends each rule a request that should match and one that
-should not, and runs the F5 iRule's logic in a Tcl stand-in
-(`scripts/tests/waf/irule_runtime.tcl`). The engine suites skip when the
+with ModSecurity v3, alone and after the OWASP Core Rule Set, sends each rule
+a request that should match and one that should not, and runs the F5 iRule's
+logic in a Tcl stand-in (`scripts/tests/waf/irule_runtime.tcl`). Test a rule
+beside the software it is deployed beside: two defects showed only with the
+Core Rule Set loaded first. The engine suites skip when the
 engines are absent, and the `waf-engines` CI job sets `WAF_ENGINES_REQUIRED=1`
 so a skip there is a failure. **Change a WAF rule, add a request case, and run
 it in an engine**: the pack shipped with a file that did not load, because

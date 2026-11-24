@@ -150,7 +150,7 @@ signins
 | join kind=inner canaries on IPAddress
 | where AdminTime >= CanaryTime and AdminTime - CanaryTime <= 1m
 | summarize CanaryTime = min(CanaryTime), SecondsToAdmin = min(datetime_diff("second", AdminTime, CanaryTime)),
-            AdminSuccesses = countif(AdminResult == "0"), CanaryUsers = make_set(CanaryUser, 5), AdminUsers = make_set(AdminUser, 5) by IPAddress
+            AdminSuccesses = dcountif(AdminTime, AdminResult == "0"), CanaryUsers = make_set(CanaryUser, 5), AdminUsers = make_set(AdminUser, 5) by IPAddress
 | order by AdminSuccesses desc, CanaryTime desc
 
 // --- H-AGT-019  ARTEX task artifacts on a compromised host (S-RM 2026-11-04) -------------------

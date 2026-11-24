@@ -104,8 +104,10 @@ jobs:
   # not load on v2, one rule never fired, four rate rules did something other
   # than their comments said, and a percent-encoded path walked past the path
   # rules. This job loads the file in Apache + ModSecurity v2 and in nginx +
-  # ModSecurity v3, sends each rule a request that should match and one that
-  # should not, and runs the F5 iRule's logic in a Tcl stand-in for its runtime.
+  # ModSecurity v3, alone and after the OWASP Core Rule Set (which is how the
+  # file says to deploy it, and where two more of its defects hid), sends each
+  # rule a request that should match and one that should not, and runs the F5
+  # iRule's logic in a Tcl stand-in for its runtime.
   #
   # WAF_ENGINES_REQUIRED turns "engine not installed" from a skip into a
   # failure. Without it a runner image that lost a package would skip all three
@@ -113,6 +115,9 @@ jobs:
   # The same tests skip in the `python` job, where nothing is installed.
   waf-engines:
     runs-on: ubuntu-latest
+    # The suite takes under a minute. A server that never comes up should fail
+    # the job in minutes, not hold a runner for the six-hour default.
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,12 +130,21 @@ jobs:
       # policy-rc.d stops apt from starting either web server: both would bind
       # port 80, the second to start fails, and the package install fails with
       # it. The tests start their own instances on free loopback ports.
-      - name: Install Apache, nginx, both ModSecurity engines and Tcl
+      # Retried for the same reason the PowerShell module install above is: a
+      # mirror that is briefly unreachable should not read as a broken rule.
+      - name: Install Apache, nginx, both ModSecurity engines, the Core Rule Set and Tcl
         run: |
           printf '#!/bin/sh\nexit 101\n' | sudo tee /usr/sbin/policy-rc.d > /dev/null
           sudo chmod +x /usr/sbin/policy-rc.d
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends apache2 libapache2-mod-security2 nginx libnginx-mod-http-modsecurity tcl
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+                apache2 libapache2-mod-security2 nginx libnginx-mod-http-modsecurity modsecurity-crs tcl; then
+              exit 0
+            fi
+            echo "attempt $attempt failed"
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Run the WAF rules in the engines
         env:

@@ -253,11 +253,11 @@ python -m unittest discover -s scripts/tests -p "test_*.py"
 That command also runs [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py),
 the only tests that execute the WAF rule pack rather than compare its files
 with each other. Its engine suites skip unless Apache with mod_security2,
-nginx with the ModSecurity v3 connector, and `tclsh` are installed; a third
+nginx with the ModSecurity v3 connector, the OWASP Core Rule Set and `tclsh` are installed; a third
 CI job, `waf-engines`, installs them and treats a skip as a failure:
 
 ```bash
-sudo apt-get install apache2 libapache2-mod-security2 nginx-light libnginx-mod-http-modsecurity tcl
+sudo apt-get install apache2 libapache2-mod-security2 nginx libnginx-mod-http-modsecurity modsecurity-crs tcl
 WAF_ENGINES_REQUIRED=1 python -m unittest discover -s scripts/tests -p "test_waf_engines.py" -v
 ```
 

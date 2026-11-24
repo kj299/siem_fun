@@ -196,7 +196,9 @@ query: |
       | where OperationName has_any (ops)
       // has_any is a phrase match, so "Add member to role" also matches the Privileged Identity
       // Management activity names ("Add member to role completed (PIM activation)" ...). Those are
-      // people activating their own eligible roles; left in, every activation alerts.
+      // people activating their own eligible roles; left in, every activation alerts. The
+      // directory may record the same activation a second time under the plain name, written by
+      // the PIM service itself: look for that actor in your own AuditLogs and add it to `approved`.
       | where OperationName !has "PIM"
       | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
                Target = tostring(TargetResources[0].displayName), TargetId = tostring(TargetResources[0].id);
@@ -345,7 +347,8 @@ query: |
       | where TimeGenerated > ago(1d)
       | where OperationName has_any ("Add service principal credentials", "Certificates and secrets management", "Add owner to application",
                                      "Add app role assignment to service principal", "Add member to role", "Consent to application")
-      | where OperationName !has "PIM"
+      // Privileged Identity Management activations are deliberately kept here, unlike in
+      // R-B-AGT-008: a sprayed account that then activates a privileged role is the chain.
       | project TWrite = TimeGenerated, UserPrincipalName = tolower(tostring(InitiatedBy.user.userPrincipalName)), OperationName,
                 Target = tostring(TargetResources[0].displayName);
   sprays
@@ -609,7 +612,7 @@ relevantTechniques:
 - T1595
 query: |
   _Im_WebSession(starttime=ago(15m))
-  | where HttpUserAgent matches regex @"(?i)(^|[^a-z])artex" or HttpUserAgent startswith "artex-enrich/" or HttpUserAgent contains "spa-api-recon" or HttpUserAgent startswith "norma/"
+  | where HttpUserAgent matches regex @"(?i)(^|[^a-z])artex($|[^a-z]|probe|bot)" or HttpUserAgent startswith "artex-enrich/" or HttpUserAgent contains "spa-api-recon" or HttpUserAgent startswith "norma/"
        or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent startswith "HexStrike-BrowserAgent" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/" or HttpUserAgent contains "security-testing; authorized" or HttpUserAgent contains "recon-audit" or HttpUserAgent contains "compatible; ArtEx/" or HttpUserAgent contains "infra-hunt/" or HttpUserAgent startswith "verify-911-probe/"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10)
             by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), HttpUserAgent

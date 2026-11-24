@@ -45,9 +45,21 @@ BT = chr(96) * 3
 
 fails: list[str] = []
 
+# Every suite below runs once per mutation. The WAF engine suites start two web
+# servers and take half a minute where the engines are installed, and they are
+# not what any mutation here is aimed at: the static tests in the same file are.
+os.environ["WAF_ENGINES_SKIP"] = "1"
+
 # Tests that cannot be mutation-checked, and why. Listed so the gap is explicit
 # rather than looking like an oversight.
 NOT_MUTATABLE = {
+    "the engine suites of test_waf_engines.py":
+        "they need Apache, nginx, the Core Rule Set and tclsh, which the Windows "
+        "runner this harness runs on does not have, so they are skipped here (see "
+        "WAF_ENGINES_SKIP above). WAF_MUTS below mutates the rule file against the "
+        "static tests of the same module, which need no engine. The engine suites "
+        "were mutation-checked by hand, each rule defect put back in turn; the "
+        "list and the result are in QUERY_SKILL_PLAN.md",
     "tolerates YAML shapes the old regex parser rejected":
         "asserts ConvertFrom-Yaml's own behaviour; there is no repo code to break",
     "returns null for a non-dictionary value":
@@ -576,6 +588,53 @@ RUNNER_MUTS = [
 ]
 for label, old, new in RUNNER_MUTS:
     unit_mutation(label, RUNNER, old, new, grader_suite)
+
+# The ModSecurity rule file. Each mutation puts back a defect that shipped and
+# that an engine found; the static REGRESSION tests in test_waf_engines.py must
+# go red with no engine installed, because this harness runs where there is none.
+WAF_CONF = "examples/agentic-ai-attacks/waf/modsecurity-agentic.conf"
+
+WAF_MUTS = [
+    ("waf: a doubled backslash in a pattern (the file did not load on v2)",
+     'SecRule ARGS_GET|ARGS_POST "@rx \\.\\.(?:/|\\x5c)"',
+     'SecRule ARGS_GET|ARGS_POST "@rx \\.\\.[/\\\\]"'),
+    ("waf: no counter collection opened ahead of the deny rules",
+     'SecAction "id:9907100,phase:1,pass,nolog,initcol:resource=agt_%{REMOTE_ADDR}"',
+     'SecAction "id:9907100,phase:1,pass,nolog"'),
+    ("waf: counters in the collection the Core Rule Set keys on the User-Agent",
+     "initcol:resource=agt_%{REMOTE_ADDR}",
+     "initcol:ip=%{REMOTE_ADDR}"),
+    ("waf: a counter re-arms its own expiry on every hit (sliding window)",
+     "setvar:resource.agt_err=+1,setvar:tx.agt_err_hit=1",
+     "setvar:resource.agt_err=+1,expirevar:resource.agt_err=60,setvar:tx.agt_err_hit=1"),
+    ("waf: a counter whose window is never armed",
+     '    SecRule RESOURCE:AGT_DENIED "@eq 1" "expirevar:resource.agt_denied=120"',
+     '    SecRule RESOURCE:AGT_DENIED "@eq 1" "t:none"'),
+    ("waf: a denying rule that does not feed the repeat-violator counter",
+     '"id:9907004,phase:2,deny,status:403,log,setvar:tx.agt_deny=1,',
+     '"id:9907004,phase:2,deny,status:403,log,'),
+    ("waf: the sign-up limit refuses every request, not only sign-ups",
+     'SecRule TX:AGT_SIGNUP_HIT "@eq 1" \\\n'
+     "    \"id:9907107,phase:2,deny,status:429,log,msg:'W-AGT-032 self-registration rate',tag:'agentic-ai',chain\"\n"
+     '    SecRule RESOURCE:AGT_SIGNUP "@gt 3"',
+     'SecRule RESOURCE:AGT_SIGNUP "@gt 3" \\\n'
+     "    \"id:9907107,phase:2,deny,status:429,log,msg:'W-AGT-032 self-registration rate',tag:'agentic-ai'\""),
+    ("waf: a path rule that matches the path as sent",
+     '"id:9907021,phase:1,deny,status:404,log,setvar:tx.agt_deny=1,t:none,t:urlDecodeUni,',
+     '"id:9907021,phase:1,deny,status:404,log,setvar:tx.agt_deny=1,t:none,'),
+    ("waf: the XML rule reads the media type case-sensitively",
+     '"id:9907009,phase:2,deny,status:403,log,t:none,t:lowercase,chain,',
+     '"id:9907009,phase:2,deny,status:403,log,chain,'),
+    ("waf: the Core Rule Set blocking rule edited to count its blocks",
+     "#SecRule TX:ANOMALY_SCORE \"@ge %{tx.inbound_anomaly_score_threshold}\" \\\n"
+     '#    "id:9907160,phase:5,pass,nolog,setvar:tx.agt_deny=1"',
+     'SecRuleUpdateActionById 949110 "setvar:tx.agt_deny=1"'),
+    ("waf: the ARTEX name pattern loses its right boundary",
+     "(?:^|[^a-z])artex(?:$|[^a-z]|probe|bot)",
+     "(?:^|[^a-z])artex"),
+]
+for label, old, new in WAF_MUTS:
+    unit_mutation(label, WAF_CONF, old, new, grader_suite)
 
 # The shared rule corpus, and the two readers that consume it. Kept separate
 # from the lists above because these mutations target the TEST files and the
@@ -1266,7 +1325,7 @@ if fails:
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
       f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + "
-      f"{len(RUNNER_MUTS)} runner + 2 shared corpus, "
+      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
       f"{run_counts['environment']} environment)")
 sys.exit(0)

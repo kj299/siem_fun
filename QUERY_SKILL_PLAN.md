@@ -627,6 +627,27 @@ the engines and treats a skipped suite as a failure. Limits, stated where the
 rules live: no BIG-IP and no Akamai account were available, so the tmsh file
 is unloaded and the Akamai JSON is checked against its schema only.
 
+An independent review of that work then did what the first pass had not:
+it loaded the corrected file after the OWASP Core Rule Set, which is how the
+file's own header says to deploy it. Two more defects were waiting there.
+The counters sat in the collection the Core Rule Set opens first and keys on
+the User-Agent, so on v2 a client that rotated that header was never boxed;
+and a comment recommended a way of counting Core Rule Set blocks that, on v3,
+switched them off. It also showed that eleven changes to the rule file left
+every test green, among them deleting three of the four rules that end a
+window. The tests now load the Core Rule Set too, check every counter's
+window and every response inside it, read the log for the rules that only
+log, and each defect in this section, twenty-two in all, was put back in turn
+to see a test fail for it. Doing that found one more hole, in a test written
+that same hour: the window check looked only at the end of its run, after a
+one-second penalty had already expired, and caught one counter of four.
+Eleven of the mutations are in the harness, against the static tests, since
+the harness runs where no engine is installed.
+
+The lesson is narrower than "run the code". The first pass ran the code and
+stopped at the rule file's own edge. A rule that is deployed beside other
+software has to be tested beside it, and a test has to be shown to fail.
+
 The same retrospective read the vendors' references and the published
 reporting again. From the references: two columns in `hunting.kql` that their
 tables do not have, an operation match that also caught Privileged Identity

@@ -19,11 +19,16 @@ The three platform files do not carry the same weight of evidence. On
 
 - **ModSecurity: executed.** The file was loaded on Apache 2.4.58 with
   mod_security 2.9.7 and on nginx 1.24 with libmodsecurity 3.0.12, each with
-  the two body-processor rules of the recommended base configuration, and
-  every rule was sent a request that should match and one that should not.
-  The tempo rules were driven from separate source addresses, with two
-  windows shortened in a test copy to check that a window ends. Coraza was
-  not tried.
+  the two body-processor rules of the recommended base configuration, alone
+  and again after OWASP Core Rule Set 3.3.5. Every rule that ships enabled,
+  and W-AGT-020 with its comment marks removed, was sent a request that
+  should match and one that should not; the two log-only rules were read from
+  the engine's log. The tempo rules were driven from separate source
+  addresses, and in a test copy with every window shortened to check that a
+  window ends and that a tripped counter is cleared. Each defect listed below
+  was then put back, one at a time, to confirm a test fails for it. Coraza
+  was not tried, and nginx was run with one worker (see the tempo section for
+  why that matters).
 - **F5: logic executed, platform not.** The iRule was run in `tclsh` against
   its real data groups, inside a stand-in for the iRule runtime that follows
   the command semantics on clouddocs.f5.com. That proves the rule's logic. It
@@ -44,7 +49,7 @@ them against both engines on every pull request. Run them yourself before a
 deployment, and add a case when you change a rule:
 
 ```text
-apt-get install apache2 libapache2-mod-security2 nginx-light libnginx-mod-http-modsecurity tcl
+apt-get install apache2 libapache2-mod-security2 nginx libnginx-mod-http-modsecurity modsecurity-crs tcl
 python3 -m unittest discover -s scripts/tests -p "test_waf_engines.py" -v
 ```
 
@@ -72,6 +77,23 @@ traps wait for any rule you add:
   `/actuator/health/..;/env` and `/i4028.php;.jpg` on every platform.
 - The iRule skipped any body over 64 KB and every chunked body, read only
   the last of a repeated header, and did not treat `+` as a space.
+
+A second, independent review then ran the corrected file the way its own
+header says to deploy it, after the Core Rule Set, and found two more:
+
+- The counters were kept in the `IP` collection. The Core Rule Set opens
+  that collection first, keyed on the address and a hash of the User-Agent,
+  and on v2 a second `initcol` is ignored: a client that changed its
+  User-Agent on every request got fresh counters each time and was never
+  boxed. The counters now live in `RESOURCE`, keyed on the address.
+- A comment recommended counting Core Rule Set blocks by editing the actions
+  of its blocking rule. On libmodsecurity 3 that replaced the rule's deny and
+  the Core Rule Set stopped blocking. The recipe is gone; an optional rule
+  that reads the score instead is in the file, commented.
+
+Nothing here was found by reading the rules. All of it was found by running
+them, and the second batch only by running them beside the software they are
+meant to run beside.
 
 ## Read this before blocking anything
 
@@ -125,7 +147,7 @@ engine tests above are what run them.
 
 | Rule | Matches | Where | Evidence | False-positive risk |
 | --- | --- | --- | --- | --- |
-| W-AGT-001 | Framework user-agents: `artex-enrich/`, `compatible; ArtEx/`, `infra-hunt/`, `verify-911-probe/`, `spa-api-recon`, `security-testing; authorized`, `recon-audit`, `ReconProbe/`, `HexStrike-`, `CyberStrikeAI`, `PentAGI/`, `tcp_beacon`. Also the name `artex`, in any case, at the start of a word: the agent makes up a user-agent per task and 44 of the 46 that F5 Labs lists carry the name | User-Agent header | Framework source code; WorkOS 2026-11-06; Unit 42 2026-10-30; Wiz 2026-10-22; F5 Labs 2026-11-23 (appendix) | Low. An authorized tester running a default build will be blocked too; that is a finding, not a false positive. The name is matched at a word start so a product such as SmartExchange is not a hit; Akamai's wildcard version covers the start of the header, a space and an opening bracket. F5's caveat: the agent changes the header when blocked. |
+| W-AGT-001 | Framework user-agents: `artex-enrich/`, `compatible; ArtEx/`, `infra-hunt/`, `verify-911-probe/`, `spa-api-recon`, `security-testing; authorized`, `recon-audit`, `ReconProbe/`, `HexStrike-`, `CyberStrikeAI`, `PentAGI/`, `tcp_beacon`. Also the name `artex`, in any case, as a word (not after a letter; followed by the end, a non-letter, or `probe` or `bot`): the agent makes up a user-agent per task and 44 of the 46 that F5 Labs lists carry the name | User-Agent header | Framework source code; WorkOS 2026-11-06; Unit 42 2026-10-30; Wiz 2026-10-22; F5 Labs 2026-11-23 (appendix) | Low. An authorized tester running a default build will be blocked too; that is a finding, not a false positive. The name rule is the exception: medium. It does not match SmartExchange or ArtExpo, but any product whose name is exactly that word would be refused, and six refusals box the address. Akamai's wildcard version cannot say what may follow the name, so it ships as a separate alert rule (W-AGT-001b). F5's caveat: the agent changes the header when blocked. |
 | W-AGT-002 | `CyberStrikeAI-WebShell` user-agent | User-Agent header | CyberStrikeAI source (web-shell manager) | None, and blocking is not enough: this is someone driving a shell they believe is on your server. Investigate the requested path. |
 | W-AGT-003 | `norma/0.`, `Fuzz Faster U Fool`, `PentAGI-Installer` | User-Agent header | Nextron (Norma is not ARTEX-exclusive); Unit 42 | High if denied. Log only. |
 | W-AGT-004 | Canary probes `/zzz-nonexistent-xyz123`, `/zzzrandom12345`; `artex-probe-<number>` files and `ArtexProbe` account names (GTIG); canary identities `zz_no_such_user_9f3a`, `zzq.nonexistent9x7`, `precheck.not-a-user@example.invalid`; any address at `example.invalid`; OAuth `state=notvalidb64`; cloud metadata address in a parameter | Path, query, body | Wiz 2026-10-22; Unit 42 2026-10-30; S-RM 2026-11-04; CrowdStrike 2026-10-29 | Low. `.invalid` is a reserved top-level domain that can never receive mail. Matched as prefixes, so a changed suffix still hits. |
@@ -138,7 +160,7 @@ engine tests above are what run them.
 | W-AGT-010 | 44 source addresses, including the eight Storm-3358 ARTEX and C2 servers Microsoft published on 2026-11-06 | Client address | `iocs.csv` rows marked block (CrowdStrike, Zscaler, NorForge, Kaspersky, Microsoft and others) | Low today, decaying. The FBI FLASH of 2026-11-13 asks you to vet addresses before blocking because hosting addresses get reassigned. Review on every `iocs.csv` update; expire after 90 days. |
 | W-AGT-011 | Shell command syntax in the User-Agent (`$(`, a backtick, `; curl`, a pipe to `sh`) | User-Agent header | Microsoft 2026-11-05 (exploitation by shell commands embedded in a user agent) | None for browsers. |
 | W-AGT-012 | Upload filename containing `../`, or named `sitecustomize.py` or `usercustomize.py` | Multipart body | Amazon 2026-11-20: Cairn agents found a path-traversal zero-day in an upload filename parameter in about 11 minutes and wrote a Python auto-import file for a root shell | Low. On Akamai this is left to the managed attack groups. |
-| W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, half-encoded, double-encoded and overlong dots), and `..;/`, which Tomcat and Spring resolve as `../` | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
+| W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, half-encoded, double-encoded and overlong dots), and `..;` in the path (not the query), which Tomcat and Spring resolve as `..` | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
 | W-AGT-013 | `isCliRequest` request header | Header | Amazon, November 2026: authentication bypass in the ARTEX playbook against One API family LLM gateways | Log only. Relevant only in front of such a gateway. |
 
 The user-agent and probe-string rules deny on values the IOC file marks
@@ -183,8 +205,11 @@ predictable development credential and no rate limiting.
   keeps working; `/actuator/env`, `/actuator/heapdump` and the rest are not.
   The exemption is deliberately narrow, plain path segments only (on Akamai,
   a list: `health`, `health/liveness`, `health/readiness`), because
-  `/actuator/health/..;/env` is `/actuator/env` to Tomcat and Spring. The
-  rules decode the path and treat `;` as a boundary for the same reason.
+  `/actuator/health/..;/env` is `/actuator/env` to Tomcat and Spring, and it
+  must be the first `/actuator` in the path, because
+  `/actuator/jolokia/exec/x/actuator/health` is not the health endpoint
+  (W-AGT-021c on Akamai). The rules decode the path and treat `;` as a
+  boundary for the same reason.
   Evidence, stated plainly: Amazon reports ARTEX agents harvesting secrets
   from "debug routes, and environment files", and Unit 42 reports them
   fetching API documentation pages. No report read for this pack names
@@ -238,7 +263,21 @@ The windows are fixed: a counter starts when its first event arrives and is
 cleared when it trips or its window ends. The SecLang counters are keyed on
 the client address alone, so everyone behind one NAT address shares them;
 that is the reason for the thresholds above being loose and for the next
-note.
+note. Three things about where those counters live:
+
+- They are in ModSecurity's `RESOURCE` collection, not `IP`, so that the
+  Core Rule Set's own use of `IP` (keyed on address and User-Agent) cannot
+  split them.
+- On nginx they are held in each worker process's memory. With more than one
+  worker a client is counted separately by each, so a threshold is reached
+  later than written and a boxed client is refused only by the workers that
+  boxed it. A review run with four workers left 44 of 100 six-denial
+  sequences unboxed. On Apache the counters are shared through `SecDataDir`.
+- On Apache a penalty lasts no longer than `SecCollectionTimeout`. The Core
+  Rule Set's setup file sets that to 600 seconds, which cuts the 30-minute
+  penalty of W-AGT-034 and the 15-minute one of W-AGT-031 to ten. Set it to
+  1800 after that include if you want the penalties as written. On nginx the
+  directive made no difference.
 
 On Akamai the table's low thresholds cannot be written. A rate policy counts
 hits per second and the lowest value is 1, about 120 requests in two

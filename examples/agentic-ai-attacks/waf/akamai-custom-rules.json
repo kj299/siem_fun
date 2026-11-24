@@ -10,7 +10,7 @@
       "action": "deny",
       "rule": {
         "name": "W-AGT-001 agent framework user-agent",
-        "description": "User-agents compiled into ARTEX, CyberStrikeAI, PentAGI and HexStrike-AI. Mirrors ua-block.txt. The last three values are the framework's own name at the start of a word (F5 Labs 2026-11-23 lists 46 ARTEX user-agents, 44 carrying the name); the wildcard builder cannot say 'not preceded by a letter', so they cover the start of the header, a space and an opening bracket.",
+        "description": "User-agents compiled into ARTEX, CyberStrikeAI, PentAGI and HexStrike-AI. Mirrors ua-block.txt.",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -35,7 +35,31 @@
               "*hexstrike-*",
               "*cyberstrikeai*",
               "*pentagi/*",
-              "*tcp_beacon*",
+              "*tcp_beacon*"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "alert",
+      "rule": {
+        "name": "W-AGT-001b ARTEX named in the user-agent",
+        "description": "The framework's own name at the start of a word in the User-Agent. F5 Labs (2026-11-23) lists 46 user-agents it tied to ARTEX, made up by the agent per task; 44 carry the name. Alert, not deny: the wildcard builder can say 'at the start of the header, after a space or after an opening bracket' but cannot say what may follow, so this also matches a product such as ArtExpo. The regex versions in the other files can, and deny.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "requestHeaderMatch",
+            "positiveMatch": true,
+            "name": "User-Agent",
+            "value": [
               "artex*",
               "* artex*",
               "*(artex*"
@@ -501,6 +525,31 @@
               "*/actuator/health",
               "*/actuator/health/liveness",
               "*/actuator/health/readiness"
+            ],
+            "valueCase": false,
+            "valueWildcard": true
+          }
+        ]
+      }
+    },
+    {
+      "action": "deny",
+      "rule": {
+        "name": "W-AGT-021c management endpoint reached through the health exemption",
+        "description": "W-AGT-021b exempts paths ending in /actuator/health. A path with a second /actuator segment before that ending (for example /actuator/jolokia/exec/x/actuator/health) is not the health endpoint; refuse it. Add the same ipMatch or clientListMatch condition you add to W-AGT-021b.",
+        "operation": "AND",
+        "structured": true,
+        "version": 1,
+        "tag": [
+          "agentic-ai"
+        ],
+        "conditions": [
+          {
+            "type": "pathMatch",
+            "positiveMatch": true,
+            "value": [
+              "*/actuator/*/actuator/*",
+              "*/actuator;*/actuator/*"
             ],
             "valueCase": false,
             "valueWildcard": true

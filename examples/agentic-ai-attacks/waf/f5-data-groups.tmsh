@@ -12,4 +12,4 @@ create ltm data-group internal agt_canary_strings type string records add { "zzz
 create ltm data-group internal agt_jwt_none type string records add { "eyJhbGciOiJub25l" { } "eyJhbGciOiJOb25l" { } "eyJhbGciOiJOT05F" { } "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25l" { } "eyJ0eXAiOiJKV1QiLCJhbGciOiJOb25l" { } "eyJ0eXAiOiJKV1QiLCJhbGciOiJOT05F" { } }
 create ltm data-group internal agt_spec_paths type string records add { ".js.map" { } "/openapi.json" { } "/swagger.json" { } "/v3/api-docs" { } "/v2/api-docs" { } "/swagger-ui.html" { } "/swagger-resources" { } "/runtime-config.json" { } }
 create ltm data-group internal agt_internal_nets type ip records add { 10.0.0.0/8 { } 172.16.0.0/12 { } 192.168.0.0/16 { } }
-create ltm data-group internal agt_traversal type string records add { "../" { } "..\\" { } "%2e%2e" { } "..%2f" { } "..%5c" { } "%252e" { } "%c0%ae" { } "%c0%af" { } "..;" { } }
+create ltm data-group internal agt_traversal type string records add { "../" { } "..\\" { } "%2e%2e" { } "..%2f" { } "..%5c" { } "%252e" { } "%c0%ae" { } "%c0%af" { } }

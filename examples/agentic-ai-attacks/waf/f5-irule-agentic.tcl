@@ -61,9 +61,11 @@ when HTTP_REQUEST {
 
     # W-AGT-001: user-agents compiled into the frameworks (default builds only), and the
     # framework's own name at the start of a word. F5 Labs (2026-11-23) lists 46 user-agents
-    # it tied to ARTEX; the agent makes them up per task and 44 carry the name. The word
-    # start keeps SmartExchange out. The agent changes the header when blocked.
-    if { $agt_ua ne "" && ([class match -- $agt_ua contains agt_ua_block] || [regexp {(^|[^a-z])artex} $agt_ua]) } {
+    # it tied to ARTEX; the agent makes them up per task and 44 carry the name. Matched as a
+    # word: not after a letter (SmartExchange), and followed by the end, a non-letter, or
+    # one of the two suffixes in F5's list, probe and bot (so ArtExpo is not a hit).
+    # The agent changes the header when blocked.
+    if { $agt_ua ne "" && ([class match -- $agt_ua contains agt_ua_block] || [regexp {(^|[^a-z])artex($|[^a-z]|probe|bot)} $agt_ua]) } {
         # A request from the CyberStrikeAI web-shell manager means a shell may already
         # be on this server: page someone, do not just block.
         if { $agt_ua contains "cyberstrikeai-webshell" } {
@@ -121,7 +123,9 @@ when HTTP_REQUEST {
     # for the encoded forms and on the decoded one for the plain forms. A browser resolves
     # dot-segments before it sends a request, so ../ in a path is never typed by a person.
     # Amazon 2026-11-20: Cairn agents found traversal in a filename parameter in 11 minutes.
-    if { [class match -- [string tolower $agt_uri_raw] contains agt_traversal] || [class match -- $agt_uri contains agt_traversal] } {
+    # "..;" is tested on the path alone: Tomcat and Spring resolve it as "..", and in a
+    # query string two dots and a semicolon are ordinary text.
+    if { [class match -- [string tolower $agt_uri_raw] contains agt_traversal] || [class match -- $agt_uri contains agt_traversal] || $agt_path contains "..;" } {
         if { [call agt_act "W-AGT-014" $agt_uri 1] } { return }
     }
 
@@ -134,28 +138,36 @@ when HTTP_REQUEST {
         if { [call agt_act "W-AGT-021" $agt_path 1] } { return }
     }
     # /actuator/health and its probe groups stay open for load balancers. The exemption
-    # accepts plain path segments only, so /actuator/health/..;/env does not ride through.
-    if { $static::agt_block_mgmt && [regexp {/actuator([/;]|$)|/debug/pprof} $agt_path] && ![regexp {/actuator/health(/[a-z0-9_-]+)*/?$} $agt_path] && ![class match -- [IP::client_addr] equals agt_internal_nets] } {
+    # accepts plain path segments only, so /actuator/health/..;/env does not ride through,
+    # and it must be the FIRST /actuator in the path, so
+    # /actuator/jolokia/exec/x/actuator/health does not either.
+    if { $static::agt_block_mgmt && [regexp {/actuator([/;]|$)|/debug/pprof} $agt_path] && ![regexp {^(/(?!actuator([/;]|$))[^/]*)*/actuator/health(/[a-z0-9_-]+)*/?$} $agt_path] && ![class match -- [IP::client_addr] equals agt_internal_nets] } {
         if { [call agt_act "W-AGT-021" $agt_path 1] } { return }
     }
 
     # W-AGT-020: source maps, API specs and Swagger UI to outside clients (exposure reduction).
     # Tested on the path with any ;parameters removed, since ends_with would miss them.
-    set agt_path_bare [regsub -all {;[^/]*} $agt_path ""]
+    regsub -all {;[^/]*} $agt_path "" agt_path_bare
     if { $static::agt_block_specs && ([class match -- $agt_path_bare ends_with agt_spec_paths] || $agt_path_bare contains "/swagger-ui") && ![class match -- [IP::client_addr] equals agt_internal_nets] } {
         if { [call agt_act "W-AGT-020" $agt_path 1] } { return }
     }
 
     # Inspect form/JSON/XML bodies for the same strings (logins, sign-up, recovery).
-    # Collect the declared length, capped at agt_max_body; a chunked body declares none, so
-    # ask for the cap. Skipping bodies over the cap, as this rule first did, let a client
-    # opt out of every body rule by padding the request, and skipped chunked bodies entirely.
+    # Collect the declared length, capped at agt_max_body. A chunked body declares none, so
+    # ask for the cap, and test for chunked FIRST: it overrides Content-Length, and a
+    # request carrying "Content-Length: 0" beside it would otherwise go uninspected.
+    # The cap is a limit, not a fix: only the first agt_max_body bytes are read, so a
+    # payload behind that much padding is still unseen. Raise the cap, or use Advanced WAF,
+    # where whole bodies matter.
     set agt_len 0
-    if { [HTTP::header exists "Content-Length"] && [string is integer -strict [HTTP::header value "Content-Length"]] } {
-        set agt_len [HTTP::header value "Content-Length"]
-        if { $agt_len > $static::agt_max_body } { set agt_len $static::agt_max_body }
-    } elseif { [string tolower [HTTP::header value "Transfer-Encoding"]] contains "chunked" } {
+    set agt_cl [string trim [HTTP::header value "Content-Length"]]
+    if { [string tolower [HTTP::header value "Transfer-Encoding"]] contains "chunked" } {
         set agt_len $static::agt_max_body
+    } elseif { [regexp {^[0-9]{1,15}$} $agt_cl] } {
+        # scan reads decimal. Used as a number directly, "029" is an invalid octal and "035"
+        # is 29, and "string is integer" rejects the first: either way the body was skipped.
+        scan $agt_cl %ld agt_len
+        if { $agt_len > $static::agt_max_body } { set agt_len $static::agt_max_body }
     }
     if { [HTTP::method] eq "POST" || [HTTP::method] eq "PUT" || [HTTP::method] eq "PATCH" } {
         if { $agt_len > 0 } {
