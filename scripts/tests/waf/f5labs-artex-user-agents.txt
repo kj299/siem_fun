@@ -1,0 +1,54 @@
+# User-agents F5 Labs listed as "identified ARTEX related User-Agents" in the appendix of
+# "The ARTEX framework" (2026-11-23, https://www.f5.com/labs/articles/the-artex-framework),
+# copied as that page gives them, one entry per line (one entry is two strings run together
+# on the page and is kept that way). F5's note on the list: it is non-exhaustive, and "ARTEX
+# can and will adapt to blocks and change the User-Agent header dynamically, so this cannot
+# be recommended as a single line defense".
+# Test data for scripts/tests/test_waf_engines.py. The agent makes these up per task, so the
+# rules match the pattern (the framework's name at the start of a word), not this list.
+Mozilla/5.0 (compatible; ARTEX-crawl/1.0)
+Mozilla/5.0 (ARTEX)
+Mozilla/5.0 (spa-api-recon)
+Mozilla/5.0 (compatible; ARTexBot/1.0; +https://github.com/artex-project/artex)
+Mozilla/5.0 (spa-api-recon spider)
+Mozilla/5.0 (X11; Linux x86_64) artex-8856-oracle
+artex
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36 ARTEX-skill
+Mozilla/5.0 (compatible; ARTEX)
+Mozilla/5.0 artex
+artex-recon/1.0
+Mozilla/5.0 artex-header-probe
+artex-probe/1.0
+Mozilla/5.0 (compatible; ARTEX/6555)
+artex-test
+artex-i776/0.2
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) ARTEX-Probe/1.0Mozilla/5.0 (compatible; ARTEX-verify)
+Mozilla/5.0 (ARTEX-t45-i19336)
+Mozilla/5.0 (compatible; ArtEx-Verify/1.0)
+artex-h2
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) ArtexProbe/2322
+ARTEX_UA
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36 ARTEX
+artex-worker/8178
+Mozilla/5.0 (artex-i1086)
+Mozilla/5.0 (compatible; ARTEX-preflight/1.0)
+artex-enrich/1.0
+Mozilla/5.0 (compatible; artex-agent)
+artex-i736/1.0
+Mozilla/5.0 (ARTEX authorized test)
+Mozilla/5.0 (compatible; artex-audit/1.0)
+Mozilla/5.0 (compatible; artex-authorized-ro-probe/1.0)
+Mozilla/5.0 artex-i18930
+artex-research/1.0
+Mozilla/5.0 (X11; Linux x86_64) ARTEX-read-only-recon
+Mozilla/5.0 (compatible; ARTEX-Subfinder-MCP/1.0)
+Mozilla/5.0 (compatible; artex-discovery/1.0)
+Mozilla/5.0 (compatible; artex-origindisc)
+ARTEX-source-audit/1.0
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 ARTEX-CORP-18098
+Mozilla/5.0 (compatible; ARTEX-Phase8-Validation/1.0)
+Mozilla/5.0 artex-i17889
+artex-spawn/1
+ARTEX research
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) Artex2359
+Mozilla/5.0 (compatible; artexprobe)

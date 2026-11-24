@@ -8,25 +8,75 @@ and the reporting summarised in
 other four frameworks that document covers where they leave an edge-visible
 fingerprint.
 
-**Status: `needs_validation`.** The patterns were exercised offline against
-the indicator values; no file here has been loaded on a live device. What was
-checked against vendor documentation on 2026-11-24:
+**Status: `needs_validation`.** No file here has seen production traffic, so
+false-positive rates are unmeasured. Deploy every rule in log or alert mode
+first.
 
-- **Akamai**: field names, condition types and enum values in the JSON match
+## What was executed, and what was only read
+
+The three platform files do not carry the same weight of evidence. On
+2026-11-24:
+
+- **ModSecurity: executed.** The file was loaded on Apache 2.4.58 with
+  mod_security 2.9.7 and on nginx 1.24 with libmodsecurity 3.0.12, each with
+  the two body-processor rules of the recommended base configuration, and
+  every rule was sent a request that should match and one that should not.
+  The tempo rules were driven from separate source addresses, with two
+  windows shortened in a test copy to check that a window ends. Coraza was
+  not tried.
+- **F5: logic executed, platform not.** The iRule was run in `tclsh` against
+  its real data groups, inside a stand-in for the iRule runtime that follows
+  the command semantics on clouddocs.f5.com. That proves the rule's logic. It
+  does not prove a BIG-IP behaves the same way, and the tmsh file has not
+  been loaded on a device.
+- **Akamai: read only.** Field names, condition types and enum values match
   the Application Security API reference for custom rules and rate policies.
-  The reference documents wildcard values for header conditions only, so the
-  path, query and POST-argument rules are the least certain.
-- **F5**: the iRule's use of `class match`, `call` with a local `proc`,
-  body collection and the `noserver` response flag matches the iRules
-  reference on clouddocs.f5.com.
-- **ModSecurity**: not checked against an engine or its reference.
+  Nothing was imported into a configuration. The reference documents
+  wildcard values and wildcard names for header conditions only, so the
+  path, query and POST-argument rules are the least certain thing in this
+  folder, and whether a path condition sees the path as sent or normalized is
+  not stated on the public pages.
 
-Deploy every rule in log or alert mode first.
+The request cases are in
+[scripts/tests/test_waf_engines.py](../../../scripts/tests/test_waf_engines.py)
+and [scripts/tests/waf/](../../../scripts/tests/waf/irule_cases.tcl). CI runs
+them against both engines on every pull request. Run them yourself before a
+deployment, and add a case when you change a rule:
+
+```text
+apt-get install apache2 libapache2-mod-security2 nginx-light libnginx-mod-http-modsecurity tcl
+python3 -m unittest discover -s scripts/tests -p "test_waf_engines.py" -v
+```
+
+The first time these files were executed they were wrong in ways that
+reading them had not shown, and the list is worth knowing because the same
+traps wait for any rule you add:
+
+- The SecLang file did not load on ModSecurity v2 at all. Apache collapses a
+  doubled backslash inside a quoted directive, so a character class holding
+  one reached the regex compiler unterminated. Version 3 loaded the same
+  text. Write a backslash in a pattern as `\x5c`.
+- W-AGT-009 cannot see an XML body on v2 once the XML body processor is
+  selected, which the recommended base configuration does. The rule file
+  carries a commented v2-only block for it; v3 needs nothing.
+- The per-client counters were opened after the tier 1 rules, and a denial
+  ends its phase, so a request refused in phase 1 was missing from every
+  counter.
+- Each counter re-armed its own expiry on every hit, which makes the window
+  slide: a counter fed more often than its window never expires, and a busy
+  shared address would have crossed any threshold eventually.
+- W-AGT-034 counted every 403, including the application's own, and the
+  W-AGT-032 limit refused every request from the address, not only sign-ups.
+- Path rules matched the path as sent. `/%61ctuator/env` and `/.%65nv` were
+  served on v2 and through the iRule, and `/actuator;x/env`,
+  `/actuator/health/..;/env` and `/i4028.php;.jpg` on every platform.
+- The iRule skipped any body over 64 KB and every chunked body, read only
+  the last of a repeated header, and did not treat `+` as a space.
 
 ## Read this before blocking anything
 
 A WAF signature stops a default or careless deployment, not a determined
-operator. Three facts from the reporting set the ceiling:
+operator. Four facts from the reporting set the ceiling:
 
 - STRIX's own prompt tells the operator to strip identifiable markers, and
   every user-agent below is one config line away from changing. Absence of a
@@ -43,7 +93,9 @@ operator. Three facts from the reporting set the ceiling:
   rules" unless the agent names itself in the User-Agent.
 - Unit 42's clearest agent tell is cadence (bursts of 1 to 14 requests at
   about one a second, then a 25 to 31 second model-inference pause). A WAF
-  cannot see that shape; the SIEM rules next door can.
+  cannot see that shape. Nor, yet, can the SIEM rules next door: R-B-AGT-002
+  alerts on evenly spaced requests, which is a throttled agent, and a burst
+  followed by a long pause is the opposite of evenly spaced.
 
 So the pack is three tiers, and the value rises as you go down: fingerprints
 are cheap and brittle, exposure reduction removes what the agent reads first,
@@ -66,33 +118,42 @@ its speed advantage.
 keeps these in step with `iocs.csv`: the address list must equal the
 block-action rows, every platform file must carry every user-agent substring,
 every inbound user-agent indicator must be covered, and no legitimate service
-may appear in a rule file.
+may appear in a rule file. That test compares the files with each other; the
+engine tests above are what run them.
 
 ## Tier 1: deterministic fingerprints (deny after a log-only week)
 
 | Rule | Matches | Where | Evidence | False-positive risk |
 | --- | --- | --- | --- | --- |
-| W-AGT-001 | Framework user-agents: `artex-enrich/`, `compatible; ArtEx/`, `infra-hunt/`, `verify-911-probe/`, `spa-api-recon`, `security-testing; authorized`, `recon-audit`, `ReconProbe/`, `HexStrike-`, `CyberStrikeAI`, `PentAGI/`, `tcp_beacon` | User-Agent header | Framework source code; WorkOS 2026-11-06; Unit 42 2026-10-30; Wiz 2026-10-22 | Low. An authorized tester running a default build will be blocked too; that is a finding, not a false positive. |
+| W-AGT-001 | Framework user-agents: `artex-enrich/`, `compatible; ArtEx/`, `infra-hunt/`, `verify-911-probe/`, `spa-api-recon`, `security-testing; authorized`, `recon-audit`, `ReconProbe/`, `HexStrike-`, `CyberStrikeAI`, `PentAGI/`, `tcp_beacon`. Also the name `artex`, in any case, at the start of a word: the agent makes up a user-agent per task and 44 of the 46 that F5 Labs lists carry the name | User-Agent header | Framework source code; WorkOS 2026-11-06; Unit 42 2026-10-30; Wiz 2026-10-22; F5 Labs 2026-11-23 (appendix) | Low. An authorized tester running a default build will be blocked too; that is a finding, not a false positive. The name is matched at a word start so a product such as SmartExchange is not a hit; Akamai's wildcard version covers the start of the header, a space and an opening bracket. F5's caveat: the agent changes the header when blocked. |
 | W-AGT-002 | `CyberStrikeAI-WebShell` user-agent | User-Agent header | CyberStrikeAI source (web-shell manager) | None, and blocking is not enough: this is someone driving a shell they believe is on your server. Investigate the requested path. |
 | W-AGT-003 | `norma/0.`, `Fuzz Faster U Fool`, `PentAGI-Installer` | User-Agent header | Nextron (Norma is not ARTEX-exclusive); Unit 42 | High if denied. Log only. |
 | W-AGT-004 | Canary probes `/zzz-nonexistent-xyz123`, `/zzzrandom12345`; `artex-probe-<number>` files and `ArtexProbe` account names (GTIG); canary identities `zz_no_such_user_9f3a`, `zzq.nonexistent9x7`, `precheck.not-a-user@example.invalid`; any address at `example.invalid`; OAuth `state=notvalidb64`; cloud metadata address in a parameter | Path, query, body | Wiz 2026-10-22; Unit 42 2026-10-30; S-RM 2026-11-04; CrowdStrike 2026-10-29 | Low. `.invalid` is a reserved top-level domain that can never receive mail. Matched as prefixes, so a changed suffix still hits. |
 | W-AGT-005 | JWT whose header is `alg` `none` (base64 prefix `eyJhbGciOiJub25l` and casings) | Authorization, cookies, URL | Wiz 2026-10-22 | None. No working deployment issues unsigned tokens. |
 | W-AGT-006 | SQL injection strings tagged `ARTEX'` | Query, body | S-RM 2026-11-04 | Low. |
 | W-AGT-007 | Probe-account identity `i<intent>probe<unix-time>@` | Sign-up, login and recovery bodies | Okta 2026-11-06 | Low. |
-| W-AGT-008 | Script named like an agent task artifact, `i<3 to 5 digits>.<asp, aspx, jsp, php ...>`, requested or uploaded | Path, upload filename | S-RM 2026-11-04 (`i4028.asp`) | Medium. Single-engagement indicator; check your own file naming first. Akamai's wildcard version is looser, so it ships as alert. |
+| W-AGT-008 | Script named like an agent task artifact, `i<3 to 5 digits>.<asp, aspx, jsp, php ...>`, requested or uploaded, including with path info or a `;parameter` after the name | Path, upload filename | S-RM 2026-11-04 (`i4028.asp`) | Medium. Single-engagement indicator; check your own file naming first. Akamai's wildcard version is looser, so it ships as alert. |
 | W-AGT-008 (second shape) | JSP shell named 1-2 letters, 4 digits, optional letter (`cl1217.jsp`, `f1219a.jsp`, `z1219.jsp`) | Path | GTIG 2026-10-30 (MySQL general-log poisoning) | Medium. Not expressible in Akamai's wildcard builder. |
-| W-AGT-009 | Inline DTD or entity declaration in an XML body | Body | CrowdStrike 2026-10-29 (unsigned SAML plus XXE to the metadata service) | Low, but partial: a base64 SAML response hides it from the edge. The real fix is DTD processing off and signature validation on in the service provider. |
+| W-AGT-009 | Inline DTD or entity declaration in an XML body | Body | CrowdStrike 2026-10-29 (unsigned SAML plus XXE to the metadata service) | Low, but partial: a base64 SAML response hides it from the edge, and on ModSecurity v2 the rule needs the v2-only block in the rule file. The real fix is DTD processing off and signature validation on in the service provider. |
 | W-AGT-010 | 44 source addresses, including the eight Storm-3358 ARTEX and C2 servers Microsoft published on 2026-11-06 | Client address | `iocs.csv` rows marked block (CrowdStrike, Zscaler, NorForge, Kaspersky, Microsoft and others) | Low today, decaying. The FBI FLASH of 2026-11-13 asks you to vet addresses before blocking because hosting addresses get reassigned. Review on every `iocs.csv` update; expire after 90 days. |
 | W-AGT-011 | Shell command syntax in the User-Agent (`$(`, a backtick, `; curl`, a pipe to `sh`) | User-Agent header | Microsoft 2026-11-05 (exploitation by shell commands embedded in a user agent) | None for browsers. |
 | W-AGT-012 | Upload filename containing `../`, or named `sitecustomize.py` or `usercustomize.py` | Multipart body | Amazon 2026-11-20: Cairn agents found a path-traversal zero-day in an upload filename parameter in about 11 minutes and wrote a Python auto-import file for a root shell | Low. On Akamai this is left to the managed attack groups. |
-| W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, double-encoded and overlong dots) | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
+| W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, half-encoded, double-encoded and overlong dots), and `..;/`, which Tomcat and Spring resolve as `../` | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
 | W-AGT-013 | `isCliRequest` request header | Header | Amazon, November 2026: authentication bypass in the ARTEX playbook against One API family LLM gateways | Log only. Relevant only in front of such a gateway. |
+
+The user-agent and probe-string rules deny on values the IOC file marks
+alert, not block: the judgement is that no legitimate visitor sends them, and
+it is this pack's, not a source's. Addresses are different. An address is
+denied only where the IOC file marks it block, and 21 of the 44 are also on
+the FBI's list, which asks for vetting first; nine of those the FBI labels
+proxy addresses. Treat W-AGT-010 as the rule most likely to age badly.
 
 Deliberately **not** blocked, because the IOC file says so and the test
 enforces it: LLM API hosts, `webhook.site`, `dnslog.cn`, the `lanmao666`
 gateway, the Check Point cluster ranges, the Unit 42 addresses, the addresses
-Amazon published from its decoy sensors (for review, and three sit in a
-shared CDN range), and the WorkOS researcher's addresses and JA4 fingerprints. The three JA4 values in
+Amazon published from its decoy sensors (Amazon lists them as indicators
+and does not say how to use them; leaving them unblocked is this pack's
+choice, made because four sit in a range a CDN announces), and the WorkOS researcher's addresses and JA4 fingerprints. The three JA4 values in
 `iocs.csv` identify an HTTP client library rather than an actor: if your
 platform exposes JA4, use them to raise a score, never as a deny on their own.
 
@@ -120,6 +181,10 @@ predictable development credential and no rate limiting.
   default, unlike W-AGT-020, because nothing public should depend on these.
   `/actuator/health` is exempt so an external load balancer or uptime monitor
   keeps working; `/actuator/env`, `/actuator/heapdump` and the rest are not.
+  The exemption is deliberately narrow, plain path segments only (on Akamai,
+  a list: `health`, `health/liveness`, `health/readiness`), because
+  `/actuator/health/..;/env` is `/actuator/env` to Tomcat and Spring. The
+  rules decode the path and treat `;` as a boundary for the same reason.
   Evidence, stated plainly: Amazon reports ARTEX agents harvesting secrets
   from "debug routes, and environment files", and Unit 42 reports them
   fetching API documentation pages. No report read for this pack names
@@ -136,8 +201,9 @@ predictable development credential and no rate limiting.
 - Admin and management paths: deny from the internet outright rather than
   rate limiting them. The FBI FLASH names Kudu/SCM publishing endpoints,
   hypervisors and backup platforms specifically.
-- **Inventory the peripheral applications.** Akamai (2026-10-23) and the FBI
-  both put the weight here: partner and supplier portals, mobile backends,
+- **Inventory the peripheral applications.** The FBI puts the weight here,
+  and so, going by search summaries of a 2026-10-23 post that was not read in
+  full, does Akamai: partner and supplier portals, mobile backends,
   employee and sales-support applications, legacy services and third-party
   integrations get less attention than the flagship site and are what the
   agents find. A rule pack attached only to the main virtual server or
@@ -146,9 +212,9 @@ predictable development credential and no rate limiting.
   Amazon saw an ARTEX campaign harvest provider keys from exposed One API,
   New API, LiteLLM, Dify, Langflow, RAGFlow and Open WebUI installs through
   unclaimed setup pages, anonymous management endpoints and default master
-  keys. Keep their management interfaces off the internet; Akamai's guidance
-  is to put a WAF or AI gateway in front of model and MCP endpoints and rate
-  limit by identity and cost.
+  keys. Keep their management interfaces off the internet. Akamai's guidance,
+  again known here only from search summaries, is to put a WAF or AI gateway
+  in front of model and MCP endpoints and rate limit by identity and cost.
 - **Return less.** The FBI asks that unauthenticated users never see stack
   traces, SQL errors, internal paths or framework details; F5's lab found the
   attacks that still succeeded behind a full stack hit endpoints returning
@@ -164,17 +230,29 @@ the SIEM rules in this folder do the same.
 | --- | --- | --- | --- |
 | W-AGT-030 | Error-rate enumeration: count 400, 401, 403, 404 and 405 responses per client | More than 30 in 60 seconds, then a 10-minute penalty | Wiz: more than 60 SSO route variants per target; R-D-AGT-001 alerts at 200 distinct paths in 10 minutes |
 | W-AGT-031 | Source-centric login failures, across any number of usernames | More than 10 in 5 minutes | Microsoft: 151,000 failures against 327 accounts, peaking at 2,900 a minute |
-| W-AGT-032 | Self-registration rate, plus refusal of disposable mail domains and of shared-mailbox prefixes at your own domain (`admin@`, `billing@`, `security@` ...) | More than 3 sign-ups an hour per client | Okta 2026-11-06; Expel 2026-10-21 |
+| W-AGT-032 | Self-registration rate: further sign-up posts are refused, the client's other requests are not. Pair it with refusal of disposable mail domains and of shared-mailbox prefixes at your own domain (`admin@`, `billing@`, `security@` ...), which no file here implements | More than 3 sign-ups an hour per client | Okta 2026-11-06; Expel 2026-10-21 |
 | W-AGT-033 | OAuth authorize and token endpoints: rate the error responses | More than 3 a second burst | Unit 42 and Okta: unregistered redirect URIs tried across many client IDs |
-| W-AGT-034 | Repeat violator: a client that keeps drawing WAF denials is probing the ruleset, so escalate from challenge to block | More than 5 denials in 2 minutes, then a 30-minute penalty | F5 Labs 2026-11-23: rapid probing that adapts to the previous response is the strongest agent signal |
+| W-AGT-034 | Repeat violator: a client that keeps drawing WAF denials is probing the ruleset, so escalate from challenge to block. Counts the WAF's own denials, not the application's 403s | More than 5 denials in 2 minutes, then a 30-minute penalty | F5 Labs 2026-11-23: very rapid probing "is a strong signal", and stronger when the probing adapts to the previous response |
+
+The windows are fixed: a counter starts when its first event arrives and is
+cleared when it trips or its window ends. The SecLang counters are keyed on
+the client address alone, so everyone behind one NAT address shares them;
+that is the reason for the thresholds above being loose and for the next
+note.
+
+On Akamai the table's low thresholds cannot be written. A rate policy counts
+hits per second and the lowest value is 1, about 120 requests in two
+minutes, so the W-AGT-031 and W-AGT-032 policies in the JSON catch only the
+machine-speed end of those behaviours.
 
 Platform notes:
 
 - **Key the counters on more than the address.** Use a TLS fingerprint,
   session cookie or device identifier where the platform has one, because the
   spraying is spread over residential proxy pools precisely to stay under
-  per-address limits. F5 measured one proxy service on an exposed attacker
-  server handing out 79 exit addresses for the first 100 identities tested.
+  per-address limits. F5 (2026-11-13) cites an analysis of an exposed
+  attacker server, without saying whose, in which one proxy service handed
+  out 79 exit addresses for the first 100 identities tested.
 - **Use reputation for the egress the agents favour.** F5 Labs notes the
   rotation usually lands on Tor and residential proxy networks, so IP
   reputation feeds and geofencing still bite even though a static list does
@@ -194,13 +272,18 @@ Platform notes:
   cookies and JWT claims as well as address), Bot Defense client telemetry,
   and OpenAPI schema enforcement. F5 reports more than 70 percent fewer
   successful attacks with the first two and more than 90 percent with all
-  four, in its lab, against a deliberately vulnerable application.
+  four, in its lab, against a deliberately vulnerable application, with no
+  published method; F5 adds that the results are specific to that
+  configuration. It is the only measured result for any edge control in the
+  reporting read for this pack, and it is the vendor's own.
 - **Akamai**: the rate policies in the JSON cover W-AGT-030 to W-AGT-033 and
-  count per address and TLS fingerprint. For W-AGT-034 turn on the security
-  policy's penalty box. Akamai's Adaptive Security Engine also ships
-  AI-powered WAF detections (announced 2026-08-13, manageable by API);
-  Akamai's own example of one is a request whose User-Agent contains
-  `PentestAgent`. Keep the managed attack groups in deny: W-AGT-009 and
+  count per address and TLS fingerprint, at the per-second floor described
+  above; use Account Protector or Bot Manager for the slow end. For
+  W-AGT-034 turn on the security policy's penalty box. Search summaries of
+  Akamai's posts, which were not read in full, describe AI-powered WAF
+  detections in its Adaptive Security Engine (announced 2026-08-13,
+  manageable by API), with a request whose User-Agent contains
+  `PentestAgent` as the example. Keep the managed attack groups in deny: W-AGT-009 and
   W-AGT-012 rely on them here, and W-AGT-014 is only a second line behind
   the local-file-inclusion group.
   Pair the rate policies with Bot Manager on the same endpoints, and add a
@@ -214,8 +297,10 @@ Platform notes:
 Pair these rules with the detections in this folder rather than treating
 either as complete:
 
-- Cadence and spec-driven API targeting: R-B-AGT-002 and R-D-AGT-017.
-- A canary username followed by an admin login: R-D-AGT-018.
+- A steady request timer and spec-driven API targeting: R-B-AGT-002 and
+  R-D-AGT-017. The burst-and-pause cadence Unit 42 describes has no rule yet.
+- A canary username followed by an admin login, failed or successful:
+  R-D-AGT-018.
 - Leaked application secrets used against Entra, and identity persistence
   afterwards: R-D-AGT-020 and R-B-AGT-008. No inbound WAF sees these.
 - A web shell written through SQL injection or log poisoning: R-B-AGT-005 and
@@ -251,9 +336,12 @@ Read in full: FBI FLASH-20261113-001; F5 Labs, "The ARTEX framework"
 (2026-11-23); F5, "Stopping ARTEX cybersecurity attacks" (2026-11-13);
 Amazon Threat Intelligence's two posts on ARTEX and Cairn agents; Microsoft's
 Storm-3358 post (2026-11-06); Akamai's API reference; F5's iRules reference.
+"F5 Labs" above means the research article of 2026-11-23; the lab figures
+come from the F5 company blog post of 2026-11-13, which is a product post.
 
 Not read, and so not relied on for any rule: Akamai's blog posts (the site
-refuses automated clients, so only search summaries were seen), Unit 42's
+refuses automated clients, so only search summaries were seen, and each use
+above says so), Unit 42's
 CL-STA-1238 Cairn report, Sophos, CERT-EU and the Cloud Security Alliance
 notes. Two addresses that secondary coverage attributes to CL-STA-1238 were
 left out of `iocs.csv` for that reason.

@@ -1014,6 +1014,13 @@ $requiredFiles = @(
     "examples/agentic-ai-attacks/iocs.csv",
     "examples/agentic-ai-attacks/attack-navigator-layer.json",
     "scripts/tests/test_agentic_ai_attacks.py",
+    # The only tests that RUN the WAF rule pack (in Apache, nginx and a stand-in
+    # for the iRule runtime). Everything else about that pack compares documents
+    # with each other, which is how a rule file that did not load shipped.
+    "scripts/tests/test_waf_engines.py",
+    "scripts/tests/waf/irule_runtime.tcl",
+    "scripts/tests/waf/irule_cases.tcl",
+    "scripts/tests/waf/f5labs-artex-user-agents.txt",
     "splunk-data-dictionary-builder/SKILL.md",
     "splunk-data-dictionary-builder/agents/openai.yaml",
     "splunk-data-dictionary-builder/agents/claude-opus.yaml",
