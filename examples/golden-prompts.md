@@ -855,8 +855,10 @@ Expected output:
 - `Assumptions`
 - Builds the fourth behavior the reference ranks: credentials added to OAuth applications or service principals
 - Queries `AuditLogs` only, bounded to `ago(30d)`, filtering on `OperationName`
+- Matches both operations that add a credential: "Add service principal credentials", and the application one whose name ends "Certificates and secrets management". These are the two the pack's own Sentinel rule matches
+- Matches the application operation by that ending, not by its full name typed with a plain hyphen: the real name carries a different dash character, so the plain-hyphen form matches nothing
 - Says this is behavior, not an indicator match, so legitimate secret rotation is returned too
-- Not machine-checked, reviewer's job: the application operation name carries a dash character that varies, so a phrase match is safer than equality, and an application adding a credential to itself is the row to read first
+- Not machine-checked, reviewer's job: the second operation also records removals, so the answer should say how to keep additions only, and an application adding a credential to itself is the row to read first
 
 Grader spec:
 
@@ -876,7 +878,11 @@ Grader spec:
     "^AuditLogs",
     "ago\\(30d\\)",
     "OperationName",
-    "(?i)credential|secret|certificate"
+    "(?i)Add service principal credentials",
+    "(?i)Certificates and secrets management"
+  ],
+  "query_not_matches": [
+    "(?i)Update application\\s*-\\s*Certificates"
   ],
   "tables": [
     "AuditLogs"

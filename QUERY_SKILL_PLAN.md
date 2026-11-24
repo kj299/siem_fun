@@ -843,6 +843,15 @@ so it has stated misses: advice by pronoun and advice hedged with a
 condition. No prompt and no skill content moved, so the twenty-one answers
 were re-graded, not re-run, and the marker was recorded again.
 
+Fixture 20 was tightened the same day. It had checked only that the filter
+was on the operation name and concerned credentials. It now requires both
+operations that add one, the service principal operation and the application
+operation matched by its ending, which are the two the pack's own Sentinel
+rule matches and the two all three real answers chose. It also forbids the
+application operation's full name typed with a plain hyphen, which matches
+nothing because the real name carries a different dash. Re-graded, not
+re-run.
+
 Six fixture defects and two skill-content gaps across twelve runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
