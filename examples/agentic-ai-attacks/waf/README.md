@@ -115,9 +115,9 @@ operator. Four facts from the reporting set the ceiling:
   rules" unless the agent names itself in the User-Agent.
 - Unit 42's clearest agent tell is cadence (bursts of 1 to 14 requests at
   about one a second, then a 25 to 31 second model-inference pause). A WAF
-  cannot see that shape. Nor, yet, can the SIEM rules next door: R-B-AGT-002
-  alerts on evenly spaced requests, which is a throttled agent, and a burst
-  followed by a long pause is the opposite of evenly spaced.
+  cannot see that shape. The SIEM rules next door take it in two halves:
+  R-B-AGT-002 alerts on evenly spaced requests, which is a throttled agent,
+  and R-B-AGT-030 on bursts separated by pauses of constant length.
 
 So the pack is three tiers, and the value rises as you go down: fingerprints
 are cheap and brittle, exposure reduction removes what the agent reads first,
@@ -336,8 +336,14 @@ Platform notes:
 Pair these rules with the detections in this folder rather than treating
 either as complete:
 
-- A steady request timer and spec-driven API targeting: R-B-AGT-002 and
-  R-D-AGT-017. The burst-and-pause cadence Unit 42 describes has no rule yet.
+- A steady request timer, the burst-and-pause cadence Unit 42 describes, and
+  spec-driven API targeting: R-B-AGT-002, R-B-AGT-030 and R-D-AGT-017.
+- A client walking consecutive record identifiers: R-D-AGT-029.
+- What happens after access: in the cloud control plane, R-D-AGT-021 to
+  R-D-AGT-023; in the domain, R-D-AGT-024 and R-D-AGT-027; on the host,
+  R-D-AGT-025 and R-D-AGT-026.
+- Credential guessing at volume against services a WAF does not front (SSH,
+  VPN): R-D-AGT-028.
 - A canary username followed by an admin login, failed or successful:
   R-D-AGT-018.
 - Leaked application secrets used against Entra, and identity persistence

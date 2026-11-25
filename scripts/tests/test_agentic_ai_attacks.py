@@ -243,5 +243,110 @@ class WafRulePackTests(unittest.TestCase):
             self.assertTrue(all(b < 127 for b in path.read_bytes()), path.name)
 
 
+class DetectionAssetTests(unittest.TestCase):
+    """The Splunk rules, Sentinel rules and hunts are three files nothing executes. These tests
+    cannot run a query; they pin the things that can be pinned without one: identifiers are unique,
+    every Sentinel table is one the catalogue vouches for, a rule shipped on both platforms matches
+    the same operations on each, and the reference names what ships."""
+
+    CATALOG = ROOT / "splunk-sentinel-query-builder" / "references" / "sentinel-table-catalog.md"
+    RULE_ID = re.compile(r"\b[RH](?:-[A-Z])?-AGT-\d{3}\b")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.splunk = (ASSETS / "splunk-savedsearches.conf").read_text()
+        cls.sentinel = (ASSETS / "sentinel-rules.yaml").read_text()
+        cls.hunts = (ASSETS / "hunting.kql").read_text()
+        cls.doc = DOC.read_text()
+        cls.tables = set(re.findall(r"^\| `([A-Za-z_]+)` \|", cls.CATALOG.read_text(), re.M))
+
+    def test_sentinel_rule_ids_and_names_are_unique(self):
+        ids = re.findall(r"^id: (\S+)$", self.sentinel, re.M)
+        names = re.findall(r"^name: (\S+) ", self.sentinel, re.M)
+        self.assertGreater(len(ids), 20)
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(len(names), len(ids))
+        self.assertEqual(len(names), len(set(names)))
+        for name in names:
+            self.assertRegex(name, r"^R-[A-Z]-AGT-\d{3}$")
+
+    def test_splunk_stanzas_and_hunt_headers_are_unique(self):
+        stanzas = re.findall(r"^\[(R-[A-Z]-AGT-\d{3}) ", self.splunk, re.M)
+        hunts = re.findall(r"^// --- (H-AGT-\d{3}) ", self.hunts, re.M)
+        self.assertGreater(len(stanzas), 30)
+        self.assertGreater(len(hunts), 20)
+        self.assertEqual(len(stanzas), len(set(stanzas)))
+        self.assertEqual(len(hunts), len(set(hunts)))
+
+    def test_every_sentinel_rule_has_a_splunk_rule_of_the_same_id(self):
+        splunk = set(re.findall(r"^\[(R-[A-Z]-AGT-\d{3}) ", self.splunk, re.M))
+        for name in re.findall(r"^name: (\S+) ", self.sentinel, re.M):
+            self.assertIn(name, splunk)
+
+    def test_every_table_a_query_reads_is_in_the_catalogue(self):
+        # A table in table position: an identifier alone at the start of a line (after an opening
+        # bracket or a let binding), followed by a pipe or the end of the line. KQL names are
+        # case-sensitive, and a wrong one returns nothing instead of failing.
+        position = re.compile(r"^\s*(?:let \w+ = |\()?\s*([A-Z][A-Za-z]+)\s*(?:\||$)", re.M)
+        seen = set()
+        for text in (self.sentinel, self.hunts):
+            body = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith(("//", "#")))
+            for name in position.findall(body):
+                seen.add(name)
+        self.assertGreater(len(seen), 10)
+        for name in sorted(seen):
+            self.assertIn(name, self.tables, f"{name} is read by a query but is not in sentinel-table-catalog.md")
+
+    def test_azure_operations_are_the_same_on_both_platforms(self):
+        # R-D-AGT-023 is one rule written twice. The operation names come from Microsoft's
+        # resource provider reference; the two copies must not drift.
+        pattern = re.compile(r"microsoft\.[a-z]+/[a-z/]+/(?:action|write)", re.I)
+        stanza = self.splunk[self.splunk.index("[R-D-AGT-023 "):self.splunk.index("[R-D-AGT-024 ")]
+        search = stanza[stanza.index("search = "):]
+        start = self.sentinel.index("name: R-D-AGT-023 ")
+        rule = self.sentinel[start:self.sentinel.index("entityMappings:", start)]
+        query = rule[rule.index("query: |"):]
+        splunk_ops = {m.lower() for m in pattern.findall(search)}
+        sentinel_ops = {m.lower() for m in pattern.findall(query)}
+        self.assertEqual(len(splunk_ops), 10)
+        self.assertEqual(splunk_ops, sentinel_ops)
+
+    def test_the_reference_names_every_detection_added_since_the_first_set(self):
+        # The first twenty rules predate this test and the reference describes them in prose.
+        # From 021 (rules) and 023 (hunts) on, a detection the reference does not name is one the
+        # query-builder skill cannot point anyone to.
+        shipped = set(self.RULE_ID.findall(self.splunk)) | set(self.RULE_ID.findall(self.sentinel)) | \
+            set(re.findall(r"^// --- (H-AGT-\d{3}) ", self.hunts, re.M))
+        for rule in sorted(shipped):
+            number = int(rule[-3:])
+            if (rule.startswith("H-") and number >= 23) or (rule.startswith("R-") and number >= 21):
+                self.assertIn(rule, self.doc, rule)
+
+    def test_no_saved_search_line_carries_two_dollar_signs(self):
+        # REGRESSION: savedsearches.conf treats text between two dollar signs as a token to
+        # substitute and a doubled one as an escape, so a regex ending in an escaped dollar and an
+        # anchor, or two "ends with a dollar" tests on one line, may not reach the search as
+        # written. One per line is the shape the older rules already use; where a literal dollar
+        # is needed, build it (printf("%c", 36)) instead of typing it.
+        for line in self.splunk.splitlines():
+            if line.startswith(("search =", "|")):
+                self.assertLess(line.count("$"), 2, line[:80])
+
+    def test_sentinel_queries_stay_inside_their_yaml_block(self):
+        # No YAML parser in the standard library, so this checks the one thing that breaks the
+        # file quietly: a query line that is not indented ends the block scalar early.
+        blocks = re.findall(r"^query: \|\n(.*?)^entityMappings:", self.sentinel, re.S | re.M)
+        self.assertEqual(len(blocks), len(re.findall(r"^id: ", self.sentinel, re.M)))
+        for block in blocks:
+            for line in block.splitlines():
+                self.assertTrue(line == "" or line.startswith("  "), line[:80])
+
+    def test_only_known_normalizing_parsers_are_called(self):
+        # A misspelt parser is an unknown function, and the table test cannot see it.
+        for text in (self.sentinel, self.hunts):
+            for name in re.findall(r"\b_Im_\w+", text):
+                self.assertIn(name, ("_Im_WebSession", "_Im_Authentication"))
+
+
 if __name__ == "__main__":
     unittest.main()

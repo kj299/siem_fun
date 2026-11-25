@@ -392,7 +392,44 @@ against the ATT&CK 20.1 catalogue.
   service principals with leaked secrets, the Microsoft pattern). The saved searches
   schedule four of these, and the numbers do not line up: R-D-AGT-017 is H-AGT-017,
   R-D-AGT-018 is H-AGT-018, R-D-AGT-019 is H-AGT-021 and R-D-AGT-020 is H-AGT-022.
-  H-AGT-019 and H-AGT-020 are hunts only. Lookups the rules read are
+  H-AGT-019 and H-AGT-020 are hunts only.
+
+  A second set, added 2026-11-25, covers what the reporting describes past the
+  web edge. As scheduled rules on both platforms: R-D-AGT-021 (AWS instance
+  launches, key pairs, Elastic IPs, volumes and instance-profile changes by an
+  unapproved principal), R-D-AGT-022 (AWS permission probing with DryRun
+  requests), R-D-AGT-023 (Azure operations that return credentials, such as
+  storage account keys and App Service publishing profiles, VM Run Command, and
+  deployment-validation sweeps, read from `AzureActivity`), R-D-AGT-024
+  (Kerberoasting, user enumeration, DCSync and a delegation write, from domain
+  controller Security events; in `SecurityEvent` the Kerberos ticket fields
+  are inside `EventData`, not columns), R-D-AGT-027 (a burst of password
+  resets, or an account created with `ArtexProbe` in its name; the Splunk rule
+  reads on-premises domain controllers and the Sentinel rule reads Entra) and R-D-AGT-028 (one source
+  failing hundreds of logins against tens of accounts, the Cairn shape that the
+  spray rule R-D-AGT-003 is built not to match). Splunk only as rules, with
+  Sentinel hunts beside them: R-D-AGT-025 and H-AGT-030 (Chisel, SoftEther,
+  AdaptixC2, vshell and self-hosted LLM gateway software on a server),
+  R-D-AGT-026 and H-AGT-031 (a database or Python application server starting a
+  shell or a download tool; a `sitecustomize.py` written outside the
+  interpreter's own directories), R-D-AGT-029 and H-AGT-029 (fifty or more
+  record identifiers under one path, packed into a range no more than twice as
+  wide; the rule looks at fifteen minutes and the hunt at a day) and R-B-AGT-030 and H-AGT-028
+  (requests in bursts separated by pauses of constant length). Hunts only:
+  H-AGT-023 (many Key Vault secrets read by one caller, from `AZKVAuditLogs`;
+  secret reads are data-plane and never appear in `AzureActivity`), H-AGT-024
+  (a small blob written and deleted within two seconds, and mass blob reads,
+  from `StorageBlobLogs`), H-AGT-025 (one application taking tokens for three
+  or more of Resource Manager, Key Vault, Storage and Graph within ten
+  minutes), H-AGT-026 (bulk file downloads or mailbox access in
+  `OfficeActivity`) and H-AGT-027 (tokens, service connections and pipelines
+  touched from a new user-agent in `AzureDevOpsAuditing`). Table and column
+  names for these were checked against Microsoft's table reference; none has
+  run against live data. Still without a detection: the LLM-gateway exploit
+  chains Amazon lists, spend anomalies on AI services, tunnelling and
+  file-transfer egress by destination, and certificate-enrollment abuse.
+
+  Lookups the rules read are
   in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);
   the cloud-log and baseline indicators are deliberately kept out of the
   auto-block sweep.
@@ -433,8 +470,10 @@ coverage against these:
    trojanized ARTEX image should be treated as compromised.
 6. **Active Directory credential attacks at machine speed** -- Kerberoasting,
    AS-REP Roasting, LSASS and registry dumps, DCSync and Golden Ticket inside
-   hours of an implant landing (the CyberStrikeAI chain). Detection here is the
-   familiar one; what changed is the time available to respond.
+   hours of an implant landing (the CyberStrikeAI chain), and from ARTEX
+   operators Kerberoasting, DCSync and delegation abuse (FBI). Detection here is
+   the familiar one, and R-D-AGT-024 carries four of its shapes; what changed is
+   the time available to respond.
 
 ## MITRE ATT&CK technique map
 
