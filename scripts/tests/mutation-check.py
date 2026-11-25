@@ -636,6 +636,18 @@ WAF_MUTS = [
 for label, old, new in WAF_MUTS:
     unit_mutation(label, WAF_CONF, old, new, grader_suite)
 
+# The Splunk saved searches. One shape is checkable without a Splunk: a doubled
+# dollar sign, which savedsearches.conf reads as an escaped dollar.
+SAVED_SEARCHES = "examples/agentic-ai-attacks/splunk-savedsearches.conf"
+
+DETECTION_MUTS = [
+    ("detections: a regex ending in an escaped dollar and an anchor",
+     'NOT like(ServiceName, "%$")',
+     'NOT match(ServiceName, "\\$$")'),
+]
+for label, old, new in DETECTION_MUTS:
+    unit_mutation(label, SAVED_SEARCHES, old, new, grader_suite)
+
 # The shared rule corpus, and the two readers that consume it. Kept separate
 # from the lists above because these mutations target the TEST files and the
 # corpus itself rather than one tool's source, so each carries its own path and
@@ -1325,7 +1337,7 @@ if fails:
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
       f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + "
-      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + 2 shared corpus, "
+      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + {len(DETECTION_MUTS)} detection + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
       f"{run_counts['environment']} environment)")
 sys.exit(0)

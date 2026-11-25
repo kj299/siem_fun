@@ -41,6 +41,9 @@ search *
 | Table | Contents | Reference |
 | --- | --- | --- |
 | `AzureActivity` | Azure subscription-level control-plane events. | [Data source schema reference](https://learn.microsoft.com/azure/sentinel/data-source-schema-reference) |
+| `AZKVAuditLogs` | Key Vault audit events in resource-specific mode: secret, key and certificate operations (`OperationName` such as `SecretGet`), with `CallerIpAddress` and the object `Id`. A vault still in Azure diagnostics mode writes the same events to `AzureDiagnostics`. | [AZKVAuditLogs](https://learn.microsoft.com/azure/azure-monitor/reference/tables/azkvauditlogs) |
+| `StorageBlobLogs` | Blob storage data-plane requests: `OperationName` (`GetBlob`, `PutBlob`, `DeleteBlob`), `CallerIpAddress` (with port), `RequesterObjectId`, `ObjectKey`, body sizes. | [StorageBlobLogs](https://learn.microsoft.com/azure/azure-monitor/reference/tables/storagebloblogs) |
+| `AzureDevOpsAuditing` | Azure DevOps organization audit events: `OperationName`, `ActorUPN`, `IpAddress`, `UserAgent`, `ProjectName`. | [AzureDevOpsAuditing](https://learn.microsoft.com/azure/azure-monitor/reference/tables/azuredevopsauditing) |
 | `AzureDiagnostics` | Resource diagnostic logs, including Logic Apps actions behind a playbook. | [Data source schema reference](https://learn.microsoft.com/azure/sentinel/data-source-schema-reference) |
 | `Usage` | Hourly ingestion volume per table. Key columns: `DataType`, `Quantity` (Mbytes), `IsBillable`, `Solution`. | [Usage table columns](https://learn.microsoft.com/azure/azure-monitor/reference/tables/usage#columns) |
 | `Operation` | Daily records of data-allowance benefit used. | [Azure Monitor cost and usage](https://learn.microsoft.com/azure/azure-monitor/fundamentals/cost-usage#view-data-allocation-benefits) |

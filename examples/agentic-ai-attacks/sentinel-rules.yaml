@@ -720,7 +720,7 @@ query: |
   DeviceFileEvents
   | where TimeGenerated > ago(10m)
   | where InitiatingProcessFileName in~ ("mysqld.exe", "mysqld", "mariadbd", "mariadbd.exe")
-  | where FileName matches regex @"(?i)\.(jsp|jspx|php|aspx)$"
+  | where FileName matches regex @"(?i)\.(jsp|jspx|php|asp|aspx)$"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Files = make_set(strcat(FolderPath), 20), SHA256 = make_set(SHA256, 20) by DeviceName
 entityMappings:
 - entityType: Host
@@ -833,8 +833,8 @@ kind: Scheduled
 ---
 id: ea089344-be25-57b8-be85-32fae7e361cd
 name: R-D-AGT-016 Agentic intrusion - server calling an out-of-band callback service
-description: 'A server reaching webhook.site or dnslog.cn: GTIG saw ARTEX agents post command output to 491 rotating webhook.site URLs; Hunt.io found a dnslog.cn callback on actor infrastructure. Legitimate
-  services: alert from servers only. Status: needs_validation.'
+description: 'A server reaching webhook.site or dnslog.cn: GTIG saw ARTEX agents post command output to 491 rotating webhook.site URLs; Hunt.io found a dnslog.cn callback on actor infrastructure; FBI FLASH-20261113-001
+  reports agents querying api.db-ip.com to geolocate a victim. Legitimate services: alert from servers only. Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -856,7 +856,7 @@ query: |
   let servers = DeviceInfo | where TimeGenerated > ago(1d) | summarize arg_max(TimeGenerated, DeviceType) by DeviceId | where DeviceType in ("Server", "DomainController") | project DeviceId;
   DeviceNetworkEvents
   | where TimeGenerated > ago(15m)
-  | where RemoteUrl has "webhook.site" or RemoteUrl has "dnslog.cn"
+  | where RemoteUrl has "webhook.site" or RemoteUrl has "dnslog.cn" or RemoteUrl has "api.db-ip.com"
   | join kind=inner servers on DeviceId
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Connections = count(), Urls = make_set(RemoteUrl, 10),
               Processes = make_set(InitiatingProcessCommandLine, 5) by DeviceName
@@ -865,6 +865,329 @@ entityMappings:
   fieldMappings:
   - identifier: HostName
     columnName: DeviceName
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled
+---
+id: bdf69883-67b2-52c4-81f8-f6f69a287006
+name: R-D-AGT-021 Agentic intrusion - AWS foothold and exfiltration preparation
+description: 'A principal outside the approved list launching instances, creating or importing an SSH key pair, allocating an Elastic IP, creating or attaching a volume, or changing an instance profile. GTIG (2026-10-30) and FBI FLASH-20261113-001: ARTEX operators generated a key pair, allocated an Elastic IP, launched instances with high-value roles and created a 100 GB volume to stage data. Fires on two or more distinct actions, or a launch that names an instance profile. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Persistence
+- Collection
+relevantTechniques:
+- T1578
+- T1098
+- T1074
+query: |
+  let approved = dynamic(["<AUTOMATION_ROLE_ARN>"]);
+  AWSCloudTrail
+  | where TimeGenerated > ago(30m)
+  | where EventName in ("RunInstances", "CreateKeyPair", "ImportKeyPair", "AllocateAddress", "CreateVolume", "AttachVolume",
+                        "AssociateIamInstanceProfile", "ReplaceIamInstanceProfileAssociation")
+  | where isempty(ErrorCode)
+  | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn), Request = parse_json(RequestParameters)
+  | where Actor !in (approved)
+  | extend InstanceProfile = coalesce(tostring(Request.iamInstanceProfile.arn), tostring(Request.iamInstanceProfile.name)),
+           VolumeGb = toint(Request.size)
+  | summarize DistinctActions = dcount(EventName), Actions = make_set(EventName), InstanceProfiles = make_set_if(InstanceProfile, isnotempty(InstanceProfile), 5),
+              LargestVolumeGb = max(VolumeGb), UserAgents = make_set(UserAgent, 5), SourceIpAddress = any(SourceIpAddress), StartTime = min(TimeGenerated) by Actor
+  | where DistinctActions >= 2 or array_length(InstanceProfiles) > 0
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SourceIpAddress
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled
+---
+id: eb09365d-9c62-500e-830e-080f6debfbd3
+name: R-D-AGT-022 Agentic intrusion - AWS permission probing with DryRun
+description: 'One principal sending DryRun requests for five or more distinct API actions in half an hour: the agent asking what a stolen key may do without doing it. FBI FLASH-20261113-001 (tested compromised IAM user permissions using DryRun flags); GTIG keys its own detection on GetCallerIdentity, counted here as context. A DryRun call that would have succeeded is logged with ErrorCode Client.DryRunOperation. Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques:
+- T1580
+- T1087
+query: |
+  let approved = dynamic(["<AUTOMATION_ROLE_ARN>"]);
+  AWSCloudTrail
+  | where TimeGenerated > ago(30m)
+  | where ErrorCode == "Client.DryRunOperation" or EventName == "GetCallerIdentity"
+  | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn)
+  | where Actor !in (approved)
+  | summarize DryRunActions = dcountif(EventName, ErrorCode == "Client.DryRunOperation"), Actions = make_set_if(EventName, ErrorCode == "Client.DryRunOperation", 20),
+              IdentityChecks = countif(EventName == "GetCallerIdentity"), UserAgents = make_set(UserAgent, 5),
+              SourceIpAddress = any(SourceIpAddress), StartTime = min(TimeGenerated) by Actor
+  | where DryRunActions >= 5
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SourceIpAddress
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled
+---
+id: 6dcf7788-14ae-50f3-a2ff-ff2cae9e3371
+name: R-D-AGT-023 Agentic intrusion - Azure credential-returning operations and Run Command
+description: 'One caller using three or more distinct Azure operations that hand back credentials (storage account keys, App Service settings and publishing profile, AKS user credentials, Machine Learning connection and datastore secrets), or running a script on a VM with Run Command, or sweeping deployment validation as a permission test. Microsoft (2026-11-05) lists these as what the agents did with leaked application secrets; GTIG (2026-10-30) timed an 8-second deployments/validate sweep across 11 resource types. Operation names are from Microsoft''s resource provider reference and are compared case-insensitively, because the table stores them in upper case. Key Vault secret reads are data-plane and are not in this table: see hunt H-AGT-023. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+- Execution
+- Discovery
+relevantTechniques:
+- T1552
+- T1651
+- T1580
+query: |
+  let approved = dynamic(["<AUTOMATION_IDENTITY>"]);
+  let credentialOps = dynamic(["microsoft.storage/storageaccounts/listkeys/action", "microsoft.web/sites/config/list/action",
+                               "microsoft.web/sites/publishxml/action", "microsoft.containerservice/managedclusters/listclusterusercredential/action",
+                               "microsoft.machinelearningservices/workspaces/connections/listsecrets/action",
+                               "microsoft.machinelearningservices/workspaces/datastores/listsecrets/action"]);
+  AzureActivity
+  | where TimeGenerated > ago(30m)
+  | extend Op = tolower(OperationNameValue)
+  | where Op in (credentialOps) or Op == "microsoft.compute/virtualmachines/runcommand/action" or Op == "microsoft.resources/deployments/validate/action"
+  | where Caller !in~ (approved)
+  | summarize CredentialOps = dcountif(Op, Op in (credentialOps)), RunCommands = dcountif(CorrelationId, Op endswith "runcommand/action"),
+              Validations = dcountif(CorrelationId, Op endswith "deployments/validate/action"), Operations = make_set(Op, 10),
+              Resources = make_set(_ResourceId, 10), CallerIpAddress = any(CallerIpAddress), StartTime = min(TimeGenerated) by Caller
+  | where CredentialOps >= 3 or RunCommands > 0 or Validations >= 8
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Caller
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: CallerIpAddress
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled
+---
+id: 8c3425a8-df0b-56be-9f7b-b56827b40140
+name: R-D-AGT-024 Agentic intrusion - Active Directory credential attacks
+description: 'Four shapes FBI FLASH-20261113-001 and GTIG (2026-10-30) report from ARTEX operators inside a domain, from domain controller Security events: Kerberoasting (one account requesting RC4 service tickets, type 0x17, for ten or more services), user enumeration without pre-authentication (one address drawing client-not-found, status 0x6, for twenty or more names), DCSync (a replication right, 1131f6aa or 1131f6ad, exercised by an account that is not a machine account) and a write to msDS-AllowedToActOnBehalfOfOtherIdentity. The ticket and attribute fields are not columns of SecurityEvent, so they are read from EventData. A sync service such as Entra Connect legitimately replicates: add it to the approved list. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+- Discovery
+- PrivilegeEscalation
+relevantTechniques:
+- T1558
+- T1589
+- T1003
+- T1134
+query: |
+  let approved = dynamic(["<SYNC_SERVICE_ACCOUNT>"]);
+  SecurityEvent
+  | where TimeGenerated > ago(30m)
+  | where EventID in (4769, 4768, 4662, 5136)
+  | extend Service = extract(@'Name="ServiceName">([^<]*)<', 1, EventData),
+           Encryption = extract(@'Name="TicketEncryptionType">([^<]*)<', 1, EventData),
+           KerberosStatus = extract(@'Name="Status">([^<]*)<', 1, EventData),
+           Requester = extract(@'Name="TargetUserName">([^<]*)<', 1, EventData),
+           ClientAddress = extract(@'Name="IpAddress">([^<]*)<', 1, EventData),
+           Attribute = extract(@'Name="AttributeLDAPDisplayName">([^<]*)<', 1, EventData),
+           ObjectDn = extract(@'Name="ObjectDN">([^<]*)<', 1, EventData)
+  | extend Signal = case(
+      EventID == 4769 and Encryption == "0x17" and Service !endswith "$" and Service !~ "krbtgt", "kerberoast",
+      EventID == 4768 and KerberosStatus == "0x6", "user enumeration",
+      EventID == 4662 and Properties matches regex @"(?i)1131f6a[ad]-9c07-11d1-f79f-00c04fc2dcd2" and SubjectUserName !endswith "$", "dcsync",
+      EventID == 5136 and Attribute =~ "msDS-AllowedToActOnBehalfOfOtherIdentity", "delegation write",
+      "")
+  | where Signal != ""
+  | extend Actor = tolower(case(Signal == "user enumeration", ClientAddress, Signal == "kerberoast", Requester, SubjectUserName)),
+           Item = case(Signal == "kerberoast", Service, Signal == "user enumeration", Requester, Signal == "delegation write", ObjectDn, ObjectName)
+  | where Actor !in (approved)
+  | summarize DistinctItems = dcount(Item), Events = count(), Addresses = make_set(ClientAddress, 5), DomainControllers = make_set(Computer, 5),
+              StartTime = min(TimeGenerated) by Signal, Actor
+  | where (Signal == "kerberoast" and DistinctItems >= 10) or (Signal == "user enumeration" and DistinctItems >= 20) or Signal in ("dcsync", "delegation write")
+  | extend DomainController = tostring(DomainControllers[0])
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: Actor
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: DomainController
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled
+---
+id: b412e20c-2177-55d1-b340-5d19986bacd9
+name: R-D-AGT-027 Agentic intrusion - account takeover burst or agent-named account
+description: 'One actor resetting the passwords of five or more users in half an hour, or a user created with the agent''s own marker in its name. GTIG (2026-10-30): the operators gained persistence through account takeover (resetting passwords for identified users) and by creating accounts that included ArtexProbe in the naming convention. Entra audit activities Reset password (by admin) and Add user. A help desk resets passwords all day: add its accounts to the approved list. Status: needs_validation.'
+severity: High
+status: Available
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Persistence
+- Impact
+relevantTechniques:
+- T1098
+- T1136
+- T1531
+query: |
+  let approved = dynamic(["<HELP_DESK_ACCOUNT>"]);
+  AuditLogs
+  | where TimeGenerated > ago(30m)
+  | where OperationName in ("Reset password (by admin)", "Add user")
+  | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
+           Target = tolower(coalesce(tostring(TargetResources[0].userPrincipalName), tostring(TargetResources[0].displayName)))
+  | extend Marked = OperationName == "Add user" and Target contains "artexprobe"
+  | summarize AccountsReset = dcountif(Target, OperationName == "Reset password (by admin)"), MarkedAccounts = make_set_if(Target, Marked, 10),
+              StartTime = min(TimeGenerated) by Actor
+  | where array_length(MarkedAccounts) > 0 or (AccountsReset >= 5 and Actor !in (approved))
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Actor
+suppressionEnabled: false
+suppressionDuration: PT1H
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT1H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled
+---
+id: 5edde465-c5a5-522d-895c-33540a46fe71
+name: R-D-AGT-028 Agentic intrusion - credential guessing at volume from one source
+description: 'One source failing authentication 500 or more times in an hour against 20 or more accounts, on any service normalized by the ASIM authentication parsers (SSH, VPN, an admin panel, a portal). Amazon (2026-11-20): Cairn agents tested more than 30,000 credential combinations from about 80 real usernames against SSH, a storage device, a VPN and a portal. R-D-AGT-003 looks for the opposite shape, many accounts tried at most three times each, and does not fire on this one. Status: needs_validation.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CredentialAccess
+relevantTechniques:
+- T1110
+query: |
+  _Im_Authentication(starttime=ago(1h), eventresult='Failure')
+  | where isnotempty(SrcIpAddr) and isnotempty(TargetUsername)
+  | summarize Attempts = count(), Accounts = dcount(TargetUsername), Services = dcount(TargetAppName), Apps = make_set(TargetAppName, 10),
+              StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by SrcIpAddr
+  | where Accounts >= 20 and Attempts >= 500
+  | extend AttemptsPerAccount = Attempts / Accounts
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
 suppressionEnabled: false
 suppressionDuration: PT1H
 incidentConfiguration:

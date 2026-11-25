@@ -48,7 +48,7 @@ AADServicePrincipalSignInLogs
 DeviceFileEvents
 | where TimeGenerated > ago(14d)
 | where InitiatingProcessFileName in~ ("w3wp.exe","php-cgi.exe","httpd.exe","java.exe","node.exe","php-fpm","apache2","httpd","nginx","java","node")
-| where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|aspx|ashx|asmx)$"
+| where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|asp|aspx|ashx|asmx)$"
 | project TimeGenerated, DeviceName, FolderPath, FileName, InitiatingProcessFileName, SHA256
 
 // --- H-AGT-014  CyberStrikeAI implant artifacts (Kaspersky Securelist 2026-11-02) -------------
@@ -215,3 +215,159 @@ AADServicePrincipalSignInLogs
 | where ServicePrincipals >= 3 or (InvalidSecret > 0 and Successes > 0)
 | extend FailureThenSuccess = isnotnull(FirstFailure) and isnotnull(FirstSuccess) and FirstSuccess > FirstFailure
 | order by FailureThenSuccess desc, ServicePrincipals desc
+
+
+// ===== Added 2026-11-25: behaviours the reporting describes that had no rule or hunt ============
+// Table and column names below were checked against Microsoft's table reference on that date.
+// None of these has run in a workspace.
+
+// --- H-AGT-023  Key Vault secret sweep (Microsoft 2026-11-05) -----------------------------------
+// "The agents exfiltrated secrets from the organization's Azure Key Vault." Secret reads are
+// data-plane: they are in the vault's audit log, never in AzureActivity. One caller reading or
+// listing many distinct secrets in an hour. Resource-specific table; a vault still logging in
+// AzureDiagnostics mode has the same OperationName values there, with CallerIPAddress spelt so.
+AZKVAuditLogs
+| where TimeGenerated > ago(7d)
+| where OperationName in ("SecretGet", "SecretList", "SecretListVersions")
+| extend CallerApp = tostring(Identity.claim.appid)
+| summarize Secrets = dcount(Id), Reads = count(), Lists = countif(OperationName != "SecretGet"), Denied = countif(HttpStatusCode >= 400),
+            Vaults = dcount(_ResourceId), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+            by CallerIpAddress, CallerApp, bin(TimeGenerated, 1h)
+| where Secrets >= 10 or (Lists > 0 and Vaults >= 2)
+| order by Secrets desc
+
+// --- H-AGT-024  Storage permission probe and mass read (GTIG 2026-10-30; FBI FLASH-20261113-001) -
+// GTIG: "writing and immediately deleting a tiny test blob in ~330-400 ms". The FBI adds "mass blob
+// reads". First the probe: a small blob written and deleted by the same caller within two seconds.
+// Then volume: one caller reading 500 or more distinct blobs in an hour. CallerIpAddress carries
+// the port, so it is split off.
+let probes = StorageBlobLogs
+    | where TimeGenerated > ago(7d) and OperationName in ("PutBlob", "DeleteBlob") and StatusCode startswith "2"
+    | extend Caller = tostring(split(CallerIpAddress, ":")[0])
+    | summarize PutTime = minif(TimeGenerated, OperationName == "PutBlob"), DeleteTime = minif(TimeGenerated, OperationName == "DeleteBlob"),
+                Bytes = maxif(RequestBodySize, OperationName == "PutBlob") by Caller, RequesterObjectId, AccountName, ObjectKey
+    | where isnotnull(PutTime) and isnotnull(DeleteTime) and DeleteTime >= PutTime and DeleteTime - PutTime <= 2s and Bytes <= 1024
+    | summarize ProbeBlobs = count(), FirstProbe = min(PutTime) by Caller, RequesterObjectId, AccountName;
+StorageBlobLogs
+| where TimeGenerated > ago(7d) and OperationName == "GetBlob" and StatusCode startswith "2"
+| extend Caller = tostring(split(CallerIpAddress, ":")[0])
+| summarize BlobsRead = dcount(ObjectKey), BytesOut = sum(ResponseBodySize) by Caller, RequesterObjectId, AccountName, bin(TimeGenerated, 1h)
+| summarize PeakBlobsPerHour = max(BlobsRead), BytesOut = sum(BytesOut) by Caller, RequesterObjectId, AccountName
+| join kind=fullouter probes on Caller, RequesterObjectId, AccountName
+| extend Caller = coalesce(Caller, Caller1), AccountName = coalesce(AccountName, AccountName1), RequesterObjectId = coalesce(RequesterObjectId, RequesterObjectId1)
+| where ProbeBlobs > 0 or PeakBlobsPerHour >= 500
+| project Caller, RequesterObjectId, AccountName, ProbeBlobs, FirstProbe, PeakBlobsPerHour, BytesOut
+| order by ProbeBlobs desc, PeakBlobsPerHour desc
+
+// --- H-AGT-025  One application taking tokens for several Azure planes at once (Microsoft 2026-11-05)
+// The second half of Microsoft's behavioral pattern, which H-AGT-022 does not cover: "one app
+// requesting tokens across Azure Resource Manager, Key Vault, Storage and Graph in a short window".
+// Three or more of the four within ten minutes. The resource is matched by its display name and
+// by its application ID, because either may be the one your tenant shows.
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(30d)
+| extend Plane = case(
+    ResourceDisplayName == "Windows Azure Service Management API" or ResourceIdentity == "797f4846-ba00-4fd7-ba43-dac1f8f63013", "resource manager",
+    ResourceDisplayName == "Azure Key Vault" or ResourceIdentity == "cfa8b339-82a2-471a-a3c9-0fc0be7a4093", "key vault",
+    ResourceDisplayName == "Azure Storage" or ResourceIdentity == "e406a681-f3d4-42a8-90b6-c2b029497af1", "storage",
+    ResourceDisplayName == "Microsoft Graph" or ResourceIdentity == "00000003-0000-0000-c000-000000000000", "graph",
+    "")
+| where Plane != ""
+| summarize Planes = make_set(Plane), SignIns = count(), Addresses = make_set(IPAddress, 10), FirstSeen = min(TimeGenerated)
+            by ServicePrincipalId, ServicePrincipalName, bin(TimeGenerated, 10m)
+| where array_length(Planes) >= 3
+| order by FirstSeen desc
+
+// --- H-AGT-026  Bulk file download or mailbox access by one identity (Microsoft 2026-11-05) ------
+// "Accessed SharePoint and OneDrive in the targeted organization tenants, including file downloads
+// and mailbox-item access." One identity and address downloading 200 or more distinct files, or
+// touching five or more mailboxes, in an hour. Sync clients do the first all day: read UserAgent.
+OfficeActivity
+| where TimeGenerated > ago(14d)
+| where Operation in ("FileDownloaded", "FileSyncDownloadedFull", "MailItemsAccessed")
+| summarize Files = dcountif(OfficeObjectId, Operation != "MailItemsAccessed"), Mailboxes = dcountif(MailboxOwnerUPN, Operation == "MailItemsAccessed"),
+            Events = count(), UserAgents = make_set(UserAgent, 5), Apps = make_set(AppId, 5)
+            by UserId, ClientIP, bin(TimeGenerated, 1h)
+| where Files >= 200 or Mailboxes >= 5
+| order by Files desc, Mailboxes desc
+
+// --- H-AGT-027  Azure DevOps: tokens, service connections and pipelines by an unfamiliar client ---
+// Microsoft 2026-11-05: "In Azure DevOps auditing, review PAT creation and first use, federated
+// service connections, pipeline runs and edits, and unfamiliar user agents." The agents searched
+// Azure DevOps for secrets. This lists actors whose user-agent first appeared in the last day and
+// who touched tokens, service connections or pipelines. The three substrings are a starting
+// filter, not verified operation names: read the OperationName values your organization logs.
+let known = AzureDevOpsAuditing
+    | where TimeGenerated between (ago(30d) .. ago(1d))
+    | summarize by ActorUPN, UserAgent;
+AzureDevOpsAuditing
+| where TimeGenerated > ago(1d)
+| where OperationName has_any ("Token", "ServiceConnection", "Pipeline")
+| join kind=leftanti known on ActorUPN, UserAgent
+| summarize Operations = make_set(OperationName, 20), Events = count(), Projects = make_set(ProjectName, 10), FirstSeen = min(TimeGenerated)
+            by ActorUPN, IpAddress, UserAgent
+| order by Events desc
+
+// --- H-AGT-028  Burst-and-pause request cadence (Unit 42 2026-10-30) ----------------------------
+// R-B-AGT-002 finds an even timer. Unit 42 describes the opposite: 1 to 14 requests at about one
+// a second, then a 25 to 31 second pause while the model thinks. The pauses are the regular
+// part, so only they are measured: gaps of 20 to 40 seconds, eight or more in an hour, tightly
+// clustered, with at least as many short gaps around them and few gaps of any other length.
+_Im_WebSession(starttime=ago(1h))
+| summarize by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), Second = bin(TimeGenerated, 1s)
+| sort by SrcIpAddr asc, Dst asc, Second asc
+| extend Gap = iff(SrcIpAddr == prev(SrcIpAddr) and Dst == prev(Dst), datetime_diff("second", Second, prev(Second)), long(null))
+| where isnotnull(Gap)
+| summarize Pauses = countif(Gap >= 20 and Gap <= 40), MeanPause = avgif(Gap, Gap >= 20 and Gap <= 40), SdPause = stdevif(Gap, Gap >= 20 and Gap <= 40),
+            ShortGaps = countif(Gap <= 2), OtherGaps = countif((Gap > 2 and Gap < 20) or Gap > 40) by SrcIpAddr, Dst
+| extend PauseCv = iff(MeanPause > 0, SdPause / MeanPause, real(null))
+| where Pauses >= 8 and ShortGaps >= Pauses and OtherGaps <= Pauses and PauseCv < 0.15
+| order by Pauses desc
+
+// --- H-AGT-029  Sequential record walk (FBI FLASH-20261113-001) ---------------------------------
+// The FBI lists insecure direct object references among the flaws the agents used and asks
+// defenders to "alert on sequential lookups and unusually high numbers of records accessed per
+// session". Fifty or more consecutive numeric identifiers under one path from one client in a day.
+_Im_WebSession(starttime=ago(1d))
+| where EventResultDetails == "200"
+| extend Path = tostring(parse_url(Url).Path)
+| extend Template = extract(@"^(.*?/)\d{1,12}(?:/|$)", 1, Path), ObjectId = tolong(extract(@"^.*?/(\d{1,12})(?:/|$)", 1, Path))
+| where isnotempty(Template) and isnotnull(ObjectId)
+| summarize DistinctIds = dcount(ObjectId), LowestId = min(ObjectId), HighestId = max(ObjectId), Requests = count(), FirstSeen = min(TimeGenerated)
+            by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), Template
+| extend Density = todouble(DistinctIds) / (HighestId - LowestId + 1)
+| where DistinctIds >= 50 and Density >= 0.5
+| order by DistinctIds desc
+
+// --- H-AGT-030  Tunnel, remote-access or LLM gateway software on a host (FBI FLASH-20261113-001) -
+// The FBI names Chisel and SoftEther tunnels, the AdaptixC2 and vshell remote-access tools, and
+// self-hosted LLM gateway or reseller software (CLIProxyAPI, New API). Matched by the projects'
+// own binary names, which an operator can change. VShell is also a commercial SSH server. WISP,
+// which the FBI also names, has no known process name and is not matched.
+DeviceProcessEvents
+| where TimeGenerated > ago(30d)
+| where FileName in~ ("chisel", "chisel.exe", "vpnbridge", "vpnbridge.exe", "vpncmd", "vpncmd.exe", "vshell", "vshell.exe",
+                      "new-api", "new-api.exe", "one-api", "one-api.exe")
+     or ProcessCommandLine has_any ("softether", "adaptix", "CLIProxyAPI")
+| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Commands = make_set(ProcessCommandLine, 5), Accounts = make_set(AccountName, 5)
+            by DeviceName, FileName
+| order by LastSeen desc
+
+// --- H-AGT-031  Database or application server fetching a tool, and Python auto-import files -----
+// GTIG 2026-10-30: execution on a Windows database server "by using native curl to pull down
+// dynamically generated PowerShell and batch scripts". Microsoft 2026-11-06: agents used netcat
+// and curl to download remote-access tools. Amazon 2026-11-20: a Cairn agent wrote
+// sitecustomize.py through an upload flaw, and a new Python process imported it.
+union
+  (DeviceProcessEvents | where TimeGenerated > ago(14d)
+     | where (InitiatingProcessFileName in~ ("sqlservr.exe", "mysqld.exe", "mysqld", "postgres.exe", "postgres", "oracle.exe", "redis-server")
+              and FileName in~ ("cmd.exe", "powershell.exe", "pwsh.exe", "sh", "bash", "dash", "curl", "curl.exe", "wget", "wget.exe", "nc", "nc.exe", "ncat", "ncat.exe"))
+          or (InitiatingProcessFileName in~ ("python", "python3", "python.exe", "gunicorn", "uvicorn")
+              and FileName in~ ("curl", "curl.exe", "wget", "wget.exe", "nc", "nc.exe", "ncat", "ncat.exe"))
+     | project TimeGenerated, DeviceName, Signal = strcat(InitiatingProcessFileName, " started ", FileName), Detail = ProcessCommandLine),
+  (DeviceFileEvents | where TimeGenerated > ago(14d)
+     | where FileName in~ ("sitecustomize.py", "usercustomize.py")
+     | where not(FolderPath matches regex @"(?i)^(/usr/lib|/usr/lib64|/etc/python|/usr/share|[a-z]:\\program files|[a-z]:\\python)")
+     | project TimeGenerated, DeviceName, Signal = "python auto-import file written", Detail = strcat(FolderPath, " by ", InitiatingProcessFileName))
+| summarize Signals = make_set(Signal, 10), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| order by LastSeen desc
