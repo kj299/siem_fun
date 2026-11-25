@@ -240,17 +240,17 @@ AZKVAuditLogs
 // GTIG: "writing and immediately deleting a tiny test blob in ~330-400 ms". The FBI adds "mass blob
 // reads". First the probe: a small blob written and deleted by the same caller within two seconds.
 // Then volume: one caller reading 500 or more distinct blobs in an hour. CallerIpAddress carries
-// the port, so it is split off.
+// the port, so it is cut off. Backup and analytics tools also write and delete marker blobs.
 let probes = StorageBlobLogs
     | where TimeGenerated > ago(7d) and OperationName in ("PutBlob", "DeleteBlob") and StatusCode startswith "2"
-    | extend Caller = tostring(split(CallerIpAddress, ":")[0])
+    | extend Caller = extract(@"^(.*):\d+$", 1, CallerIpAddress)
     | summarize PutTime = minif(TimeGenerated, OperationName == "PutBlob"), DeleteTime = minif(TimeGenerated, OperationName == "DeleteBlob"),
                 Bytes = maxif(RequestBodySize, OperationName == "PutBlob") by Caller, RequesterObjectId, AccountName, ObjectKey
     | where isnotnull(PutTime) and isnotnull(DeleteTime) and DeleteTime >= PutTime and DeleteTime - PutTime <= 2s and Bytes <= 1024
     | summarize ProbeBlobs = count(), FirstProbe = min(PutTime) by Caller, RequesterObjectId, AccountName;
 StorageBlobLogs
 | where TimeGenerated > ago(7d) and OperationName == "GetBlob" and StatusCode startswith "2"
-| extend Caller = tostring(split(CallerIpAddress, ":")[0])
+| extend Caller = extract(@"^(.*):\d+$", 1, CallerIpAddress)
 | summarize BlobsRead = dcount(ObjectKey), BytesOut = sum(ResponseBodySize) by Caller, RequesterObjectId, AccountName, bin(TimeGenerated, 1h)
 | summarize PeakBlobsPerHour = max(BlobsRead), BytesOut = sum(BytesOut) by Caller, RequesterObjectId, AccountName
 | join kind=fullouter probes on Caller, RequesterObjectId, AccountName
@@ -295,14 +295,15 @@ OfficeActivity
 // Microsoft 2026-11-05: "In Azure DevOps auditing, review PAT creation and first use, federated
 // service connections, pipeline runs and edits, and unfamiliar user agents." The agents searched
 // Azure DevOps for secrets. This lists actors whose user-agent first appeared in the last day and
-// who touched tokens, service connections or pipelines. The three substrings are a starting
-// filter, not verified operation names: read the OperationName values your organization logs.
+// who touched tokens, service connections or pipelines. The three are matched as substrings
+// (the names look like Library.ServiceConnectionCreated, where a whole-term match finds nothing)
+// and are a starting filter: read the OperationName values your organization logs.
 let known = AzureDevOpsAuditing
     | where TimeGenerated between (ago(30d) .. ago(1d))
     | summarize by ActorUPN, UserAgent;
 AzureDevOpsAuditing
 | where TimeGenerated > ago(1d)
-| where OperationName has_any ("Token", "ServiceConnection", "Pipeline")
+| where OperationName contains "Token" or OperationName contains "ServiceConnection" or OperationName contains "Pipeline"
 | join kind=leftanti known on ActorUPN, UserAgent
 | summarize Operations = make_set(OperationName, 20), Events = count(), Projects = make_set(ProjectName, 10), FirstSeen = min(TimeGenerated)
             by ActorUPN, IpAddress, UserAgent
@@ -313,6 +314,7 @@ AzureDevOpsAuditing
 // a second, then a 25 to 31 second pause while the model thinks. The pauses are the regular
 // part, so only they are measured: gaps of 20 to 40 seconds, eight or more in an hour, tightly
 // clustered, with at least as many short gaps around them and few gaps of any other length.
+// A page that polls every half minute has the same shape.
 _Im_WebSession(starttime=ago(1h))
 | summarize by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), Second = bin(TimeGenerated, 1s)
 | sort by SrcIpAddr asc, Dst asc, Second asc
@@ -327,12 +329,14 @@ _Im_WebSession(starttime=ago(1h))
 // --- H-AGT-029  Sequential record walk (FBI FLASH-20261113-001) ---------------------------------
 // The FBI lists insecure direct object references among the flaws the agents used and asks
 // defenders to "alert on sequential lookups and unusually high numbers of records accessed per
-// session". Fifty or more consecutive numeric identifiers under one path from one client in a day.
+// session". Fifty or more numeric identifiers under one path from one client in a day, packed
+// into a range no more than twice as wide. The identifier is the last numeric path segment.
 _Im_WebSession(starttime=ago(1d))
 | where EventResultDetails == "200"
 | extend Path = tostring(parse_url(Url).Path)
-| extend Template = extract(@"^(.*?/)\d{1,12}(?:/|$)", 1, Path), ObjectId = tolong(extract(@"^.*?/(\d{1,12})(?:/|$)", 1, Path))
-| where isnotempty(Template) and isnotnull(ObjectId)
+| extend Parts = extract_all(@"^(.*/)(\d{1,12})((?:/[^/\d][^/]*)*/?)$", Path)
+| extend Template = strcat(tostring(Parts[0][0]), "{id}", tostring(Parts[0][2])), ObjectId = tolong(Parts[0][1])
+| where isnotnull(ObjectId)
 | summarize DistinctIds = dcount(ObjectId), LowestId = min(ObjectId), HighestId = max(ObjectId), Requests = count(), FirstSeen = min(TimeGenerated)
             by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), Template
 | extend Density = todouble(DistinctIds) / (HighestId - LowestId + 1)
@@ -346,9 +350,10 @@ _Im_WebSession(starttime=ago(1d))
 // which the FBI also names, has no known process name and is not matched.
 DeviceProcessEvents
 | where TimeGenerated > ago(30d)
-| where FileName in~ ("chisel", "chisel.exe", "vpnbridge", "vpnbridge.exe", "vpncmd", "vpncmd.exe", "vshell", "vshell.exe",
-                      "new-api", "new-api.exe", "one-api", "one-api.exe")
-     or ProcessCommandLine has_any ("softether", "adaptix", "CLIProxyAPI")
+| where FileName in~ ("chisel", "chisel.exe", "vpnserver", "vpnserver.exe", "vpnserver_x64.exe", "vpnbridge", "vpnbridge.exe", "vpnbridge_x64.exe",
+                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "new-api", "new-api.exe", "one-api", "one-api.exe")
+     or ProcessCommandLine contains "softether" or ProcessCommandLine contains "adaptix"
+     or ProcessCommandLine contains "CLIProxyAPI" or ProcessCommandLine contains "cli-proxy-api"
 | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Commands = make_set(ProcessCommandLine, 5), Accounts = make_set(AccountName, 5)
             by DeviceName, FileName
 | order by LastSeen desc
@@ -357,16 +362,17 @@ DeviceProcessEvents
 // GTIG 2026-10-30: execution on a Windows database server "by using native curl to pull down
 // dynamically generated PowerShell and batch scripts". Microsoft 2026-11-06: agents used netcat
 // and curl to download remote-access tools. Amazon 2026-11-20: a Cairn agent wrote
-// sitecustomize.py through an upload flaw, and a new Python process imported it.
+// sitecustomize.py through an upload flaw, and a new Python process imported it. PostgreSQL
+// starts a shell for every archived log segment, so for it only a download tool counts.
 union
   (DeviceProcessEvents | where TimeGenerated > ago(14d)
-     | where (InitiatingProcessFileName in~ ("sqlservr.exe", "mysqld.exe", "mysqld", "postgres.exe", "postgres", "oracle.exe", "redis-server")
+     | where (InitiatingProcessFileName in~ ("sqlservr.exe", "mysqld.exe", "mysqld", "oracle.exe", "redis-server")
               and FileName in~ ("cmd.exe", "powershell.exe", "pwsh.exe", "sh", "bash", "dash", "curl", "curl.exe", "wget", "wget.exe", "nc", "nc.exe", "ncat", "ncat.exe"))
-          or (InitiatingProcessFileName in~ ("python", "python3", "python.exe", "gunicorn", "uvicorn")
+          or ((InitiatingProcessFileName startswith "python" or InitiatingProcessFileName in~ ("gunicorn", "uvicorn", "postgres", "postgres.exe"))
               and FileName in~ ("curl", "curl.exe", "wget", "wget.exe", "nc", "nc.exe", "ncat", "ncat.exe"))
      | project TimeGenerated, DeviceName, Signal = strcat(InitiatingProcessFileName, " started ", FileName), Detail = ProcessCommandLine),
   (DeviceFileEvents | where TimeGenerated > ago(14d)
-     | where FileName in~ ("sitecustomize.py", "usercustomize.py")
+     | where FileName in~ ("sitecustomize.py", "usercustomize.py") and ActionType in ("FileCreated", "FileModified", "FileRenamed")
      | where not(FolderPath matches regex @"(?i)^(/usr/lib|/usr/lib64|/etc/python|/usr/share|[a-z]:\\program files|[a-z]:\\python)")
      | project TimeGenerated, DeviceName, Signal = "python auto-import file written", Detail = strcat(FolderPath, " by ", InitiatingProcessFileName))
 | summarize Signals = make_set(Signal, 10), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName

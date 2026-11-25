@@ -339,8 +339,11 @@ either as complete:
 - A steady request timer, the burst-and-pause cadence Unit 42 describes, and
   spec-driven API targeting: R-B-AGT-002, R-B-AGT-030 and R-D-AGT-017.
 - A client walking consecutive record identifiers: R-D-AGT-029.
-- What happens after access, in the cloud control plane and the domain:
-  R-D-AGT-021 to R-D-AGT-028.
+- What happens after access: in the cloud control plane, R-D-AGT-021 to
+  R-D-AGT-023; in the domain, R-D-AGT-024 and R-D-AGT-027; on the host,
+  R-D-AGT-025 and R-D-AGT-026.
+- Credential guessing at volume against services a WAF does not front (SSH,
+  VPN): R-D-AGT-028.
 - A canary username followed by an admin login, failed or successful:
   R-D-AGT-018.
 - Leaked application secrets used against Entra, and identity persistence

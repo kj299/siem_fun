@@ -402,8 +402,10 @@ against the ATT&CK 20.1 catalogue.
   storage account keys and App Service publishing profiles, VM Run Command, and
   deployment-validation sweeps, read from `AzureActivity`), R-D-AGT-024
   (Kerberoasting, user enumeration, DCSync and a delegation write, from domain
-  controller Security events), R-D-AGT-027 (a burst of password resets, or an
-  account created with `ArtexProbe` in its name) and R-D-AGT-028 (one source
+  controller Security events; in `SecurityEvent` the Kerberos ticket fields
+  are inside `EventData`, not columns), R-D-AGT-027 (a burst of password
+  resets, or an account created with `ArtexProbe` in its name; the Splunk rule
+  reads on-premises domain controllers and the Sentinel rule reads Entra) and R-D-AGT-028 (one source
   failing hundreds of logins against tens of accounts, the Cairn shape that the
   spray rule R-D-AGT-003 is built not to match). Splunk only as rules, with
   Sentinel hunts beside them: R-D-AGT-025 and H-AGT-030 (Chisel, SoftEther,
@@ -411,7 +413,8 @@ against the ATT&CK 20.1 catalogue.
   R-D-AGT-026 and H-AGT-031 (a database or Python application server starting a
   shell or a download tool; a `sitecustomize.py` written outside the
   interpreter's own directories), R-D-AGT-029 and H-AGT-029 (fifty or more
-  consecutive record identifiers under one path) and R-B-AGT-030 and H-AGT-028
+  record identifiers under one path, packed into a range no more than twice as
+  wide; the rule looks at fifteen minutes and the hunt at a day) and R-B-AGT-030 and H-AGT-028
   (requests in bursts separated by pauses of constant length). Hunts only:
   H-AGT-023 (many Key Vault secrets read by one caller, from `AZKVAuditLogs`;
   secret reads are data-plane and never appear in `AzureActivity`), H-AGT-024

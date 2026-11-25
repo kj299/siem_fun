@@ -879,15 +879,15 @@ kind: Scheduled
 ---
 id: bdf69883-67b2-52c4-81f8-f6f69a287006
 name: R-D-AGT-021 Agentic intrusion - AWS foothold and exfiltration preparation
-description: 'A principal outside the approved list launching instances, creating or importing an SSH key pair, allocating an Elastic IP, creating or attaching a volume, or changing an instance profile. GTIG (2026-10-30) and FBI FLASH-20261113-001: ARTEX operators generated a key pair, allocated an Elastic IP, launched instances with high-value roles and created a 100 GB volume to stage data. Fires on two or more distinct actions, or a launch that names an instance profile. Status: needs_validation.'
-severity: High
+description: 'A principal outside the approved list launching instances, creating or importing an SSH key pair, allocating an Elastic IP, creating or attaching a volume, or changing an instance profile. GTIG (2026-10-30) and FBI FLASH-20261113-001: ARTEX operators generated a key pair, allocated an Elastic IP, launched instances with high-value roles and created a 100 GB volume to stage data. Fires on two or more distinct actions of which at least one is a key pair, an Elastic IP or an instance-profile change: launches and volumes alone are what Auto Scaling, EKS node groups and batch services do all day. Status: needs_validation.'
+severity: Medium
 status: Available
 requiredDataConnectors:
 - connectorId: AWS
   dataTypes:
   - AWSCloudTrail
 queryFrequency: 15m
-queryPeriod: 30m
+queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -900,17 +900,20 @@ relevantTechniques:
 query: |
   let approved = dynamic(["<AUTOMATION_ROLE_ARN>"]);
   AWSCloudTrail
-  | where TimeGenerated > ago(30m)
+  | where TimeGenerated > ago(15m)
   | where EventName in ("RunInstances", "CreateKeyPair", "ImportKeyPair", "AllocateAddress", "CreateVolume", "AttachVolume",
                         "AssociateIamInstanceProfile", "ReplaceIamInstanceProfileAssociation")
   | where isempty(ErrorCode)
   | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn), Request = parse_json(RequestParameters)
   | where Actor !in (approved)
-  | extend InstanceProfile = coalesce(tostring(Request.iamInstanceProfile.arn), tostring(Request.iamInstanceProfile.name)),
-           VolumeGb = toint(Request.size)
-  | summarize DistinctActions = dcount(EventName), Actions = make_set(EventName), InstanceProfiles = make_set_if(InstanceProfile, isnotempty(InstanceProfile), 5),
-              LargestVolumeGb = max(VolumeGb), UserAgents = make_set(UserAgent, 5), SourceIpAddress = any(SourceIpAddress), StartTime = min(TimeGenerated) by Actor
-  | where DistinctActions >= 2 or array_length(InstanceProfiles) > 0
+  | extend InstanceProfile = coalesce(tostring(Request.iamInstanceProfile.arn), tostring(Request.iamInstanceProfile.name),
+                                     tostring(Request.AssociateIamInstanceProfileRequest.IamInstanceProfile.Arn),
+                                     tostring(Request.AssociateIamInstanceProfileRequest.IamInstanceProfile.Name)),
+           VolumeGb = toint(tostring(Request.size)),
+           Foothold = EventName in ("CreateKeyPair", "ImportKeyPair", "AllocateAddress", "AssociateIamInstanceProfile", "ReplaceIamInstanceProfileAssociation")
+  | summarize DistinctActions = dcount(EventName), FootholdActions = countif(Foothold), Actions = make_set(EventName), InstanceProfiles = make_set_if(InstanceProfile, isnotempty(InstanceProfile), 5),
+              LargestVolumeGb = max(VolumeGb), UserAgents = make_set(UserAgent, 5), SourceIpAddress = take_any(SourceIpAddress), StartTime = min(TimeGenerated) by Actor
+  | where FootholdActions > 0 and DistinctActions >= 2
 entityMappings:
 - entityType: Account
   fieldMappings:
@@ -934,7 +937,7 @@ kind: Scheduled
 ---
 id: eb09365d-9c62-500e-830e-080f6debfbd3
 name: R-D-AGT-022 Agentic intrusion - AWS permission probing with DryRun
-description: 'One principal sending DryRun requests for five or more distinct API actions in half an hour: the agent asking what a stolen key may do without doing it. FBI FLASH-20261113-001 (tested compromised IAM user permissions using DryRun flags); GTIG keys its own detection on GetCallerIdentity, counted here as context. A DryRun call that would have succeeded is logged with ErrorCode Client.DryRunOperation. Status: needs_validation.'
+description: 'One principal drawing a DryRun or an unauthorized answer for five or more distinct EC2 API actions in fifteen minutes: the agent asking what a stolen key may do. FBI FLASH-20261113-001 (tested compromised IAM user permissions using DryRun flags); GTIG keys its own detection on GetCallerIdentity, counted here as context. A DryRun call that would have succeeded is logged with ErrorCode Client.DryRunOperation and one that would not with Client.UnauthorizedOperation, the code a refused real call also gets. Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -942,7 +945,7 @@ requiredDataConnectors:
   dataTypes:
   - AWSCloudTrail
 queryFrequency: 15m
-queryPeriod: 30m
+queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -953,13 +956,13 @@ relevantTechniques:
 query: |
   let approved = dynamic(["<AUTOMATION_ROLE_ARN>"]);
   AWSCloudTrail
-  | where TimeGenerated > ago(30m)
-  | where ErrorCode == "Client.DryRunOperation" or EventName == "GetCallerIdentity"
+  | where TimeGenerated > ago(15m)
+  | where ErrorCode in ("Client.DryRunOperation", "Client.UnauthorizedOperation") or EventName == "GetCallerIdentity"
   | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn)
   | where Actor !in (approved)
-  | summarize DryRunActions = dcountif(EventName, ErrorCode == "Client.DryRunOperation"), Actions = make_set_if(EventName, ErrorCode == "Client.DryRunOperation", 20),
+  | summarize DryRunActions = dcountif(EventName, ErrorCode startswith "Client."), Actions = make_set_if(EventName, ErrorCode startswith "Client.", 20),
               IdentityChecks = countif(EventName == "GetCallerIdentity"), UserAgents = make_set(UserAgent, 5),
-              SourceIpAddress = any(SourceIpAddress), StartTime = min(TimeGenerated) by Actor
+              SourceIpAddress = take_any(SourceIpAddress), StartTime = min(TimeGenerated) by Actor
   | where DryRunActions >= 5
 entityMappings:
 - entityType: Account
@@ -992,7 +995,7 @@ requiredDataConnectors:
   dataTypes:
   - AzureActivity
 queryFrequency: 15m
-queryPeriod: 30m
+queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -1009,14 +1012,17 @@ query: |
                                "microsoft.web/sites/publishxml/action", "microsoft.containerservice/managedclusters/listclusterusercredential/action",
                                "microsoft.machinelearningservices/workspaces/connections/listsecrets/action",
                                "microsoft.machinelearningservices/workspaces/datastores/listsecrets/action"]);
+  let runCommandOps = dynamic(["microsoft.compute/virtualmachines/runcommand/action",
+                               "microsoft.compute/virtualmachinescalesets/virtualmachines/runcommand/action",
+                               "microsoft.compute/virtualmachines/runcommands/write"]);
   AzureActivity
-  | where TimeGenerated > ago(30m)
+  | where TimeGenerated > ago(15m)
   | extend Op = tolower(OperationNameValue)
-  | where Op in (credentialOps) or Op == "microsoft.compute/virtualmachines/runcommand/action" or Op == "microsoft.resources/deployments/validate/action"
+  | where Op in (credentialOps) or Op in (runCommandOps) or Op == "microsoft.resources/deployments/validate/action"
   | where Caller !in~ (approved)
-  | summarize CredentialOps = dcountif(Op, Op in (credentialOps)), RunCommands = dcountif(CorrelationId, Op endswith "runcommand/action"),
+  | summarize CredentialOps = dcountif(Op, Op in (credentialOps)), RunCommands = dcountif(CorrelationId, Op in (runCommandOps)),
               Validations = dcountif(CorrelationId, Op endswith "deployments/validate/action"), Operations = make_set(Op, 10),
-              Resources = make_set(_ResourceId, 10), CallerIpAddress = any(CallerIpAddress), StartTime = min(TimeGenerated) by Caller
+              Resources = make_set(_ResourceId, 10), CallerIpAddress = take_any(CallerIpAddress), StartTime = min(TimeGenerated) by Caller
   | where CredentialOps >= 3 or RunCommands > 0 or Validations >= 8
 entityMappings:
 - entityType: Account
@@ -1049,7 +1055,7 @@ requiredDataConnectors:
   dataTypes:
   - SecurityEvent
 queryFrequency: 15m
-queryPeriod: 30m
+queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -1064,7 +1070,7 @@ relevantTechniques:
 query: |
   let approved = dynamic(["<SYNC_SERVICE_ACCOUNT>"]);
   SecurityEvent
-  | where TimeGenerated > ago(30m)
+  | where TimeGenerated > ago(15m)
   | where EventID in (4769, 4768, 4662, 5136)
   | extend Service = extract(@'Name="ServiceName">([^<]*)<', 1, EventData),
            Encryption = extract(@'Name="TicketEncryptionType">([^<]*)<', 1, EventData),
@@ -1110,7 +1116,7 @@ kind: Scheduled
 ---
 id: b412e20c-2177-55d1-b340-5d19986bacd9
 name: R-D-AGT-027 Agentic intrusion - account takeover burst or agent-named account
-description: 'One actor resetting the passwords of five or more users in half an hour, or a user created with the agent''s own marker in its name. GTIG (2026-10-30): the operators gained persistence through account takeover (resetting passwords for identified users) and by creating accounts that included ArtexProbe in the naming convention. Entra audit activities Reset password (by admin) and Add user. A help desk resets passwords all day: add its accounts to the approved list. Status: needs_validation.'
+description: 'One actor resetting the passwords of five or more users in fifteen minutes, or a user created with the agent''s own marker in its name. GTIG (2026-10-30): the operators gained persistence through account takeover (resetting passwords for identified users) and by creating accounts that included ArtexProbe in the naming convention. Entra audit activities Reset password (by admin) and Add user. This reads the Entra directory; the Splunk rule of the same number reads on-premises domain controllers. A help desk resets passwords all day, and a tenant with self-service reset may record those under a service identity: look at who the actor is in your own AuditLogs and add those to the approved list. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -1118,7 +1124,7 @@ requiredDataConnectors:
   dataTypes:
   - AuditLogs
 queryFrequency: 15m
-queryPeriod: 30m
+queryPeriod: 15m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -1131,7 +1137,7 @@ relevantTechniques:
 query: |
   let approved = dynamic(["<HELP_DESK_ACCOUNT>"]);
   AuditLogs
-  | where TimeGenerated > ago(30m)
+  | where TimeGenerated > ago(15m)
   | where OperationName in ("Reset password (by admin)", "Add user")
   | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
            Target = tolower(coalesce(tostring(TargetResources[0].userPrincipalName), tostring(TargetResources[0].displayName)))
@@ -1158,7 +1164,7 @@ kind: Scheduled
 ---
 id: 5edde465-c5a5-522d-895c-33540a46fe71
 name: R-D-AGT-028 Agentic intrusion - credential guessing at volume from one source
-description: 'One source failing authentication 500 or more times in an hour against 20 or more accounts, on any service normalized by the ASIM authentication parsers (SSH, VPN, an admin panel, a portal). Amazon (2026-11-20): Cairn agents tested more than 30,000 credential combinations from about 80 real usernames against SSH, a storage device, a VPN and a portal. R-D-AGT-003 looks for the opposite shape, many accounts tried at most three times each, and does not fire on this one. Status: needs_validation.'
+description: 'One source failing authentication 500 or more times in an hour against 20 or more accounts, on any service normalized by the ASIM authentication parsers (SSH, VPN, an admin panel, a portal). Amazon (2026-11-20): Cairn agents tested more than 30,000 credential combinations from about 80 real usernames against SSH, a storage device, a VPN and a portal. R-D-AGT-003 looks for the opposite shape, many accounts tried at most three times each, and does not fire on this one. Only wrong-user and wrong-password failures are counted, since an interrupted sign-in (a second factor still owed) also normalizes to a failure, and your own egress addresses should be listed. Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -1177,8 +1183,10 @@ tactics:
 relevantTechniques:
 - T1110
 query: |
+  let egress = dynamic(["<YOUR_OWN_EGRESS_ADDRESS>"]);
   _Im_Authentication(starttime=ago(1h), eventresult='Failure')
-  | where isnotempty(SrcIpAddr) and isnotempty(TargetUsername)
+  | where isnotempty(SrcIpAddr) and isnotempty(TargetUsername) and SrcIpAddr !in (egress)
+  | where isempty(EventResultDetails) or EventResultDetails in ("No such user or password", "No such user", "Incorrect password")
   | summarize Attempts = count(), Accounts = dcount(TargetUsername), Services = dcount(TargetAppName), Apps = make_set(TargetAppName, 10),
               StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by SrcIpAddr
   | where Accounts >= 20 and Attempts >= 500

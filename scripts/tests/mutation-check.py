@@ -642,7 +642,7 @@ SAVED_SEARCHES = "examples/agentic-ai-attacks/splunk-savedsearches.conf"
 
 DETECTION_MUTS = [
     ("detections: a regex ending in an escaped dollar and an anchor",
-     'NOT like(ServiceName, "%$")',
+     'substr(ServiceName, -1)!=dollar',
      'NOT match(ServiceName, "\\$$")'),
 ]
 for label, old, new in DETECTION_MUTS:

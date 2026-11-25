@@ -293,7 +293,6 @@ class DetectionAssetTests(unittest.TestCase):
             body = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith(("//", "#")))
             for name in position.findall(body):
                 seen.add(name)
-        seen -= {"Scheduled"}   # the YAML value of `kind:`, not a table
         self.assertGreater(len(seen), 10)
         for name in sorted(seen):
             self.assertIn(name, self.tables, f"{name} is read by a query but is not in sentinel-table-catalog.md")
@@ -301,7 +300,7 @@ class DetectionAssetTests(unittest.TestCase):
     def test_azure_operations_are_the_same_on_both_platforms(self):
         # R-D-AGT-023 is one rule written twice. The operation names come from Microsoft's
         # resource provider reference; the two copies must not drift.
-        pattern = re.compile(r"microsoft\.[a-z]+/[a-z/]+/action", re.I)
+        pattern = re.compile(r"microsoft\.[a-z]+/[a-z/]+/(?:action|write)", re.I)
         stanza = self.splunk[self.splunk.index("[R-D-AGT-023 "):self.splunk.index("[R-D-AGT-024 ")]
         search = stanza[stanza.index("search = "):]
         start = self.sentinel.index("name: R-D-AGT-023 ")
@@ -309,7 +308,7 @@ class DetectionAssetTests(unittest.TestCase):
         query = rule[rule.index("query: |"):]
         splunk_ops = {m.lower() for m in pattern.findall(search)}
         sentinel_ops = {m.lower() for m in pattern.findall(query)}
-        self.assertEqual(len(splunk_ops), 8)
+        self.assertEqual(len(splunk_ops), 10)
         self.assertEqual(splunk_ops, sentinel_ops)
 
     def test_the_reference_names_every_detection_added_since_the_first_set(self):
@@ -323,13 +322,30 @@ class DetectionAssetTests(unittest.TestCase):
             if (rule.startswith("H-") and number >= 23) or (rule.startswith("R-") and number >= 21):
                 self.assertIn(rule, self.doc, rule)
 
-    def test_no_saved_search_leaves_a_dollar_pair_for_splunk_to_substitute(self):
-        # REGRESSION: in savedsearches.conf a pair of dollar signs is an escaped dollar and
-        # $name$ is a token, so a regex written "\$$" does not mean "ends with a dollar".
+    def test_no_saved_search_line_carries_two_dollar_signs(self):
+        # REGRESSION: savedsearches.conf treats text between two dollar signs as a token to
+        # substitute and a doubled one as an escape, so a regex ending in an escaped dollar and an
+        # anchor, or two "ends with a dollar" tests on one line, may not reach the search as
+        # written. One per line is the shape the older rules already use; where a literal dollar
+        # is needed, build it (printf("%c", 36)) instead of typing it.
         for line in self.splunk.splitlines():
             if line.startswith(("search =", "|")):
-                self.assertNotIn("$$", line, line[:80])
-                self.assertNotRegex(line, r"\$\w+\$", line[:80])
+                self.assertLess(line.count("$"), 2, line[:80])
+
+    def test_sentinel_queries_stay_inside_their_yaml_block(self):
+        # No YAML parser in the standard library, so this checks the one thing that breaks the
+        # file quietly: a query line that is not indented ends the block scalar early.
+        blocks = re.findall(r"^query: \|\n(.*?)^entityMappings:", self.sentinel, re.S | re.M)
+        self.assertEqual(len(blocks), len(re.findall(r"^id: ", self.sentinel, re.M)))
+        for block in blocks:
+            for line in block.splitlines():
+                self.assertTrue(line == "" or line.startswith("  "), line[:80])
+
+    def test_only_known_normalizing_parsers_are_called(self):
+        # A misspelt parser is an unknown function, and the table test cannot see it.
+        for text in (self.sentinel, self.hunts):
+            for name in re.findall(r"\b_Im_\w+", text):
+                self.assertIn(name, ("_Im_WebSession", "_Im_Authentication"))
 
 
 if __name__ == "__main__":
