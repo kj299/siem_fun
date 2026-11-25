@@ -941,7 +941,19 @@ what the first thirteen also said about the WAF pack: a fixture grades an
 answer's shape against the reference, so it cannot tell that the reference,
 or a rule file the reference points to, is wrong.
 
-Seven fixture defects and two skill-content gaps across fourteen runs. Both gaps
+Fifteenth run, 2026-11-25, because the reference gained the second set of
+detections: fixtures 1 to 7 and 11 to 21 re-run, 20 of 21 before correction.
+Fixture 21 failed a correct answer, the eighth fixture defect. The answer
+opened "Blocklist answer: none of them" and said the services "carry no block
+action"; the spec wanted the word none followed within sixty characters by
+domain or block, and here block came first. The spec now accepts that order
+and the phrase. No prompt or skill moved after the run, so the answers were
+re-graded: 21 of 21, and the marker records it. The new detections themselves
+are not what a fixture can check: they were reviewed by reading, against
+Microsoft's documentation, and that review found two hunts whose term matching
+caught almost nothing they named.
+
+Eight fixture defects and two skill-content gaps across fifteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still

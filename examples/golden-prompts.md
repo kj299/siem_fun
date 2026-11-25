@@ -936,7 +936,7 @@ Grader spec:
   ],
   "matches": [
     "(?i)legitimate",
-    "(?i)\\bnone\\b[^\\n]{0,60}(domain|block)|never (on|as) a block|do not (add|block)|not block"
+    "(?i)\\bnone\\b[^\\n]{0,60}(domain|block)|block[^\\n]{0,30}\\bnone\\b|no block action|never (on|as) a block|do not (add|block)|not block"
   ],
   "never_block": ["xcai.pro", "webhook.site"],
   "indexes": [],
