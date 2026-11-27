@@ -513,8 +513,8 @@ against the ATT&CK 20.1 catalogue.
   created by the System process in ten or more folders, which is how a file
   written over SMB appears), H-AGT-041 (one actor adds an application
   credential and grants a role within an hour), H-AGT-042 (the Bedrock
-  LLMJacking stages), H-AGT-043 (Cognitive Services deployment writes and
-  diagnostic-setting deletions by caller) and H-AGT-044 (certificate
+  LLMJacking stages), H-AGT-043 (Cognitive Services deployment writes, and
+  diagnostic settings changed or deleted, by a caller new to deploying) and H-AGT-044 (certificate
   requests, events 4886 and 4887, from a requester and template pair not
   seen in thirty days). H-AGT-045 is Sentinel only: it reads the indicator
   list Wiz publishes with `externaldata` and searches sign-in and cloud
