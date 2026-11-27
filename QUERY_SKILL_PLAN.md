@@ -954,7 +954,17 @@ are not what a fixture can check: they were reviewed by reading, against
 Microsoft's documentation, and that review found two hunts whose term matching
 caught almost nothing they named.
 
-Eight fixture defects and two skill-content gaps across fifteen runs. Both gaps
+Sixteenth run, 2026-11-27, because the reference gained the section on
+reporting since 2026-11-24 and the third set of detections (hunts H-AGT-032 to
+H-AGT-045, with Splunk versions in `splunk-hunting.conf`): fixtures 1 to 7 and
+11 to 21 re-run, 21 of 21, nothing corrected. As before, the hunts themselves
+are outside what a fixture checks. Two reviews by reading found a certificate
+hunt that would have returned nothing where the agent fills the columns and
+leaves `EventData` empty, a self-grant test that could not be true, a
+secret-file count that scored the densest command lowest, and a Splunk term
+filter that dropped the labels its own pattern was written for.
+
+Eight fixture defects and two skill-content gaps across sixteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still
