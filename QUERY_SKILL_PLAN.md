@@ -964,7 +964,19 @@ leaves `EventData` empty, a self-grant test that could not be true, a
 secret-file count that scored the densest command lowest, and a Splunk term
 filter that dropped the labels its own pattern was written for.
 
-Eight fixture defects and two skill-content gaps across sixteen runs. Both gaps
+Seventeenth run, 2026-11-27, because the ATT&CK table was re-derived for the
+reports read that day (73 evidence rows, 17 new techniques): fixtures 1 to 7
+and 11 to 21 re-run, 20 of 21 before correction. Fixture 12 failed a correct
+answer, the ninth fixture defect. The answer bound the four published
+addresses with `let` before the table, so the query block did not open with
+the table name, which is what the spec's anchored pattern demanded. The
+pattern now accepts the table at the start of any line; the separate table
+allowlist still keeps every other table out. No prompt or skill moved after
+the run, so the answers were re-graded: 21 of 21, and the marker records it.
+The same anchored form is still in other fixtures' specs and will fail the
+same way on an answer that opens with a binding.
+
+Nine fixture defects and two skill-content gaps across seventeen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still
