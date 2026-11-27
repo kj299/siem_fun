@@ -103,6 +103,72 @@ ending, matches nothing. That operation also records removals; the modified
 properties say which it was. These are behaviors, not indicators: legitimate
 secret rotation and role changes produce the same events.
 
+## Developments since 2026-11-24 (as of 2026-11-27)
+
+Added in a refresh on 2026-11-27, which also read five reports the pack had
+not used. The indicators are in `iocs.csv` (20 added, none with a block
+action); the ATT&CK table below was not re-derived for them.
+
+- **No implant to find (Unit 42, 2026-11-24).** Across more than ten
+  agent-run campaigns Unit 42 recovered no compiled implant: the agent works
+  through shells, interpreters and tools already on the host. Hashes and
+  malware signatures come back empty. What it measured instead: a median gap
+  of 1.4 seconds between commands against 23.9 for a human operator, section
+  headers of the form `===[Title]===` in command output in every campaign,
+  and 40 to 100 distinct Base64 payloads in a session. Tradecraft seen once
+  each and written up as hunts: `strace` applied to the Defender for Endpoint
+  process, a `find` that excludes three security vendors' directories, a check
+  for sixteen security scanners, a switch to IMDSv2 token requests the moment
+  IMDSv1 was refused, twenty AWS services enumerated across eight regions,
+  and ASPX web shells pushed to more than forty folders of an IIS server over
+  SMB in 26 minutes. GSocket (`gs-netcat`) joins Chisel as a relay.
+- **The agent labels what it creates (Wiz, 2026-11-23 and 2026-11-25).** The
+  model names cloud resources after its task identifier, so the identifier
+  survives in role session names, SSM command comments, bucket, role, policy
+  and security-group names, tags, Azure run-command and VM names and Entra app
+  registrations, and in the error message of a denied call. Shapes Wiz
+  published: `pentest-i<N>`, `artex-i<N>`, the `artx-` prefix, the `csai-`
+  prefix (CyberStrikeAI) and the counter joined to `probe` or `canary`. The
+  counter is wider than earlier reporting showed: Wiz saw values from two
+  digits to six (i49 to i808807), so match `i[0-9]{2,7}` beside an anchor
+  word and never on its own. Cairn numbers its work differently (`i001`,
+  `f001`, `h001`, `proj_001`). Wiz also names forks and relabelled builds:
+  Pojun, AntiFox, Ling, LUCK, Guanlan SEC and sapper-v2. A fork changes the
+  name and keeps the behaviour, which is the argument for the behavioural
+  hunts over the string ones.
+- **Microsoft's hunting guidance (2026-11-25).** Microsoft published hunts of
+  its own, and three are carried here with its thresholds: a web or
+  application server process starting shells or download tools ten or more
+  distinct ways in five minutes; three or more kinds of secret file read on
+  one host by one account in ten minutes; and one user or application that
+  both adds an application credential and grants a directory role or
+  application permission within an hour (in one case an application granted
+  itself Global Administrator). It attributes use of the framework to Crystal
+  Typhoon and Salt Typhoon among others, and ships a Defender behaviour
+  detection named for ARTEX. A vendor, ThreatBook, has claimed ARTEX as its
+  product ("ARTEX Pro"); nothing here depends on whether that is so.
+- **AWS, first hand (Datadog, 2026-11-09; read 2026-11-27).** In the
+  environments Datadog watched, the framework's most frequent call was
+  CloudWatch Logs `FilterLogEvents`, every call with a limit of 1000 and
+  filter patterns looking for passwords, access keys and storage paths. It
+  also registered itself with Cognito user pools, adjusted its sign-up
+  request to whatever the pool's trigger rejected (a custom admin attribute
+  was tried), traded the tokens for identity-pool credentials and enumerated
+  with those.
+- **Stolen model access (Google GTIG, 2026-11-02; read 2026-11-27).** The
+  LLMJacking cases follow one order: list models and inference profiles,
+  enable access (`PutUseCaseForModelAccess`,
+  `CreateFoundationModelAgreement`), switch off or redirect model invocation
+  logging, then invoke at volume, with bursts of throttling and validation
+  errors. On Azure the equivalent control-plane event is a write to a
+  Cognitive Services account's deployments. Two reseller domains from that
+  report are in `iocs.csv` as alert, not block.
+- **CL-STA-1238 (Unit 42, 2026-11-12).** The primary write-up of the Cairn
+  cluster has now been read; two addresses from it are in `iocs.csv`.
+- **Not read, so nothing is written from them:** the NCSC UK advisory of
+  2026-11-24 (seen only as a search summary; it is said to name three more
+  frameworks), and reports attributed to Sophos, CSIRT Italia and Elastic.
+
 ## Developments since 2026-11-07 (as of 2026-11-24)
 
 Added in a refresh on 2026-11-24. The indicators are in `iocs.csv`, and the
@@ -249,7 +315,8 @@ against the ATT&CK 20.1 catalogue.
 - **First-hand incident-response tradecraft (S-RM, 2026-11-04).** S-RM's responders
   published artifacts from several ARTEX intrusions they handled: the working folder
   `/opt/artex/data/task/<task>/i4028/i4028.asp` on compromised hosts (the `i<number>`
-  is the agent's intent counter, so hunt the shape `i[0-9]{3,5}`, not one name),
+  is the agent's intent counter, so hunt the shape `i[0-9]{2,7}`, not one name;
+  the width is Wiz's later range),
   disposable GitHub branches named `artex-wtest-<n>`, SQL-injection strings tagged
   `ARTEX'`, a console whose self-signed TLS certificate carries `C=CN, O=ARTEX`, and
   placeholder emails at `example.invalid`. Observed pace: initial access to full
@@ -425,9 +492,42 @@ against the ATT&CK 20.1 catalogue.
   `OfficeActivity`) and H-AGT-027 (tokens, service connections and pipelines
   touched from a new user-agent in `AzureDevOpsAuditing`). Table and column
   names for these were checked against Microsoft's table reference; none has
-  run against live data. Still without a detection: the LLM-gateway exploit
-  chains Amazon lists, spend anomalies on AI services, tunnelling and
-  file-transfer egress by destination, and certificate-enrollment abuse.
+  run against live data.
+
+  A third set, added 2026-11-27, is hunts only, from the reporting in the
+  section dated 2026-11-27 above. Each exists in `hunting.kql` and, under the
+  same number, in
+  [splunk-hunting.conf](../../examples/agentic-ai-attacks/splunk-hunting.conf),
+  whose searches are unscheduled and write nothing to the risk index.
+  H-AGT-032 (the agent's own labels in AWS, Azure and Entra names: the
+  counter beside an anchor word, never alone), H-AGT-033 (CloudWatch Logs
+  searched for secrets, at the constant limit of 1000), H-AGT-034 (Cognito
+  sign-up errors that change per attempt, and an identity-pool session
+  refused across many calls), H-AGT-035 (one assumed-role session across ten
+  services and four regions in half an hour), H-AGT-036 (a web or
+  application server issuing ten distinct commands in five minutes, section
+  headers, many encoded payloads), H-AGT-037 (three kinds of secret file in
+  ten minutes), H-AGT-038 (discovery that looks for the defender first),
+  H-AGT-039 (`nsenter`, node bootstrap secrets and credentials requested from
+  the metadata service, a write to `ld.so.preload`), H-AGT-040 (web shells
+  created by the System process in ten or more folders, which is how a file
+  written over SMB appears), H-AGT-041 (one actor adds an application
+  credential and grants a role within an hour), H-AGT-042 (the Bedrock
+  LLMJacking stages), H-AGT-043 (Cognitive Services deployment writes and
+  diagnostic-setting deletions by caller) and H-AGT-044 (certificate
+  requests, events 4886 and 4887, from a requester and template pair not
+  seen in thirty days). H-AGT-045 is Sentinel only: it reads the indicator
+  list Wiz publishes with `externaldata` and searches sign-in and cloud
+  activity logs for it, so it needs outbound access to that file from the
+  workspace; on Splunk, load the list as a lookup and use R-D-AGT-012.
+  The same refresh added `gs-netcat` to R-D-AGT-025 and H-AGT-030.
+
+  Still without a detection: the LLM-gateway exploit chains Amazon lists
+  (only the gateway software on a host is hunted), spend anomalies on AI
+  services (H-AGT-042 counts invocations, not cost), tunnelling and
+  file-transfer egress by destination, the Kubernetes audit-log half of
+  H-AGT-039 (privileged pods, cluster-admin bindings), and model calls on
+  Azure, which are data-plane.
 
   Lookups the rules read are
   in [examples/agentic-ai-attacks/lookups/](../../examples/agentic-ai-attacks/lookups/);

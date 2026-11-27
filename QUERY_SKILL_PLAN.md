@@ -179,6 +179,7 @@ siem_fun/
 |   |   |-- hunting.kql
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
+|   |   |-- splunk-hunting.conf
 |   |   |-- splunk-morpheus-native.conf
 |   |   |-- splunk-savedsearches.conf
 |   |   `-- waf/
@@ -590,7 +591,7 @@ own functions against them: every KQL table is catalogued and every hunt
 bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
 the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
 score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
-`lookups/sentinel_watchlist.csv` carry the same 186 indicators, each present
+`lookups/sentinel_watchlist.csv` carry the same 206 indicators, each present
 in `iocs.csv` with the same type, confidence and source, but no test pins
 that.
 

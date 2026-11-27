@@ -347,11 +347,12 @@ _Im_WebSession(starttime=ago(1d))
 // The FBI names Chisel and SoftEther tunnels, the AdaptixC2 and vshell remote-access tools, and
 // self-hosted LLM gateway or reseller software (CLIProxyAPI, New API). Matched by the projects'
 // own binary names, which an operator can change. VShell is also a commercial SSH server. WISP,
-// which the FBI also names, has no known process name and is not matched.
+// which the FBI also names, has no known process name and is not matched. Unit 42 (2026-11-24)
+// adds GSocket, whose client is gs-netcat.
 DeviceProcessEvents
 | where TimeGenerated > ago(30d)
 | where FileName in~ ("chisel", "chisel.exe", "vpnserver", "vpnserver.exe", "vpnserver_x64.exe", "vpnbridge", "vpnbridge.exe", "vpnbridge_x64.exe",
-                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "new-api", "new-api.exe", "one-api", "one-api.exe")
+                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "gs-netcat", "gs-netcat.exe", "new-api", "new-api.exe", "one-api", "one-api.exe")
      or ProcessCommandLine contains "softether" or ProcessCommandLine contains "adaptix"
      or ProcessCommandLine contains "CLIProxyAPI" or ProcessCommandLine contains "cli-proxy-api"
 | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Commands = make_set(ProcessCommandLine, 5), Accounts = make_set(AccountName, 5)
@@ -377,3 +378,291 @@ union
      | project TimeGenerated, DeviceName, Signal = "python auto-import file written", Detail = strcat(FolderPath, " by ", InitiatingProcessFileName))
 | summarize Signals = make_set(Signal, 10), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
 | order by LastSeen desc
+
+
+// ===== Added 2026-11-27: hunts from reporting published 2026-11-23 to 2026-11-25, and from ======
+// ===== Datadog (2026-11-09) and Google (2026-11-02, 2026-11-16), which the pack had not read ===
+// Each hunt names the source of its hypothesis. Thresholds are the source's where it gives one.
+// Unit 42 (2026-11-24) found no compiled implant in more than ten agent-run campaigns: hashes and
+// malware signatures come back empty, and what is left to hunt is behaviour and the names an
+// agent gives things. None of these has run in a workspace.
+
+// --- H-AGT-032  Agent self-labels in cloud and directory names (Wiz 2026-11-23, 2026-11-25) -----
+// The model names what it creates after the task identifier in front of it. Wiz found the labels
+// in role session names, SSM command comments, bucket, role, policy and security-group names,
+// tags, Azure run-command and VM names and Entra app registrations, and notes that "for denied
+// calls, the names survive in error messages", so failed calls are read too. Shapes: pentest-i and
+// artex-i followed by the counter, the artx- and csai- prefixes (csai- is CyberStrikeAI), and the
+// counter joined to probe or canary. Wiz: "pair i<N> with an anchor before alerting"; a bare
+// i<digits> is never matched here. Counter values seen run from two digits to six.
+let label = @"(?i)(pentest-i\d{2,7}|artex-i\d{2,7}|artex-verify-i\d{2,7}|\bartx-[a-z0-9]|\bcsai-[a-z0-9]|i\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\d{2,7}|tasks/[^/\s]+/i\d{2,7})";
+union
+  (AWSCloudTrail | where TimeGenerated > ago(30d)
+     | extend Text = strcat(RequestParameters, " ", ErrorMessage, " ", UserIdentityArn)
+     | where Text matches regex label
+     | project TimeGenerated, Plane = "aws", Actor = UserIdentityArn, Source = SourceIpAddress, Operation = EventName, Label = extract(label, 1, Text)),
+  (AzureActivity | where TimeGenerated > ago(30d)
+     | extend Text = strcat(_ResourceId, " ", Properties)
+     | where Text matches regex label
+     | project TimeGenerated, Plane = "azure", Actor = Caller, Source = CallerIpAddress, Operation = OperationNameValue, Label = extract(label, 1, Text)),
+  (AuditLogs | where TimeGenerated > ago(30d)
+     | extend Text = tostring(TargetResources)
+     | where Text matches regex label
+     | project TimeGenerated, Plane = "entra", Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
+               Source = tostring(InitiatedBy.user.ipAddress), Operation = OperationName, Label = extract(label, 1, Text))
+| extend Counter = tolong(extract(@"i(\d{2,7})", 1, Label))
+| summarize Events = count(), Labels = make_set(Label, 20), LowestCounter = min(Counter), HighestCounter = max(Counter), Sources = make_set(Source, 20),
+            Operations = make_set(Operation, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Plane, Actor
+| order by FirstSeen asc
+
+// --- H-AGT-033  CloudWatch Logs searched for secrets (Datadog 2026-11-09) -----------------------
+// "ARTEX's most frequent action was FilterLogEvents", and "every FilterLogEvents call was set
+// with a limit of 1000 ... That constant shows up across sessions." The filter patterns Datadog
+// published look for credentials and data locations. One principal, an hour.
+AWSCloudTrail
+| where TimeGenerated > ago(14d) and EventName == "FilterLogEvents"
+| extend Request = parse_json(RequestParameters)
+| extend Pattern = tostring(Request.filterPattern), Limit = toint(tostring(Request["limit"]))
+| extend SecretSearch = Pattern contains "password" or Pattern contains "AKIA" or Pattern contains "mongo" or Pattern contains "presigned" or Pattern contains "s3://"
+| summarize Calls = count(), AtLimit1000 = countif(Limit == 1000), SecretSearches = countif(SecretSearch), LogGroups = dcount(tostring(Request.logGroupName)),
+            Patterns = make_set(Pattern, 10), Sources = make_set(SourceIpAddress, 5) by Actor = coalesce(SessionIssuerArn, UserIdentityArn), bin(TimeGenerated, 1h)
+| where SecretSearches > 0 or (AtLimit1000 >= 20 and LogGroups >= 3)
+| order by SecretSearches desc, Calls desc
+
+// --- H-AGT-034  Self-registration traded for AWS credentials (Datadog 2026-11-09) ----------------
+// "Registering an account, collecting tokens, trading them for AWS credentials, then enumerating
+// resources." Two halves. First, sign-up errors that change from attempt to attempt as the agent
+// works out what a PreSignUp trigger wants (Datadog saw it try a custom isAdmin attribute and a
+// tenant domain at a reserved .invalid name). Second, a session named CognitoIdentityCredentials
+// that is refused across many different calls.
+union
+  (AWSCloudTrail | where TimeGenerated > ago(14d) and EventSource == "cognito-idp.amazonaws.com" and EventName == "SignUp" and isnotempty(ErrorCode)
+     | summarize Attempts = count(), DistinctErrors = dcount(ErrorMessage), Errors = make_set(ErrorMessage, 10),
+                 PrivilegeAttribute = countif(RequestParameters contains "isAdmin" or ErrorMessage contains "isAdmin"),
+                 FirstSeen = min(TimeGenerated) by Key = SourceIpAddress, bin(TimeGenerated, 1h)
+     | where DistinctErrors >= 3 or PrivilegeAttribute > 0
+     | project FirstSeen, Signal = "sign-up errors that vary per attempt", Key, Detail = strcat(Attempts, " attempts; ", tostring(Errors))),
+  (AWSCloudTrail | where TimeGenerated > ago(14d) and UserIdentityArn contains "CognitoIdentityCredentials"
+     | summarize Denied = countif(ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"), DeniedActions = dcountif(EventName, ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"),
+                 Actions = make_set(EventName, 20), FirstSeen = min(TimeGenerated) by Key = SourceIpAddress, UserIdentityArn, bin(TimeGenerated, 1h)
+     | where Denied >= 20 and DeniedActions >= 5
+     | project FirstSeen, Signal = "identity-pool session refused across many calls", Key, Detail = strcat(Denied, " denials; ", tostring(Actions)))
+| order by FirstSeen desc
+
+// --- H-AGT-035  One AWS session sweeping services and regions (Unit 42 2026-11-24) --------------
+// After taking instance-role credentials from the metadata service, "the AI agent enumerated 20
+// AWS services across eight regions". One session, ten or more services and four or more regions
+// in half an hour. A deployment tool does this too: read the source address and the user-agent.
+// Datadog and Wiz both add the stronger test, an instance role used from an address that is not
+// AWS, which needs your own list of expected egress and is left to you.
+AWSCloudTrail
+| where TimeGenerated > ago(14d)
+| where UserIdentityType == "AssumedRole"
+| summarize Services = dcount(EventSource), Regions = dcount(AWSRegion), Calls = count(), Denied = countif(isnotempty(ErrorCode)),
+            ServiceList = make_set(EventSource, 25), Sources = make_set(SourceIpAddress, 5), UserAgents = make_set(UserAgent, 5)
+            by UserIdentityArn, bin(TimeGenerated, 30m)
+| where Services >= 10 and Regions >= 4
+| order by Services desc, Regions desc
+
+// --- H-AGT-036  A web or application server issuing commands at machine speed -------------------
+// Microsoft (2026-11-25): "Find web and application server processes that start shells or
+// download tools many times within five minutes", ten distinct commands by default. Unit 42
+// (2026-11-24): "the median inter-command gap dropped to 1.4 seconds" against 23.9 for a person,
+// "in every campaign ... AI operators used section headers in shell commands and scripts, such as
+// ===[Title]===", and 40 to 100 different Base64 payloads in a session. Parent and child lists
+// are Microsoft's. Build servers that run shells under Java or Node.js will match: exclude them.
+DeviceProcessEvents
+| where TimeGenerated > ago(14d)
+| where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "apache2", "nginx", "lighttpd", "java", "node") or InitiatingProcessFileName startswith "php"
+| where FileName in~ ("sh", "bash", "dash", "zsh", "cmd.exe", "powershell.exe", "pwsh", "pwsh.exe", "curl", "wget", "nc", "ncat", "certutil.exe", "python3", "perl")
+| extend Header = ProcessCommandLine contains "===",
+         Encoded = ProcessCommandLine contains "base64" or ProcessCommandLine contains "FromBase64String" or ProcessCommandLine contains " -enc"
+| summarize DistinctCommands = dcount(ProcessCommandLine), Starts = count(), SectionHeaders = countif(Header), EncodedPayloads = dcountif(ProcessCommandLine, Encoded),
+            First = min(TimeGenerated), Last = max(TimeGenerated), Sample = make_set(ProcessCommandLine, 5)
+            by DeviceName, InitiatingProcessFileName, bin(TimeGenerated, 5m)
+| where DistinctCommands >= 10 or SectionHeaders >= 3 or EncodedPayloads >= 10
+| extend SecondsPerCommand = todouble(datetime_diff("second", Last, First)) / Starts
+| order by DistinctCommands desc
+
+// --- H-AGT-037  Three or more kinds of secret file in ten minutes (Microsoft 2026-11-25) --------
+// "Rapid reads of /etc/shadow, .env and configuration files, private keys, and cloud credential
+// files." The file list and the threshold are Microsoft's. Read from command lines, so a tool
+// that opens files without naming them on a command line is not seen.
+DeviceProcessEvents
+| where TimeGenerated > ago(14d)
+| extend Kind = case(
+    ProcessCommandLine contains "/etc/shadow", "shadow",
+    ProcessCommandLine contains ".aws/credentials", "aws credentials",
+    ProcessCommandLine contains ".azure/", "azure profile",
+    ProcessCommandLine contains ".kube/config", "kubeconfig",
+    ProcessCommandLine contains "id_rsa" or ProcessCommandLine contains "id_ecdsa" or ProcessCommandLine contains "id_ed25519", "ssh private key",
+    ProcessCommandLine contains ".git-credentials", "git credentials",
+    ProcessCommandLine contains ".pgpass" or ProcessCommandLine contains ".my.cnf", "database client password",
+    ProcessCommandLine contains "wp-config.php" or ProcessCommandLine contains "web.config" or ProcessCommandLine contains "appsettings.json", "application config",
+    ProcessCommandLine contains ".env", "env file",
+    "")
+| where Kind != ""
+| summarize SecretFileTypes = dcount(Kind), Kinds = make_set(Kind), Commands = make_set(ProcessCommandLine, 10), Parents = make_set(InitiatingProcessFileName, 5)
+            by DeviceName, AccountName, bin(TimeGenerated, 10m)
+| where SecretFileTypes >= 3
+| order by SecretFileTypes desc
+
+// --- H-AGT-038  Discovery that looks for the defender first (Unit 42 2026-11-24) ----------------
+// "The agent applied strace to the Microsoft Defender for Endpoint process (wdavdaemon)", ran one
+// find "excluding three different security vendors", and checked "for the presence of 16 different
+// security scanners (nmap, nessus, openvas, nikto, masscan, nuclei, lynis and others)". The first
+// is rare enough to read every hit. The other two are counted: a find with three or more
+// exclusions, and one command line naming four or more of the scanners.
+DeviceProcessEvents
+| where TimeGenerated > ago(30d)
+| extend Scanners = toint(ProcessCommandLine contains "nmap") + toint(ProcessCommandLine contains "nessus") + toint(ProcessCommandLine contains "openvas")
+                  + toint(ProcessCommandLine contains "nikto") + toint(ProcessCommandLine contains "masscan") + toint(ProcessCommandLine contains "nuclei")
+                  + toint(ProcessCommandLine contains "lynis"),
+         Exclusions = countof(ProcessCommandLine, "-not -path") + countof(ProcessCommandLine, "-prune")
+| extend Signal = case(
+    ProcessCommandLine contains "wdavdaemon" and (FileName =~ "strace" or FileName =~ "ltrace" or FileName =~ "gdb"), "tracing the endpoint agent",
+    FileName =~ "find" and Exclusions >= 3, "find that skips several directories",
+    Scanners >= 4, "inventory of security scanners",
+    "")
+| where Signal != ""
+| project TimeGenerated, DeviceName, AccountName, Signal, InitiatingProcessFileName, ProcessCommandLine
+| order by TimeGenerated desc
+
+// --- H-AGT-039  From a pod or a web process to the node and the cloud ----------------------------
+// Wiz (2026-11-23) names the runtime signs of the Kubernetes escalations it investigated:
+// "privileged container creation, nsenter, IMDS kube-env queries and drifted scripts reaching for
+// cloud credentials", and a userland rootkit loaded through ld.so.preload "disguised as a
+// fontconfig service". Unit 42 (2026-11-24): "When IMDSv1 was blocked, the agent immediately
+// adapted and switched to IMDSv2 token acquisition." Host-level telemetry only; the cluster's own
+// audit log is where the privileged pod and the cluster-admin binding show.
+union
+  (DeviceProcessEvents | where TimeGenerated > ago(30d)
+     | extend Signal = case(
+         FileName =~ "nsenter" and (ProcessCommandLine contains "-t 1" or ProcessCommandLine contains "--target 1"), "nsenter into the host",
+         ProcessCommandLine contains "kube-env", "node bootstrap secrets requested from the metadata service",
+         ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "api/token", "metadata service token requested",
+         ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "security-credentials", "role credentials requested from the metadata service",
+         "")
+     | where Signal != ""
+     | project TimeGenerated, DeviceName, Signal, Detail = strcat(InitiatingProcessFileName, " > ", ProcessCommandLine)),
+  (DeviceFileEvents | where TimeGenerated > ago(30d)
+     | where FolderPath has "ld.so.preload" or FileName =~ "ld.so.preload"
+     | project TimeGenerated, DeviceName, Signal = "ld.so.preload written", Detail = strcat(FolderPath, " by ", InitiatingProcessFileName))
+| summarize Signals = make_set(Signal, 10), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName
+| order by array_length(Signals) desc, LastSeen desc
+
+// --- H-AGT-040  Web shells sprayed across a Windows web server over SMB (Unit 42 2026-11-24) -----
+// "Within two minutes of identifying the Windows IIS server, the agent began deploying ASPX web
+// shells over SMB. Over the next 26 minutes it pushed webshells to more than 40 locations ...
+// uploading custom web.config files to enable script execution." A file that arrives over SMB is
+// created by the System process, not by the web server, which is why H-AGT-013 does not see it.
+// Microsoft (2026-11-25) describes the same from the other side: "several short-lived web shells
+// with incrementing names". Ten or more folders in half an hour.
+DeviceFileEvents
+| where TimeGenerated > ago(30d)
+| where ActionType in ("FileCreated", "FileModified", "FileRenamed")
+| where InitiatingProcessFileName in~ ("System", "ntoskrnl.exe")
+| where FileName matches regex @"(?i)\.(aspx|ashx|asmx|asp|php|jsp|jspx)$" or FileName =~ "web.config"
+| summarize Folders = dcount(FolderPath), Files = dcount(FileName), ConfigFiles = countif(FileName =~ "web.config"), Names = make_set(FileName, 20),
+            SampleFolders = make_set(FolderPath, 10), RemoteAddresses = make_set(RequestSourceIP, 5) by DeviceName, bin(TimeGenerated, 30m)
+| where Folders >= 10 or (ConfigFiles > 0 and Files >= 3)
+| order by Folders desc
+
+// --- H-AGT-041  One actor adds an application credential and grants a role (Microsoft 2026-11-25)
+// "Find users or applications that both add or change application credentials and assign
+// directory roles or application permissions within an hour." In one case "an application
+// assigned itself the Global Administrator role". R-B-AGT-008 matches these operations one at a
+// time; the pairing by actor is the new part. Privileged Identity Management activations are kept.
+AuditLogs
+| where TimeGenerated > ago(30d)
+| extend Stage = case(
+    OperationName == "Add service principal credentials" or OperationName contains "Certificates and secrets management", "credential",
+    OperationName == "Add member to role" or OperationName == "Add app role assignment to service principal", "grant",
+    "")
+| where Stage != ""
+| extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
+         Target = tostring(TargetResources[0].displayName)
+| summarize Stages = make_set(Stage), Operations = make_set(OperationName, 10), Targets = make_set(Target, 10),
+            FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Actor, bin(TimeGenerated, 1h)
+| where array_length(Stages) == 2
+| extend SelfGrant = set_has_element(Targets, Actor)
+| order by SelfGrant desc, FirstSeen desc
+
+// --- H-AGT-042  Stolen model access on AWS Bedrock (Google GTIG 2026-11-02) ----------------------
+// The reference listed AI spend as a gap. Mandiant's cases give the event names. Scoping:
+// ListFoundationModels, ListInferenceProfiles, GetFoundationModelAvailability. Enabling:
+// PutUseCaseForModelAccess, CreateFoundationModelAgreement. Hiding: changes to the model
+// invocation logging configuration. Use: Converse, InvokeModel, InvokeModelWithResponseStream,
+// with "high-volume spikes in ThrottlingException, ValidationException, or
+// ResourceNotFoundException". "In multiple incidents ... LLM services were not enabled at the
+// time of compromise ... treat any unauthorized enablement as a critical security event."
+AWSCloudTrail
+| where TimeGenerated > ago(30d) and EventSource == "bedrock.amazonaws.com"
+| extend Stage = case(
+    EventName in ("PutUseCaseForModelAccess", "CreateFoundationModelAgreement"), "enable",
+    EventName in ("PutModelInvocationLoggingConfiguration", "DeleteModelInvocationLoggingConfiguration"), "logging changed",
+    EventName in ("ListFoundationModels", "ListInferenceProfiles", "GetFoundationModelAvailability", "GetModelInvocationLoggingConfiguration"), "scope",
+    EventName in ("Converse", "ConverseStream", "InvokeModel", "InvokeModelWithResponseStream"), "invoke",
+    "")
+| where Stage != ""
+| summarize Stages = make_set(Stage), Invocations = countif(Stage == "invoke"),
+            InvokeErrors = countif(Stage == "invoke" and ErrorCode in ("ThrottlingException", "ValidationException", "ResourceNotFoundException")),
+            Regions = dcount(AWSRegion), Sources = make_set(SourceIpAddress, 5), UserAgents = make_set(UserAgent, 5), FirstSeen = min(TimeGenerated)
+            by Actor = coalesce(SessionIssuerArn, UserIdentityArn), bin(TimeGenerated, 1h)
+| where set_has_element(Stages, "enable") or set_has_element(Stages, "logging changed") or (set_has_element(Stages, "scope") and Invocations >= 100) or InvokeErrors >= 50
+| order by Invocations desc
+
+// --- H-AGT-043  Stolen model access on Azure (Google GTIG 2026-11-02) ---------------------------
+// "Unauthorized creation of new instances via the Microsoft.CognitiveServices/accounts/
+// deployments/write operation", with diagnostic settings read, changed or deleted to hide it.
+// Model calls themselves are data-plane and need diagnostic logs. New deployments by a caller
+// who made none in the previous 30 days, and diagnostic settings removed from such an account.
+let seen = AzureActivity
+    | where TimeGenerated between (ago(30d) .. ago(1d)) and OperationNameValue =~ "Microsoft.CognitiveServices/accounts/deployments/write"
+    | summarize by Caller;
+AzureActivity
+| where TimeGenerated > ago(1d)
+| where OperationNameValue =~ "Microsoft.CognitiveServices/accounts/deployments/write"
+     or (OperationNameValue =~ "Microsoft.Insights/diagnosticSettings/delete" and _ResourceId contains "Microsoft.CognitiveServices")
+| join kind=leftanti seen on Caller
+| summarize Operations = make_set(OperationNameValue, 5), Resources = make_set(_ResourceId, 10), Events = dcount(CorrelationId),
+            CallerIpAddress = take_any(CallerIpAddress), FirstSeen = min(TimeGenerated) by Caller
+| order by Events desc
+
+// --- H-AGT-044  Certificate requests from a requester not seen before (FBI FLASH-20261113-001) ---
+// The FBI asks defenders to "monitor unusual certificate enrollment involving privileged users or
+// unexpected requesting systems"; GTIG (2026-10-30) saw the agents audit certificate templates.
+// Certification authority events 4886 (request received) and 4887 (certificate issued); the
+// requester and the request attributes, which carry the template, are in EventData. Needs
+// certificate services auditing on the CA. Lists requester and template pairs first seen today.
+let requests = SecurityEvent
+    | where TimeGenerated > ago(30d) and EventID in (4886, 4887)
+    | extend Requester = tolower(extract(@'Name="Requester">([^<]*)<', 1, EventData)),
+             Template = extract(@"CertificateTemplate:([^\s<&]+)", 1, EventData);
+requests
+| where TimeGenerated > ago(1d)
+| join kind=leftanti (requests | where TimeGenerated < ago(1d) | summarize by Requester, Template) on Requester, Template
+| summarize Requests = count(), Issued = countif(EventID == 4887), FirstSeen = min(TimeGenerated) by Requester, Template, Computer
+| order by Issued desc, FirstSeen asc
+
+// --- H-AGT-045  Published agent addresses in your sign-in and cloud logs (Wiz 2026-11-23) -------
+// Wiz published 74 addresses "observed conducting attacks using agentic offensive frameworks",
+// most of them used with stolen cloud or identity credentials, some marked "match may be a failed
+// attempt". Wiz gives no instruction to block and many sit in shared hosting, so this is a
+// look back, not a list to deny. It reads Wiz's own file, so it follows their corrections; a
+// workspace that cannot reach GitHub needs the list loaded as a watchlist instead. The values
+// are published with [.] in them and are restored here.
+let published = externaldata(Type: string, Value: string, Description: string)
+    [@"https://raw.githubusercontent.com/wiz-sec-public/wiz-research-iocs/main/reports/agentic_attacks_in_the_wild_iocs.csv"]
+    with (format="csv", ignoreFirstRecord=true)
+    | where Type == "IP Address"
+    | project Address = replace_string(Value, "[.]", "."), Description;
+union
+  (SigninLogs | where TimeGenerated > ago(90d) | project TimeGenerated, Address = IPAddress, Log = "user sign-in", Who = UserPrincipalName, Result = ResultType),
+  (AADServicePrincipalSignInLogs | where TimeGenerated > ago(90d) | project TimeGenerated, Address = IPAddress, Log = "service principal sign-in", Who = ServicePrincipalName, Result = ResultType),
+  (AWSCloudTrail | where TimeGenerated > ago(90d) | project TimeGenerated, Address = SourceIpAddress, Log = "aws", Who = UserIdentityArn, Result = ErrorCode),
+  (AzureActivity | where TimeGenerated > ago(90d) | project TimeGenerated, Address = CallerIpAddress, Log = "azure", Who = Caller, Result = ActivityStatusValue)
+| join kind=inner published on Address
+| summarize Events = count(), Succeeded = countif(Result in ("0", "", "Success", "Succeeded")), Identities = make_set(Who, 20),
+            FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Address, Log, Description
+| order by Succeeded desc, LastSeen desc

@@ -86,6 +86,7 @@ siem_fun/
 |   |   |-- hunting.kql
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
+|   |   |-- splunk-hunting.conf
 |   |   |-- splunk-morpheus-native.conf
 |   |   |-- splunk-savedsearches.conf
 |   |   `-- waf/
