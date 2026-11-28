@@ -31,7 +31,6 @@
               "*spa-api-recon*",
               "*security-testing; authorized*",
               "*recon-audit*",
-              "*reconprobe/*",
               "*hexstrike-*",
               "*cyberstrikeai*",
               "*pentagi/*",
@@ -74,7 +73,7 @@
       "action": "alert",
       "rule": {
         "name": "W-AGT-003 agent-adjacent user-agent",
-        "description": "Tools with legitimate users (Norma agent library, ffuf, PentAGI installer). Context only, never deny. Mirrors ua-alert.txt.",
+        "description": "Tools with legitimate users (Norma agent library, ffuf, PentAGI installer), the low-confidence ReconProbe client, and user-agents that declare themselves authorized, read-only or pentest (Bitrise and Barracuda incidents, Wiz's Black October list), which a real tester sends too. Context only, never deny. Mirrors ua-alert.txt, plus norma/ at the start of the header at any version (Microsoft 2026-11-25 lists norma/*).",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -88,8 +87,16 @@
             "name": "User-Agent",
             "value": [
               "*norma/0.*",
+              "norma/*",
               "*fuzz faster u fool*",
-              "*pentagi-installer*"
+              "*pentagi-installer*",
+              "*reconprobe/*",
+              "*pentest-probe*",
+              "*authorized-pentest*",
+              "*authorized-security-research*",
+              "*research-readonly*",
+              "*research; read-only*",
+              "*read-only-audit*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -101,7 +108,7 @@
       "action": "deny",
       "rule": {
         "name": "W-AGT-004a agent canary path",
-        "description": "Baseline-404 probes recorded by Wiz and Unit 42.",
+        "description": "Baseline-404 probes recorded by Wiz, Unit 42 and Datadog, and the _i<counter>_probe_missing SSRF canary path of the Bitrise incident (Wiz's Black October list; ? is one character, so the counter is approximated as two to seven characters).",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -114,8 +121,15 @@
             "positiveMatch": true,
             "value": [
               "/zzz-nonexistent*",
+              "/zzz_nonexistent*",
               "/zzzrandom*",
-              "*artex-probe-*"
+              "*artex-probe-*",
+              "*_i??_probe_missing*",
+              "*_i???_probe_missing*",
+              "*_i????_probe_missing*",
+              "*_i?????_probe_missing*",
+              "*_i??????_probe_missing*",
+              "*_i???????_probe_missing*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -127,7 +141,7 @@
       "action": "deny",
       "rule": {
         "name": "W-AGT-004b agent canary in query string",
-        "description": "Canary usernames, placeholder emails, junk OAuth state and metadata-service SSRF in the query string.",
+        "description": "Canary usernames, placeholder emails, junk OAuth state, metadata-service SSRF and the _i<counter>_probe_missing SSRF canary path (sent as a URL inside a parameter) in the query string.",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -147,7 +161,13 @@
               "*@example.invalid*",
               "notvalidb64",
               "*169.254.169.254*",
-              "*metadata.google.internal*"
+              "*metadata.google.internal*",
+              "*_i??_probe_missing*",
+              "*_i???_probe_missing*",
+              "*_i????_probe_missing*",
+              "*_i?????_probe_missing*",
+              "*_i??????_probe_missing*",
+              "*_i???????_probe_missing*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -159,7 +179,7 @@
       "action": "deny",
       "rule": {
         "name": "W-AGT-004c agent canary in POST body",
-        "description": "Same strings in form arguments: login, sign-up and account-recovery endpoints.",
+        "description": "Same strings in form arguments: login, sign-up and account-recovery endpoints, and the _i<counter>_probe_missing SSRF canary path sent as a URL inside a form field.",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -179,7 +199,13 @@
               "*@example.invalid*",
               "*169.254.169.254*",
               "*metadata.google.internal*",
-              "*artexprobe*"
+              "*artexprobe*",
+              "*_i??_probe_missing*",
+              "*_i???_probe_missing*",
+              "*_i????_probe_missing*",
+              "*_i?????_probe_missing*",
+              "*_i??????_probe_missing*",
+              "*_i???????_probe_missing*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -251,7 +277,7 @@
       "action": "deny",
       "rule": {
         "name": "W-AGT-007 agent probe-account identity",
-        "description": "Okta: i<intent>probe<10-digit unix time>@. Wildcard approximation (? is one character); current timestamps start with 1.",
+        "description": "Okta: i<intent>probe<10-digit unix time>@, with the intent counter two to seven digits (Wiz 2026-11-25 saw i49 to i808807). Wildcard approximation (? is one character); current timestamps start with 1.",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -268,7 +294,9 @@
               "i??probe1?????????@*",
               "i???probe1?????????@*",
               "i????probe1?????????@*",
-              "i?????probe1?????????@*"
+              "i?????probe1?????????@*",
+              "i??????probe1?????????@*",
+              "i???????probe1?????????@*"
             ],
             "valueCase": false,
             "valueWildcard": true
@@ -280,7 +308,7 @@
       "action": "alert",
       "rule": {
         "name": "W-AGT-008 agent task-artifact script name",
-        "description": "S-RM: i<number>.<script ext>. Wildcard approximation is looser than the regex elsewhere, so alert first. The second shape (GTIG: cl1217.jsp, f1219a.jsp) needs a regex and is not expressible here.",
+        "description": "S-RM: i<number>.<script ext>, three to seven characters after the i, the first of them a digit (Wiz 2026-11-25 saw the counter from i49 to i808807; two-digit names are left out of this rule as likelier to be real files). ? matches any character, so only the first character after the i is held to a digit: i4abc.php would still match, which is looser than the regex elsewhere, so alert first. Known false positive, accepted for an alert-only rule: i18n.php and I18n.php (the stem i18n fits i1??), a common internationalisation file name; the ModSecurity and F5 versions need digits only and do not match it. Before 2026-11-28 the values were i??? to i???????, which also matched index.php, info.php, install.php and include.php. The second shape (GTIG: cl1217.jsp, f1219a.jsp) needs a regex and is not expressible here.",
         "operation": "AND",
         "structured": true,
         "version": 1,
@@ -292,9 +320,56 @@
             "type": "filenameMatch",
             "positiveMatch": true,
             "value": [
-              "i???",
-              "i????",
-              "i?????"
+              "i0??",
+              "i1??",
+              "i2??",
+              "i3??",
+              "i4??",
+              "i5??",
+              "i6??",
+              "i7??",
+              "i8??",
+              "i9??",
+              "i0???",
+              "i1???",
+              "i2???",
+              "i3???",
+              "i4???",
+              "i5???",
+              "i6???",
+              "i7???",
+              "i8???",
+              "i9???",
+              "i0????",
+              "i1????",
+              "i2????",
+              "i3????",
+              "i4????",
+              "i5????",
+              "i6????",
+              "i7????",
+              "i8????",
+              "i9????",
+              "i0?????",
+              "i1?????",
+              "i2?????",
+              "i3?????",
+              "i4?????",
+              "i5?????",
+              "i6?????",
+              "i7?????",
+              "i8?????",
+              "i9?????",
+              "i0??????",
+              "i1??????",
+              "i2??????",
+              "i3??????",
+              "i4??????",
+              "i5??????",
+              "i6??????",
+              "i7??????",
+              "i8??????",
+              "i9??????"
             ],
             "valueCase": false,
             "valueWildcard": true,

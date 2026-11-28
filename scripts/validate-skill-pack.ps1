@@ -510,132 +510,181 @@ function Test-SourcetypeProvenance {
 # is only treated as a table when it stands where a table must stand.
 $script:kqlKeywords = @(
     "let", "union", "search", "find", "print", "range", "datatable",
-    "externaldata", "materialize", "where", "set", "declare", "evaluate"
+    "externaldata", "materialize", "where", "set", "declare", "evaluate",
+    # Literals a let can be bound to: 'let strict = true;' names no table.
+    "true", "false", "null"
 )
-# A leading identifier: the source of a query, unless it is an operator.
+# The reader below is the grader's kql_tables() in PowerShell, statement by
+# statement (second retrospective, 2026-11-28). The line-oriented one it
+# replaces read no table from a union whose operands start on the line after
+# the keyword, which is how nine of the pack's own hunts are written, and took
+# the body of a multi-line let for the query's source, so the real source was
+# never read. It also read 'of' as a table from '// union of both tables' and
+# a column passed to a function inside a union operand as another. The two
+# tools are held to each other by scripts/tests/shared-rule-cases.json.
+#
+# What a tabular statement opens with: its source, unless that is an operator.
 # The (?!\() matters: a query may lead with a FUNCTION rather than a table.
 # Microsoft ships _SentinelHealth() and _SentinelAudit() and tells you to prefer
 # them over the underlying tables, and without this guard the recommended form
-# is reported as an uncatalogued table. The let-value pattern below already
-# excluded function calls for the same reason.
-$script:kqlLeadingRefRegex = '^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()'
-# 'union [withsource=X] [kind=inner] Table' and 'join [kind=leftouter] (Table'.
-# The trailing \b(?![ \t]*=) is load-bearing, and BOTH parts are needed.
-# Without the lookahead, 'union withsource=Table_ *' backtracks: the option group
-# matches zero times and 'withsource' is captured as the table name. Without the
-# \b, it backtracks one character further and captures 'withsourc', which the
-# lookahead then happily accepts because the next character is 'e', not '='.
-# Together they force the option group to consume the named option, after which
-# '*' is correctly seen as no table at all.
-$script:kqlUnionRefRegex   = '\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)'
-# union takes a comma-separated list, so the operands after the first need their
-# own pass: 'union SigninLogs, InventedTable' hid everything past the comma.
-$script:kqlUnionMoreRegex  = ',[ \t\r\n]*\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])'
-# 'union (A | take 5), (B | take 5)': KQL allows a parenthesized subquery as an
-# operand, and each one names a table. The bare-identifier list pattern cannot
-# reach them, because a subquery contains a pipe.
-$script:kqlUnionParenRegex = '\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)'
+# is reported as an uncatalogued table.
+$script:kqlLeadRegex      = [regex]'\A[ \t\r\n(]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()'
+# 'let recent = SigninLogs;' binds a table, and so does a let whose value starts
+# on the next line or inside a parenthesis. The NAME the let binds is a local,
+# not a table, and a later 'recent | take 5' must not be reported.
+$script:kqlLetHeadRegex   = [regex]'\Alet[ \t\r\n]+([A-Za-z_][A-Za-z0-9_]*)[ \t\r\n]*='
+# What a let's value opens with, read from the end of the let head (\G). A
+# function call ('ago('), a path ('InitiatedBy.user'), a typed parameter
+# ('T:'), an index and a string prefix are not tables.
+$script:kqlLetSourceRegex = [regex]'\G[ \t\r\n(]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[(.:\["''])'
+# The head of a union statement: the keyword and its options. An option value
+# never contains a space, a comma, a parenthesis or a pipe, so
+# 'union withsource=Table_ *' ends at the star and names no operand -- the
+# trap that once captured 'withsource', then 'withsourc', as the table. An
+# option NAME may carry a dot ('hint.concurrency', 'hint.spread'); read as \w+
+# it stopped at the dot, reported 'hint' as a table and never read the first
+# real operand.
+$script:kqlUnionHeadRegex = [regex]'\bunion\b(?:[ \t\r\n]+[A-Za-z_][\w.]*[ \t]*=[ \t]*[^\s,()|;]+)*'
+# One union operand, bare or parenthesized, wherever the line breaks fall, read
+# from the position it is matched at (\G). A name followed by '(' is a function
+# call and one followed by '=' is an option, so neither is an operand.
+$script:kqlOperandRegex   = [regex]'\G[ \t\r\n]*(\()?[ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])'
 # (?s) so 'join (' followed by the table on the NEXT line is still seen. The
 # line-at-a-time version missed every multiline join.
-$script:kqlJoinRefRegex    = '(?s)\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)'
-# 'let recent = SigninLogs;' binds a table. The negative lookahead for '(' keeps
-# function calls out ('let cutoff = ago(1d);' must not read as a table 'ago').
-$script:kqlLetValueRegex   = '\blet[ \t]+\w+[ \t]*=[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()'
-# The names those let statements bind. They are locals, not tables, and a later
-# 'recent | take 5' must not be reported as an uncatalogued table.
-$script:kqlLetNameRegex    = '\blet[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*='
+$script:kqlJoinRefRegex   = [regex]'(?s)\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)'
 $script:knownKqlTables = New-Object 'System.Collections.Generic.HashSet[string]'
 $script:kqlRegistryFile = "splunk-sentinel-query-builder/references/sentinel-table-catalog.md"
 $script:requiredChecksFile = "scripts/required-checks.txt"
 
-# The union statement starting at $Text, operands and all. It ends at the first
-# '|' or newline whose parentheses are BALANCED. Depth is what makes both halves
-# work: 'union (A | take 5), (B | take 5)' keeps its inner pipes because they
-# sit at depth 1, while 'union A, B | summarize by X, Y' still ends at the pipe
-# so the summarize columns are not read as operands. A trailing comma carries
-# the operand list onto the next line.
-function Get-KqlUnionStatement {
-    param([string]$Text)
+# The statements of a KQL block, with comments dropped and every string literal
+# emptied. Statements end at a semicolon. Reading statement by statement is what
+# finds the source of a query that follows a multi-line let. Comments and string
+# contents go because prose is not a query.
+function Get-KqlStatements {
+    param([string]$Body)
 
-    $depth = 0
-    for ($i = 0; $i -lt $Text.Length; $i++) {
-        $ch = $Text[$i]
-        if ($ch -eq '(') {
-            $depth++
-        } elseif ($ch -eq ')') {
-            $depth = [Math]::Max(0, $depth - 1)
-        } elseif ($depth -eq 0 -and ($ch -eq '|' -or $ch -eq "`n")) {
-            if ($ch -eq "`n" -and $Text.Substring(0, $i).TrimEnd().EndsWith(",")) {
-                continue
+    $out = New-Object 'System.Collections.Generic.List[string]'
+    $cur = New-Object System.Text.StringBuilder
+    $i = 0
+    $n = $Body.Length
+    while ($i -lt $n) {
+        $ch = $Body[$i]
+        if ($ch -ceq [char]'"' -or $ch -ceq [char]"'") {
+            $verbatim = ($i -gt 0 -and $Body[$i - 1] -ceq [char]'@')
+            $j = $i + 1
+            while ($j -lt $n -and $Body[$j] -cne $ch -and $Body[$j] -cne [char]10) {
+                if ($Body[$j] -ceq [char]'\' -and -not $verbatim) {
+                    $j += 2
+                } else {
+                    $j += 1
+                }
             }
-            return $Text.Substring(0, $i)
+            $null = $cur.Append('""')
+            $i = $j + 1
+        } elseif ($ch -ceq [char]'/' -and $i + 1 -lt $n -and $Body[$i + 1] -ceq [char]'/') {
+            $j = $Body.IndexOf([char]10, $i)
+            if ($j -lt 0) {
+                $i = $n
+            } else {
+                $i = $j
+            }
+        } elseif ($ch -ceq [char]';') {
+            $out.Add($cur.ToString())
+            $null = $cur.Clear()
+            $i++
+        } else {
+            $null = $cur.Append($ch)
+            $i++
         }
     }
-    return $Text
+    $out.Add($cur.ToString())
+    $kept = @($out | Where-Object { $_.Trim().Length -gt 0 })
+    # An empty array unrolls to nothing on return, so the caller would see $null.
+    return , $kept
 }
 
-# Table references in a KQL block: the leading source, plus union and join
-# operands. Returns names only; the caller decides what is registered.
+# The names in operand position of the union statement starting at $Text. An
+# operand is what follows the head or a comma, at parenthesis depth 0. Depth is
+# what makes every half work: 'union (A | take 5), (B | take 5)' keeps its inner
+# pipes because they sit at depth 1, a function argument inside an operand
+# ('isnotempty(IPAddress)') is not at depth 0 and is not read, and
+# 'union A, B | summarize by X, Y' ends at the pipe so the summarize columns are
+# not operands.
+function Get-KqlUnionOperands {
+    param([string]$Text)
+
+    $names = New-Object 'System.Collections.Generic.List[string]'
+    $head = $script:kqlUnionHeadRegex.Match($Text)
+    $i = $head.Index + $head.Length
+    $depth = 0
+    $want = $true
+    while ($i -lt $Text.Length) {
+        if ($want -and $depth -eq 0) {
+            $want = $false
+            $m = $script:kqlOperandRegex.Match($Text, $i)
+            if ($m.Success) {
+                $names.Add($m.Groups[2].Value)
+                if ($m.Groups[1].Success) {
+                    $depth = 1
+                } else {
+                    $depth = 0
+                }
+                $i = $m.Index + $m.Length
+                continue
+            }
+        }
+        $ch = $Text[$i]
+        if ($ch -ceq [char]'(') {
+            $depth++
+        } elseif ($ch -ceq [char]')') {
+            $depth = [Math]::Max(0, $depth - 1)
+        } elseif ($depth -eq 0 -and $ch -ceq [char]',') {
+            $want = $true
+        } elseif ($depth -eq 0 -and $ch -ceq [char]'|') {
+            break
+        }
+        $i++
+    }
+    return , $names.ToArray()
+}
+
+# Table references in a KQL block: the source of each statement, the value of
+# each let, and union and join operands. Returns names only; the caller decides
+# what is registered.
 function Get-KqlTableReferences {
     param([string]$Body)
 
     $refs = New-Object 'System.Collections.Generic.HashSet[string]'
-    $lines = @(($Body -split '\r?\n') | Where-Object { $_.Trim().Length -gt 0 -and -not $_.Trim().StartsWith("//") })
-
-    # Names bound by 'let' are locals, not tables. Collected first so a later
-    # reference to one is not reported as an uncatalogued table.
     $locals = New-Object 'System.Collections.Generic.HashSet[string]'
-    foreach ($m in [regex]::Matches($Body, $script:kqlLetNameRegex)) {
-        $null = $locals.Add($m.Groups[1].Value)
-    }
-
-    # The query's source is the first line that is not part of a 'let'
-    # preamble. Reading line 0 unconditionally meant that
-    # 'let cutoff = ago(1d);' followed by 'GhostTable | where ...' put the real
-    # table on line 2, where nothing read it: 'let' is a keyword so the lead was
-    # discarded, and the let-value pattern skips a function call, so an invented
-    # table behind a let preamble was reported by nothing.
-    $leadLine = @($lines | Where-Object { $_.Trim() -notmatch '^let\b' })
-    if ($leadLine.Count -gt 0) {
-        $lead = [regex]::Match($leadLine[0], $script:kqlLeadingRefRegex)
-        if ($lead.Success -and $script:kqlKeywords -cnotcontains $lead.Groups[1].Value) {
-            $null = $refs.Add($lead.Groups[1].Value)
+    foreach ($raw in (Get-KqlStatements $Body)) {
+        $statement = $raw.Trim()
+        $let = $script:kqlLetHeadRegex.Match($statement)
+        if ($let.Success) {
+            $null = $locals.Add($let.Groups[1].Value)
+            $source = $script:kqlLetSourceRegex.Match($statement, $let.Index + $let.Length)
+        } else {
+            $source = $script:kqlLeadRegex.Match($statement)
         }
-    }
-    # Whole-body, not line-at-a-time: a join operand may sit on the line after
-    # its '(', and a union list may wrap.
-    foreach ($pattern in @($script:kqlUnionRefRegex, $script:kqlJoinRefRegex, $script:kqlLetValueRegex)) {
-        foreach ($m in [regex]::Matches($Body, $pattern)) {
-            $name = $m.Groups[1].Value
-            # 'union withsource=Table_ *' has no named operand, and an
-            # operator after union (union kind=outer ...) is not a table.
-            if ($script:kqlKeywords -cnotcontains $name) {
+        if ($source.Success) {
+            $null = $refs.Add($source.Groups[1].Value)
+        }
+        foreach ($u in $script:kqlUnionHeadRegex.Matches($statement)) {
+            foreach ($name in (Get-KqlUnionOperands $statement.Substring($u.Index))) {
                 $null = $refs.Add($name)
             }
         }
-    }
-    # Trailing operands of a union list, taken only from the union statement
-    # itself so that commas elsewhere (project, summarize by) are not mistaken
-    # for table references.
-    foreach ($u in [regex]::Matches($Body, $script:kqlUnionRefRegex)) {
-        # From the union KEYWORD, not the end of the match: the match may have
-        # consumed an opening parenthesis, which would start the depth count
-        # inside it and end the statement at the first newline.
-        $statement = Get-KqlUnionStatement $Body.Substring($u.Index)
-        foreach ($pattern in @($script:kqlUnionMoreRegex, $script:kqlUnionParenRegex)) {
-            foreach ($m in [regex]::Matches($statement, $pattern)) {
-                $name = $m.Groups[1].Value
-                if ($script:kqlKeywords -cnotcontains $name) {
-                    $null = $refs.Add($name)
-                }
-            }
+        foreach ($m in $script:kqlJoinRefRegex.Matches($statement)) {
+            $null = $refs.Add($m.Groups[1].Value)
         }
     }
     foreach ($local in $locals) {
         $null = $refs.Remove($local)
     }
+    # 'union withsource=Table_ *' has no named operand, and an operator in
+    # leading position (search, print, let) is not a table.
+    $kept = @($refs | Where-Object { $script:kqlKeywords -cnotcontains $_ })
     # An empty array unrolls to nothing on return, so the caller would see $null.
-    return , @($refs)
+    return , $kept
 }
 
 # The other half of "never invent Splunk or Sentinel identifiers". The
@@ -771,8 +820,16 @@ function Get-FencedBlocks {
 
     $blocks = New-Object System.Collections.Generic.List[object]
     foreach ($m in [regex]::Matches($Text, $script:fencedWithLangRegex)) {
+        # The label is read as the grader's fenced_blocks() reads it: lower-cased,
+        # and an alias as the language it names. Microsoft Learn fences KQL as
+        # 'kusto', and a '-ceq "kql"' test on the raw label skipped every
+        # kusto and KQL block, so an invented table in one was checked by nothing.
+        $lang = $m.Groups['lang'].Value.Trim().ToLowerInvariant()
+        if ($lang -ceq 'kusto') {
+            $lang = 'kql'
+        }
         $blocks.Add([pscustomobject]@{
-            Language = $m.Groups['lang'].Value.Trim()
+            Language = $lang
             Body     = $m.Groups['body'].Value
         })
     }
@@ -1013,7 +1070,24 @@ $requiredFiles = @(
     "splunk-sentinel-query-builder/references/agentic-ai-attacks.md",
     "examples/agentic-ai-attacks/iocs.csv",
     "examples/agentic-ai-attacks/attack-navigator-layer.json",
+    # The query assets and the lookups they read. The four query files fail the
+    # Python suite if deleted; the Morpheus file and every lookup did not, and
+    # nothing links to a lookup. lookups/README.md says inputlookup errors on a
+    # missing seed file, so the three header-only seeds are listed too.
+    "examples/agentic-ai-attacks/hunting.kql",
+    "examples/agentic-ai-attacks/sentinel-rules.yaml",
+    "examples/agentic-ai-attacks/splunk-savedsearches.conf",
+    "examples/agentic-ai-attacks/splunk-hunting.conf",
+    "examples/agentic-ai-attacks/splunk-morpheus-native.conf",
+    "examples/agentic-ai-attacks/lookups/agt_iocs.csv",
+    "examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv",
+    "examples/agentic-ai-attacks/lookups/agt_host_history.csv",
+    "examples/agentic-ai-attacks/lookups/agt_host_llm_seen.csv",
+    "examples/agentic-ai-attacks/lookups/agt_web_proc_pairs.csv",
+    "examples/agentic-ai-attacks/lookups/llm_api_domains.csv",
     "scripts/tests/test_agentic_ai_attacks.py",
+    # The ATT&CK 20.1 technique list the tests check every cited ID against.
+    "scripts/tests/attack-enterprise-20.1.tsv",
     # The only tests that RUN the WAF rule pack (in Apache, nginx and a stand-in
     # for the iRule runtime). Everything else about that pack compares documents
     # with each other, which is how a rule file that did not load shipped.

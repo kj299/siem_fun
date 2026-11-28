@@ -82,13 +82,17 @@ when HTTP_REQUEST {
     if { [HTTP::header exists "isCliRequest"] } {
         call agt_act "W-AGT-013" "iscli-header" 0
     }
-    # W-AGT-003: agent-adjacent tooling with legitimate users. Never enforced here.
-    if { $agt_ua ne "" && [class match -- $agt_ua contains agt_ua_alert] } {
+    # W-AGT-003: agent-adjacent tooling with legitimate users. Never enforced here. Norma is
+    # also matched at any version at the start of the header: Microsoft (2026-11-25) lists it
+    # as norma/*, and agt_ua_alert carries only the norma/0. that was seen.
+    if { $agt_ua ne "" && ([class match -- $agt_ua contains agt_ua_alert] || $agt_ua starts_with "norma/") } {
         call agt_act "W-AGT-003" $agt_ua 0
     }
 
     # W-AGT-004: canary probes, OAuth junk state, metadata-service SSRF, in path or query.
-    if { [class match -- $agt_uri contains agt_canary_strings] } {
+    # _i<counter>_probe_missing (an SSRF canary path in the Bitrise incident, Wiz's Black
+    # October list) needs a pattern, so it is matched here rather than in the data group.
+    if { [class match -- $agt_uri contains agt_canary_strings] || [regexp {_i[0-9]{2,7}_probe_missing} $agt_uri] } {
         if { [call agt_act "W-AGT-004" $agt_uri 1] } { return }
     }
 
@@ -102,14 +106,18 @@ when HTTP_REQUEST {
         if { [call agt_act "W-AGT-006" $agt_uri 1] } { return }
     }
 
-    # W-AGT-007: probe-account naming, i<intent>probe<unix-time>@ (Okta).
-    if { [regexp {i[0-9]{2,5}probe[0-9]{10}@} $agt_uri] } {
+    # W-AGT-007: probe-account naming, i<intent>probe<unix-time>@ (Okta). The intent counter
+    # is the one Wiz (2026-11-25) saw from i49 to i808807, so two to seven digits.
+    if { [regexp {i[0-9]{2,7}probe[0-9]{10}@} $agt_uri] } {
         if { [call agt_act "W-AGT-007" $agt_uri 1] } { return }
     }
 
     # W-AGT-008: request for a script named like an agent task artifact, i<number>.<ext>.
     # The name may be followed by path info or a ;parameter: both still run the script.
-    if { [regexp {/i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)($|[/;])} $agt_path] } {
+    # Three to seven digits: Wiz (2026-11-25) saw the counter from i49 to i808807, but a
+    # two-digit name such as i18.php is likelier in a real application than in a deny rule's
+    # target. That floor is this pack's choice; the hunts match two digits up.
+    if { [regexp {/i[0-9]{3,7}\.(asp|aspx|ashx|jsp|jspx|php)($|[/;])} $agt_path] } {
         if { [call agt_act "W-AGT-008" $agt_path 1] } { return }
     }
 
@@ -161,7 +169,10 @@ when HTTP_REQUEST {
     # where whole bodies matter.
     set agt_len 0
     set agt_cl [string trim [HTTP::header value "Content-Length"]]
-    if { [string tolower [HTTP::header value "Transfer-Encoding"]] contains "chunked" } {
+    # Every Transfer-Encoding header, for the reason given at agt_ua: with only the last one
+    # read, "chunked" followed by a second Transfer-Encoding header looked unchunked.
+    set agt_te [string tolower [join [HTTP::header values "Transfer-Encoding"] ","]]
+    if { $agt_te contains "chunked" } {
         set agt_len $static::agt_max_body
     } elseif { [regexp {^[0-9]{1,15}$} $agt_cl] } {
         # scan reads decimal. Used as a number directly, "029" is an invalid octal and "035"
@@ -183,7 +194,7 @@ when HTTP_REQUEST_DATA {
     # Media types are case-insensitive and the "contains" operator is not.
     set agt_ctype [string tolower [join [HTTP::header values "Content-Type"] " "]]
 
-    if { [class match -- $agt_body contains agt_canary_strings] } {
+    if { [class match -- $agt_body contains agt_canary_strings] || [regexp {_i[0-9]{2,7}_probe_missing} $agt_body] } {
         if { [call agt_act "W-AGT-004" "body-canary" 1] } { return }
     }
     if { [class match -- $agt_body_raw contains agt_jwt_none] } {
@@ -192,7 +203,7 @@ when HTTP_REQUEST_DATA {
     if { [regexp {artex'\s*(/\*|--|#|union\s|and\s|or\s)} $agt_body] } {
         if { [call agt_act "W-AGT-006" "body-sqli-tag" 1] } { return }
     }
-    if { [regexp {i[0-9]{2,5}probe[0-9]{10}@} $agt_body] } {
+    if { [regexp {i[0-9]{2,7}probe[0-9]{10}@} $agt_body] } {
         if { [call agt_act "W-AGT-007" "body-probe-account" 1] } { return }
     }
     # W-AGT-014 in a form body: a parameter value that climbs directories. Form bodies only;
@@ -201,7 +212,7 @@ when HTTP_REQUEST_DATA {
         if { [call agt_act "W-AGT-014" "body-traversal" 1] } { return }
     }
     # W-AGT-008 in an upload: multipart filename shaped like an agent task artifact.
-    if { [regexp {filename="?i[0-9]{3,5}\.(asp|aspx|ashx|jsp|jspx|php)} $agt_body] } {
+    if { [regexp {filename="?i[0-9]{3,7}\.(asp|aspx|ashx|jsp|jspx|php)} $agt_body] } {
         if { [call agt_act "W-AGT-008" "upload-task-artifact" 1] } { return }
     }
     # W-AGT-012: upload filename that climbs out of the upload directory, or names a Python

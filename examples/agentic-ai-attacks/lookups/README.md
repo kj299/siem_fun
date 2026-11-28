@@ -7,7 +7,7 @@
 | agt_host_roles.csv | you / CMDB export: `server` or other | R-B-AGT-004, R-D-AGT-016 |
 | agt_asset_ip.csv | you / CMDB: IP to hostname, so network-keyed and host-keyed rules join in the chain | R-D-AGT-001, 002, 004, 011, 015, 016, R-C-AGT-001 |
 | agt_sp_change_actors.csv | you: automation identities allowed to change app credentials / AWS keys | R-B-AGT-008, R-D-AGT-009 |
-| agt_iocs.csv | shipped; generated from iocs.csv, the same indicators as sentinel_watchlist.csv under Splunk column names (`ioc,ioc_type,confidence,context,source`) | R-D-AGT-012 |
+| agt_iocs.csv | shipped; the rows of iocs.csv that R-D-AGT-012 may alert on, under Splunk column names (`ioc,ioc_type,confidence,context,source`): the five types the rule has a leg for (domain, ipv4, user_agent, sha256, md5), less any row whose action says hunt, monitor or retro-hunt only, baseline, signup deny-list or legitimate service. Application IDs are not here; hunt H-AGT-016 watches them. The same rows as sentinel_watchlist.csv; a test holds both to iocs.csv | R-D-AGT-012 |
 | sentinel_watchlist.csv | shipped; generated from iocs.csv (columns `Ioc,IocType,Confidence,Context,Source`). Upload as a Sentinel watchlist with alias `ArtexCairnIocs`, search key `Ioc`. | R-D-AGT-012 (Sentinel) |
 | agt_host_history.csv, agt_host_llm_seen.csv, agt_web_proc_pairs.csv | **header-only seeds, shipped**: the baselines read them back with `inputlookup`, which errors on a missing file, so upload these before the first run; then the `AGT baseline - *` searches accumulate them nightly | detections |
 | agt_http_client_peak.csv, agt_identity_op_envelope.csv | generated fresh by their baseline searches; run the baselines for 7+ days before enabling the behavioral detections (warm-up) | detections |

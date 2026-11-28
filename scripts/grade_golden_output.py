@@ -34,7 +34,10 @@ Spec keys, all optional:
                    Sysmon sourcetype is the documented case)
   indexes          every index= value in a code block must be one of these
   sourcetypes      every sourcetype= value in a code block must be one of these
-  tables           every leading KQL table in a kql block must be one of these
+  tables           every table a kql block references must be one of these
+  tables_required  every one of these must be referenced by a kql block under
+                   the Query or Discovery query label, wherever in the block it
+                   sits: after a comment, after a let, indented inside one
   code_block       whether a fenced block is required at all (default true)
   never_block      names the answer must not recommend blocking, for a request
                    that asks which services to blocklist when the reference
@@ -94,7 +97,6 @@ _INDEX_VALUE_RE = re.compile(r'(?i)\bindex[ \t]*=[ \t]*"?([^\s"|),`\]]+)"?')
 _INDEX_IN_RE = re.compile(r"(?i)\bindex[ \t]+IN[ \t]*\(([^)]*)\)")
 _SOURCETYPE_VALUE_RE = re.compile(r'(?i)\bsourcetype[ \t]*=[ \t]*"?([^\s"|),`\]]+)"?')
 _SOURCETYPE_IN_RE = re.compile(r"(?i)\bsourcetype[ \t]+IN[ \t]*\(([^)]*)\)")
-_KQL_LEADING_TABLE_RE = re.compile(r"(?m)^[ \t]*([A-Z][A-Za-z0-9_]*)[ \t]*(?:\r?$|\|)")
 # Unquoted boolean in an eval-semantics where: the value is a field reference
 # and the filter silently matches nothing.
 _WHERE_BOOLEAN_RE = re.compile(r"(?i)\|[ \t]*where\b[^|\r\n]*=[ \t]*(true|false)\b")
@@ -234,8 +236,8 @@ def spl_time_bound(body: str) -> bool:
 SPEC_KEYS = frozenset({
     "sections", "forbid_sections", "contains", "not_contains", "matches",
     "not_matches", "query_matches", "query_not_matches", "query_lang",
-    "assumed_if_used", "indexes", "sourcetypes", "tables", "code_block",
-    "never_block",
+    "assumed_if_used", "indexes", "sourcetypes", "tables", "tables_required",
+    "code_block", "never_block",
 })
 
 # Table names the catalogue itself lists as placeholders, so a discovery answer
@@ -250,30 +252,40 @@ PLACEHOLDER_TABLES = frozenset({"TableName", "YOUR_TABLE"})
 # parts are needed: without the lookahead `union withsource=Table_ *`
 # backtracks and captures `withsource`; without the \b it captures `withsourc`,
 # which the lookahead then accepts because the next character is `e`.
-_KQL_UNION_REF_RE = re.compile(
-    r"\bunion\b(?:[ \t]+\w+[ \t]*=[ \t]*\S+)*[ \t]+\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*=)"
-)
-# `union (A | take 5), (B | take 5)`: KQL allows a parenthesized subquery as an
-# operand, and each one names a table. The bare-identifier list pattern below
-# cannot reach them, because its scan stops at the first `|` and these have one
-# inside the parentheses. Applied to the union statement only, so a `(` in a
-# `project` or `summarize` elsewhere is not read as an operand.
-_KQL_UNION_PAREN_RE = re.compile(r"\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)")
-# union takes a comma-separated list, so operands after the first need their
-# own pass.
-_KQL_UNION_MORE_RE = re.compile(r",[ \t\r\n]*\(?[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])")
+# The head of a union statement: the keyword and its options. An option value
+# never contains a space, a comma, a parenthesis or a pipe, so
+# `union withsource=Table_ *` ends at the star and names no operand. An option
+# NAME may carry a dot: `hint.concurrency` and `hint.spread` are documented
+# union options, and a name read as \w+ stopped at the dot and reported `hint`
+# as a table while the first real operand was never read.
+_KQL_UNION_HEAD_RE = re.compile(r"\bunion\b(?:[ \t\r\n]+[A-Za-z_][\w.]*[ \t]*=[ \t]*[^\s,()|;]+)*")
+# One union operand, bare or parenthesized, wherever the line breaks fall. The
+# pack's own hunts write `union` alone on a line with the operands below it,
+# and a pattern that wanted the first operand on the keyword's line read no
+# table at all from that layout. A name followed by `(` is a function call and
+# one followed by `=` is an option, so neither is an operand.
+_KQL_OPERAND_RE = re.compile(r"[ \t\r\n]*(\()?[ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[=(])")
 # re.DOTALL so `join (` followed by the table on the NEXT line is still seen.
 _KQL_JOIN_REF_RE = re.compile(r"\bjoin\b[^(\r\n]*\([ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)
-# `let recent = SigninLogs;` binds a table. The negative lookahead for `(`
-# keeps function calls out: `let cutoff = ago(1d);` must not read as `ago`.
-_KQL_LET_VALUE_RE = re.compile(r"\blet[ \t]+\w+[ \t]*=[ \t]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()")
-# The names those let statements bind. They are locals, not tables, so a later
-# `recent | take 5` must not be read as an uncatalogued table.
-_KQL_LET_NAME_RE = re.compile(r"\blet[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=")
+# `let recent = SigninLogs;` binds a table, and so does a let whose value
+# starts on the next line or inside a parenthesis, which is how a model writes
+# any let longer than one operator. The name the let binds is a local.
+_KQL_LET_HEAD_RE = re.compile(r"let[ \t\r\n]+([A-Za-z_][A-Za-z0-9_]*)[ \t\r\n]*=")
+# What a let's value opens with. A function call (`ago(`), a path
+# (`InitiatedBy.user`), a typed parameter (`T:`), an index (`ids[0]`) and a
+# string prefix (`h"..."`) are not tables.
+_KQL_LET_SOURCE_RE = re.compile(r"""[ \t\r\n(]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*[(.:\["'])""")
+# What a tabular statement opens with. Any case, as the validator reads it: a
+# table written in the wrong case (`auditlogs`) is exactly the claim the
+# allowlist exists to catch, and reading capitals only let it through. A
+# lower-case local (`hits | take 5`) is removed below with the other locals.
+_KQL_LEAD_RE = re.compile(r"[ \t\r\n(]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ \t]*\()")
 # Operators that can stand where a table would, so they are never table names.
 KQL_KEYWORDS = frozenset({
     "let", "union", "search", "find", "print", "range", "datatable",
     "externaldata", "materialize", "where", "set", "declare", "evaluate",
+    # Literals a let can be bound to: `let strict = true;` names no table.
+    "true", "false", "null",
 })
 
 
@@ -307,9 +319,22 @@ class FixtureError(ValueError):
     a fixture that silently grades nothing would read as a pass."""
 
 
+# Fence labels that name the same language. Microsoft Learn fences KQL as
+# `kusto`, so an answer that copies that label wrote KQL all the same, and
+# every KQL rule keyed on the label `kql` read nothing from it: a `kusto` block
+# with an invented table passed the `tables` allowlist and the TimeGenerated
+# check.
+_LANG_ALIASES = {"kusto": "kql"}
+
+
 def fenced_blocks(text: str) -> list[tuple[str, str]]:
-    """(language, body) for every fenced block, in order."""
-    return [(m.group(1).lower(), m.group(2)) for m in _FENCE_RE.finditer(text)]
+    """(language, body) for every fenced block, in order. The language is
+    lower-cased and an alias is read as the language it names."""
+    out = []
+    for m in _FENCE_RE.finditer(text):
+        lang = m.group(1).lower()
+        out.append((_LANG_ALIASES.get(lang, lang), m.group(2)))
+    return out
 
 
 def parse_fixtures(text: str) -> list[Fixture]:
@@ -445,68 +470,108 @@ def sourcetype_values(text: str) -> set[str]:
     return {v for v in values if not _placeholder(v)}
 
 
-def _union_statement(text: str) -> str:
-    """The union statement starting at `text`, operands and all.
+def _kql_statements(body: str) -> list[str]:
+    """The statements of a kql block, with comments dropped and every string
+    literal emptied.
 
-    It ends at the first `|` or newline whose parentheses are BALANCED. Depth is
-    what makes both halves work: `union (A | take 5), (B | take 5)` keeps its
-    inner pipes because they sit at depth 1, while `union A, B | summarize by
-    X, Y` still ends at the pipe so the summarize columns are not read as
-    operands. A trailing comma carries the list onto the next line.
+    Statements end at a semicolon. Reading the block statement by statement is
+    what finds the source of a query that follows a multi-line `let`: the
+    first line that does not start with `let` is then the let's own body, not
+    the query. Comments and string contents go because prose is not a query:
+    `// union of both tables` named a table called `of`.
     """
-    depth = 0
-    for i, ch in enumerate(text):
+    out: list[str] = []
+    cur: list[str] = []
+    i, n = 0, len(body)
+    while i < n:
+        ch = body[i]
+        if ch in "\"'":
+            verbatim = i > 0 and body[i - 1] == "@"
+            j = i + 1
+            while j < n and body[j] != ch and body[j] != "\n":
+                j += 2 if (body[j] == "\\" and not verbatim) else 1
+            cur.append('""')
+            i = j + 1
+        elif body.startswith("//", i):
+            j = body.find("\n", i)
+            i = n if j < 0 else j
+        elif ch == ";":
+            out.append("".join(cur))
+            cur = []
+            i += 1
+        else:
+            cur.append(ch)
+            i += 1
+    out.append("".join(cur))
+    return [s for s in out if s.strip()]
+
+
+def _union_operands(text: str) -> list[str]:
+    """The names in operand position of the union statement starting at `text`.
+
+    An operand is what follows the head or a comma, at parenthesis depth 0.
+    Depth is what makes every half work: `union (A | take 5), (B | take 5)`
+    keeps its inner pipes because they sit at depth 1, a function argument
+    inside an operand (`isnotempty(IPAddress)`) is not at depth 0 and is not
+    read, and `union A, B | summarize by X, Y` ends at the pipe so the
+    summarize columns are not operands.
+    """
+    head = _KQL_UNION_HEAD_RE.match(text)
+    names: list[str] = []
+    i, depth, want = head.end(), 0, True
+    while i < len(text):
+        if want and depth == 0:
+            want = False
+            m = _KQL_OPERAND_RE.match(text, i)
+            if m:
+                names.append(m.group(2))
+                depth = 1 if m.group(1) else 0
+                i = m.end()
+                continue
+        ch = text[i]
         if ch == "(":
             depth += 1
         elif ch == ")":
             depth = max(0, depth - 1)
-        elif depth == 0 and ch in "|\n":
-            if ch == "\n" and text[:i].rstrip().endswith(","):
-                continue
-            return text[:i]
-    return text
+        elif depth == 0 and ch == ",":
+            want = True
+        elif depth == 0 and ch == "|":
+            break
+        i += 1
+    return names
 
 
 def kql_tables(body: str) -> set[str]:
-    """Every table a kql block references: the leading source, plus `union` and
-    `join` operands and any table bound by `let`. Function calls
+    """Every table a kql block references: the source of each statement, the
+    value of each `let`, and `union` and `join` operands. Function calls
     (`let x = toscalar(...)`) and operators are not tables.
 
-    Scanned whole-body rather than line-at-a-time, because a join operand may
-    sit on the line after its `(` and a union list may wrap.
+    Read statement by statement and whole-statement rather than a line at a
+    time, because a join operand may sit on the line after its `(`, a union
+    list may wrap or start on the line after the keyword, and a let's value
+    may start on the line after its `=`.
     """
     tables: set[str] = set()
-    lines = [ln for ln in body.splitlines() if ln.strip() and not ln.strip().startswith("//")]
-    # Collected first so a later reference to a local is not read as a table.
-    locals_ = {m.group(1) for m in _KQL_LET_NAME_RE.finditer(body)}
-    # The source is the first line that is not part of a `let` preamble.
-    # Reading line 0 unconditionally meant `let cutoff = ago(1d);` followed by
-    # `GhostTable | where ...` put the real table on line 2, where nothing read
-    # it. The validator had the identical hole and was fixed with it.
-    lead = next((ln.strip() for ln in lines if not re.match(r"^let\b", ln.strip())), None)
-    if lead:
-        m = re.match(r"^([A-Z][A-Za-z0-9_]*)\b(?![(])", lead)
-        if m and m.group(1) not in KQL_KEYWORDS:
+    # The names let statements bind. They are locals, not tables, so a later
+    # `recent | take 5` must not be read as an uncatalogued table.
+    locals_: set[str] = set()
+    for statement in _kql_statements(body):
+        statement = statement.strip()
+        let = _KQL_LET_HEAD_RE.match(statement)
+        if let:
+            locals_.add(let.group(1))
+            source = _KQL_LET_SOURCE_RE.match(statement, let.end())
+        else:
+            source = _KQL_LEAD_RE.match(statement)
+        if source:
+            tables.add(source.group(1))
+        for u in _KQL_UNION_HEAD_RE.finditer(statement):
+            tables.update(_union_operands(statement[u.start():]))
+        for m in _KQL_JOIN_REF_RE.finditer(statement):
             tables.add(m.group(1))
-    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):
-        for m in pattern.finditer(body):
-            if m.group(1) not in KQL_KEYWORDS:
-                tables.add(m.group(1))
-    # Trailing operands of a union list, taken only from the union statement
-    # itself so commas elsewhere (project, summarize by) are not mistaken for
-    # table references.
-    # Trailing operands of a union list, bare or parenthesized. Both are read
-    # from the union STATEMENT, scanned from the union KEYWORD: starting at the
-    # end of the match would begin the depth count inside a parenthesis the
-    # match had already consumed.
-    for u in _KQL_UNION_REF_RE.finditer(body):
-        statement = _union_statement(body[u.start():])
-        for pattern in (_KQL_UNION_MORE_RE, _KQL_UNION_PAREN_RE):
-            for m in pattern.finditer(statement):
-                if m.group(1) not in KQL_KEYWORDS:
-                    tables.add(m.group(1))
     tables -= locals_
-    return {t for t in tables if t not in PLACEHOLDER_TABLES and not t.startswith("YOUR_")}
+    return {t for t in tables
+            if t not in KQL_KEYWORDS and t not in PLACEHOLDER_TABLES and not t.startswith("YOUR_")}
 
 
 def grade(fixture: Fixture, answer: str, declared: set[str]) -> Result:
@@ -583,6 +648,18 @@ def grade(fixture: Fixture, answer: str, declared: set[str]) -> Result:
                 seen |= kql_tables(body)
         invented = sorted(seen - allowed)
         (r.bad if invented else r.ok)(f"KQL tables within {sorted(allowed)}" + (f": invented {invented}" if invented else ""))
+
+    if "tables_required" in spec:
+        # The positive half of `tables`, read by the same reader. A pattern
+        # anchored to the start of the block failed a correct answer that bound
+        # a list with let first; one anchored to the start of any line fails an
+        # indented one and cannot tell a table from a comment that names it.
+        read: set[str] = set()
+        for body in query_blocks(answer, declared, "kql"):
+            read |= kql_tables(body)
+        unread = sorted(set(spec["tables_required"]) - read)
+        (r.bad if unread else r.ok)(f"a query block reads {sorted(spec['tables_required'])}"
+                                    + (f": not read {unread}" if unread else ""))
 
     if spec.get("never_block"):
         offending = block_recommendations(answer, spec["never_block"])

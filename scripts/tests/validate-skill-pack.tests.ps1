@@ -770,9 +770,9 @@ try {
     }
 
     Test-Case "a union operand list may wrap or carry a subquery pipe" {
-        # The statement ends at the first '|' or newline whose parentheses are
-        # balanced: a subquery's inner pipe does not end it, a trailing comma
-        # carries the list on, and a downstream summarize is still excluded.
+        # Operands are read at parenthesis depth 0 up to the first '|' there: a
+        # subquery's inner pipe does not end the list, a comma carries it on
+        # across a line break, and a downstream summarize is still excluded.
         $refs = [string[]](Get-KqlTableReferences "union (SigninLogs | take 5),`n      (AuditLogs | take 5)")
         Assert-True ($refs -ccontains "SigninLogs" -and $refs -ccontains "AuditLogs") "both wrapped operands must be read"
         $refs = [string[]](Get-KqlTableReferences "SigninLogs`n| union AuditLogs`n| summarize count() by Alpha, Beta")
@@ -987,6 +987,7 @@ try {
         # prevent in the tools it checks.
         Assert-True (@($corpus.kql_tables).Count -ge 15) "expected at least 15 kql cases"
         Assert-True (@($corpus.spl_time_bound).Count -ge 10) "expected at least 10 spl cases"
+        Assert-True (@($corpus.fence_language).Count -ge 4) "expected at least 4 fence-label cases"
     }
 
     foreach ($case in $corpus.kql_tables) {
@@ -1015,6 +1016,16 @@ try {
             Test-SplBlock "corpus.md" $c.query
             $reported = @($issues | Where-Object { $_ -match "no time bound" }).Count -gt 0
             Assert-Equal $c.reported $reported "time-bound outcome for: $($c.query)"
+        }
+    }
+
+    foreach ($case in $corpus.fence_language) {
+        $c = $case
+        Test-Case "fence language: $($c.name)" {
+            $fence = ([string][char]96) * 3
+            $blocks = Get-FencedBlocks ($fence + $c.label + "`nbody`n" + $fence + "`n")
+            Assert-Equal 1 @($blocks).Count "one block for label $($c.label)"
+            Assert-Equal $c.language $blocks[0].Language "language for label $($c.label)"
         }
     }
 }

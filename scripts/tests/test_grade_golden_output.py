@@ -231,6 +231,47 @@ class IdentifierTests(unittest.TestCase):
                          {"SigninLogs", "GhostTable"})
 
 
+class RequiredTableTests(unittest.TestCase):
+    """`tables_required` is the positive half of `tables`, read by the same reader."""
+
+    ANSWER = "## Objective\nx\n## Query\n```kql\n{query}\n```\n## Assumptions\nx\n"
+
+    def grade(self, query, **spec):
+        return g.grade(fx(sections=[], **spec), self.ANSWER.format(query=query), DECLARED)
+
+    def test_the_table_is_found_wherever_the_block_puts_it(self):
+        # REGRESSION: fixture 12 demanded the table at the start of the block and failed a
+        # correct answer that bound a list with let first. Three more specs carried the same
+        # pattern, and the repair (the start of any line) still failed an indented table.
+        for query in ("AuditLogs\n| where TimeGenerated > ago(30d)",
+                      "// credentials added\nAuditLogs\n| where TimeGenerated > ago(30d)",
+                      "let ops = dynamic([\"a\"]);\nAuditLogs\n| where TimeGenerated > ago(30d)",
+                      "\n  AuditLogs\n  | where TimeGenerated > ago(30d)",
+                      "let hits =\n    AuditLogs\n    | where TimeGenerated > ago(30d);\nhits | take 5"):
+            r = self.grade(query, tables_required=["AuditLogs"], tables=["AuditLogs"])
+            self.assertTrue(r.success, (query, r.failed))
+
+    def test_a_table_named_only_in_a_comment_is_not_read(self):
+        r = self.grade("// AuditLogs\nunion *\n| where TimeGenerated > ago(30d)", tables_required=["AuditLogs"])
+        self.assertTrue(any("not read ['AuditLogs']" in m for m in r.failed), r.failed)
+
+    def test_another_table_does_not_satisfy_it(self):
+        r = self.grade("SigninLogs\n| where TimeGenerated > ago(30d)", tables_required=["AuditLogs"])
+        self.assertTrue(any("not read ['AuditLogs']" in m for m in r.failed), r.failed)
+
+    def test_a_block_fenced_kusto_is_read_as_kql(self):
+        # Microsoft Learn fences KQL as kusto. Every KQL rule keyed on the label kql, so a kusto
+        # block with an invented table passed the allowlist, and tables_required would have
+        # failed a correct answer that copied the label.
+        answer = self.ANSWER.replace("```kql", "```kusto")
+        ok = g.grade(fx(sections=[], tables=["AuditLogs"], tables_required=["AuditLogs"]),
+                     answer.format(query="AuditLogs\n| where TimeGenerated > ago(30d)"), DECLARED)
+        self.assertTrue(ok.success, ok.failed)
+        bad = g.grade(fx(sections=[], tables=["AuditLogs"]),
+                      answer.format(query="GhostTable\n| where TimeGenerated > ago(30d)"), DECLARED)
+        self.assertTrue(any("invented ['GhostTable']" in m for m in bad.failed), bad.failed)
+
+
 class GenericRuleTests(unittest.TestCase):
     def test_unquoted_where_boolean_fails(self):
         text = GOOD_SHORT.replace("| stats count by host", "| where noise=true")
@@ -592,6 +633,7 @@ class SharedRuleCorpusTests(unittest.TestCase):
         # prevent in the tools it checks.
         self.assertGreaterEqual(len(self.corpus["kql_tables"]), 15)
         self.assertGreaterEqual(len(self.corpus["spl_time_bound"]), 10)
+        self.assertGreaterEqual(len(self.corpus["fence_language"]), 4)
 
     def test_kql_table_references(self):
         for case in self.corpus["kql_tables"]:
@@ -607,6 +649,13 @@ class SharedRuleCorpusTests(unittest.TestCase):
             with self.subTest(case=case["name"]):
                 reported = g.spl_is_raw_event_search(case["query"]) and not g.spl_time_bound(case["query"])
                 self.assertEqual(reported, case["reported"])
+
+    def test_fence_language(self):
+        fence = "`" * 3
+        for case in self.corpus["fence_language"]:
+            with self.subTest(case=case["name"]):
+                blocks = g.fenced_blocks(fence + case["label"] + "\nbody\n" + fence + "\n")
+                self.assertEqual([lang for lang, _ in blocks], [case["language"]])
 
 
 if __name__ == "__main__":

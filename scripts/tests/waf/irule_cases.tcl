@@ -11,13 +11,35 @@ t "baseline" {} pass {}
 t "001 artex-enrich" {headers {User-Agent artex-enrich/1.0}} 403 W-AGT-001
 t "001 ArtEx mixed case" {headers {User-Agent "Mozilla/5.0 (compatible; ArtEx/1.0)"}} 403 W-AGT-001
 t "001 security-testing" {headers {User-Agent "Mozilla/5.0 (security-testing; authorized)"}} 403 W-AGT-001
+t "001 artex-agent (Dragos) by the name rule" {headers {User-Agent artex-agent}} 403 W-AGT-001
+t "001 artex-judge-r121 (Dragos) by the name rule" {headers {User-Agent artex-judge-r121}} 403 W-AGT-001
 t "002 webshell manager" {headers {User-Agent "Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)"}} 403 {W-AGT-001 W-AGT-002}
 t "003 ffuf logged only" {headers {User-Agent "Fuzz Faster U Fool v2.1.0-dev"}} pass W-AGT-003
+t "003 norma/0.4 logged only" {headers {User-Agent norma/0.4}} pass W-AGT-003
+t "003 norma at another version logged only" {headers {User-Agent norma/1.2}} pass W-AGT-003
+t "003 norma later in the header is not logged" {headers {User-Agent "Mozilla/5.0 abnorma/1.2"}} pass {}
+t "003 ReconProbe logged, not denied (hunt only)" {headers {User-Agent ReconProbe/1.0}} pass W-AGT-003
+t "003 pentest-probe (Bitrise)" {headers {User-Agent pentest-probe-i5938/1.0}} pass W-AGT-003
+t "003 authorized-pentest (Bitrise)" {headers {User-Agent "Mozilla/5.0 (compatible; authorized-pentest/bitrise-readonly)"}} pass W-AGT-003
+t "003 authorized-security-research (Bitrise)" {headers {User-Agent "Mozilla/5.0 (compatible; authorized-security-research)"}} pass W-AGT-003
+t "003 research-readonly (Bitrise)" {headers {User-Agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) research-readonly"}} pass W-AGT-003
+t "003 research; read-only (Bitrise)" {headers {User-Agent "Mozilla/5.0 (research; read-only; pentest)"}} pass W-AGT-003
+t "003 read-only-audit (Barracuda)" {headers {User-Agent "Mozilla/5.0 (compatible; read-only-audit)"}} pass W-AGT-003
+t "003 a read-only kiosk is not a tester string" {headers {User-Agent "Mozilla/5.0 (Linux; read-only kiosk)"}} pass {}
+t "003 a pentest product name is not a tester string" {headers {User-Agent pentest-tools-dashboard/2.0}} pass {}
 t "curl allowed" {headers {User-Agent curl/8.5.0}} pass {}
 t "empty UA allowed" {headers {User-Agent ""}} pass {}
 t "010 listed address" {ip 23.158.220.98} 403 W-AGT-010
 t "004 canary path" {uri /zzz-nonexistent-xyz123} 403 W-AGT-004
 t "004 canary upper-case" {uri /ZZZ-NONEXISTENT-xyz} 403 W-AGT-004
+t "004 canary with an underscore" {uri /zzz_nonexistent_abc.txt} 403 W-AGT-004
+t "004 canary word with another separator allowed" {uri /zzz.nonexistent} pass {}
+t "004 SSRF canary path with an intent counter" {uri /_i6084_probe_missing} 403 W-AGT-004
+t "004 SSRF canary path in a parameter" {uri /cb?u=http://h/_i49_probe_missing} 403 W-AGT-004
+t "004 SSRF canary path in a body" {method POST uri /cb body "u=http%3A%2F%2Fh%2F_i6084_probe_missing"} 403 W-AGT-004
+t "004 probe_missing with no intent counter allowed" {uri /status/liveness_probe_missing} pass {}
+t "004 one-digit counter allowed" {uri /_i6_probe_missing} pass {}
+t "004 developer placeholder id allowed (hunt, not deny)" {uri /api/objects/deadbeefdeadbeefdeadbeef12} pass {}
 t "004 canary user in query" {uri /login?user=zz_no_such_user_9f3a} 403 W-AGT-004
 t "004 metadata SSRF" {uri /fetch?url=http://169.254.169.254/latest/meta-data/} 403 W-AGT-004
 t "004 metadata SSRF encoded" {uri /fetch?url=http%3A%2F%2F169.254.169.254%2F} 403 W-AGT-004
@@ -37,11 +59,22 @@ t "006 prose allowed" {uri "/search?q=the%20artex's%20manual"} pass {}
 t "007 probe account in query" {uri "/signup?email=i04probe1792451568%40x.com"} 403 W-AGT-007
 t "007 probe account in body" {method POST uri /login body "email=i04probe1792451568%40x.com"} 403 W-AGT-007
 t "007 normal email allowed" {method POST uri /login body "email=probe%40x.com"} pass {}
+t "007 six-digit intent counter in query" {uri "/signup?email=i808807probe1792451568%40x.com"} 403 W-AGT-007
+t "007 six-digit intent counter in body" {method POST uri /login body "email=i808807probe1792451568%40x.com"} 403 W-AGT-007
+t "007 pentest-probe sign-up with no counter left to the hunts" {method POST uri /login body "email=pentestprobeq7m4z2%40x.com"} pass {}
 t "008 task artifact" {uri /up/i4028.asp} 403 W-AGT-008
 t "008 index.php allowed" {uri /index.php} pass {}
+t "008 install.php allowed" {uri /install.php} pass {}
+t "008 leading zero in the counter" {uri /up/i0123.php} 403 W-AGT-008
+t "008 six-digit task artifact" {uri /up/i808807.jsp} 403 W-AGT-008
+t "008 seven-digit task artifact" {uri /up/i1234567.php} 403 W-AGT-008
+t "008 two-digit name allowed" {uri /i18.php} pass {}
+t "008 eight-digit name allowed" {uri /i12345678.php} pass {}
 t "008 jsp shell shape" {uri /x/cl1217.jsp} 403 W-AGT-008
 t "008 normal jsp allowed" {uri /page2024.jsp} pass {}
 t "008 upload artifact" {method POST uri /up headers {Content-Type "multipart/form-data; boundary=x"} body "--x\r\nContent-Disposition: form-data; name=\"file\"; filename=\"i4028.php\"\r\n\r\nx\r\n--x--"} 403 W-AGT-008
+t "008 upload artifact, six-digit counter" {method POST uri /up headers {Content-Type "multipart/form-data; boundary=x"} body "--x\r\nContent-Disposition: form-data; name=\"file\"; filename=\"i808807.aspx\"\r\n\r\nx\r\n--x--"} 403 W-AGT-008
+t "008 upload with a two-digit name allowed" {method POST uri /up headers {Content-Type "multipart/form-data; boundary=x"} body "--x\r\nContent-Disposition: form-data; name=\"file\"; filename=\"i18.php\"\r\n\r\nx\r\n--x--"} pass {}
 t "009 DTD in xml" {method POST uri /saml headers {Content-Type application/xml} body "<?xml version=\"1.0\"?><!DOCTYPE x \[<!ENTITY e SYSTEM \"file:///etc/passwd\">\]><a>&e;</a>"} 403 W-AGT-009
 t "009 plain xml allowed" {method POST uri /saml headers {Content-Type application/xml} body "<a>1</a>"} pass {}
 t "011 shell in UA" {headers {User-Agent "x \$(id)"}} 403 W-AGT-011
@@ -126,6 +159,7 @@ t "ev: dots and a semicolon in a query" {uri "/search?q=wait..;then"} pass {}
 t "ev: second /actuator/health later in the path" {uri /actuator/jolokia/exec/x/actuator/health} 403 W-AGT-021
 t "ev: Content-Length with a leading zero" {method POST uri /login headers {Content-Length 029} body "username=zz_no_such_user_9f3a"} 403 W-AGT-004
 t "ev: Content-Length 0 beside chunked" {method POST uri /login headers {Content-Length 0 Transfer-Encoding chunked} body "username=zz_no_such_user_9f3a"} 403 W-AGT-004
+t "ev: two Transfer-Encoding headers, chunked first" {method POST uri /login headers {Transfer-Encoding identity} dup {transfer-encoding {chunked identity}} body "username=zz_no_such_user_9f3a"} 403 W-AGT-004
 t "ev: text/XML in upper case" {method POST uri /saml headers {Content-Type APPLICATION/XML} body "<!DOCTYPE x><a/>"} 403 W-AGT-009
 # log-only mode
 set static::agt_log_only 1

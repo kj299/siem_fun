@@ -1,0 +1,875 @@
+# MITRE ATT&CK Enterprise 20.1: every technique and sub-technique, one per line.
+# Generated from enterprise-attack-20.1.json (mitre-attack/attack-stix-data),
+# sha256 539a843a7b53ed9749740b2123dddae3726b1a4831841c32aca740b011b910b5.
+# Columns, tab-separated: ID, name, tactics (comma-separated), status. Status is
+# live, deprecated, or revoked-by <the ID that replaced it>. One name is written
+# in ASCII here: T1055.013 is Process Doppelganging with an a-umlaut in the source.
+# Read by scripts/tests/test_agentic_ai_attacks.py; regenerate from a newer bundle
+# only together with the layer version the pack is built against.
+T1001	Data Obfuscation	Command and Control	live
+T1001.001	Junk Data	Command and Control	live
+T1001.002	Steganography	Command and Control	live
+T1001.003	Protocol or Service Impersonation	Command and Control	live
+T1002	Data Compressed	Exfiltration	revoked-by T1560
+T1003	OS Credential Dumping	Credential Access	live
+T1003.001	LSASS Memory	Credential Access	live
+T1003.002	Security Account Manager	Credential Access	live
+T1003.003	NTDS	Credential Access	live
+T1003.004	LSA Secrets	Credential Access	live
+T1003.005	Cached Domain Credentials	Credential Access	live
+T1003.006	DCSync	Credential Access	live
+T1003.007	Proc Filesystem	Credential Access	live
+T1003.008	/etc/passwd and /etc/shadow	Credential Access	live
+T1004	Winlogon Helper DLL	Persistence	revoked-by T1547.004
+T1005	Data from Local System	Collection	live
+T1006	Direct Volume Access	Stealth	live
+T1007	System Service Discovery	Discovery	live
+T1008	Fallback Channels	Command and Control	live
+T1009	Binary Padding	Stealth	revoked-by T1027.001
+T1010	Application Window Discovery	Discovery	live
+T1011	Exfiltration Over Other Network Medium	Exfiltration	live
+T1011.001	Exfiltration Over Bluetooth	Exfiltration	live
+T1012	Query Registry	Discovery	live
+T1013	Port Monitors	Persistence, Privilege Escalation	revoked-by T1547.010
+T1014	Rootkit	Stealth	live
+T1015	Accessibility Features	Persistence, Privilege Escalation	revoked-by T1546.008
+T1016	System Network Configuration Discovery	Discovery	live
+T1016.001	Internet Connection Discovery	Discovery	live
+T1016.002	Wi-Fi Discovery	Discovery	live
+T1017	Application Deployment Software	Lateral Movement	revoked-by T1072
+T1018	Remote System Discovery	Discovery	live
+T1019	System Firmware	Persistence	revoked-by T1542.001
+T1020	Automated Exfiltration	Exfiltration	live
+T1020.001	Traffic Duplication	Exfiltration	live
+T1021	Remote Services	Lateral Movement	live
+T1021.001	Remote Desktop Protocol	Lateral Movement	live
+T1021.002	SMB/Windows Admin Shares	Lateral Movement	live
+T1021.003	Distributed Component Object Model	Lateral Movement	live
+T1021.004	SSH	Lateral Movement	live
+T1021.005	VNC	Lateral Movement	live
+T1021.006	Windows Remote Management	Lateral Movement	live
+T1021.007	Cloud Services	Lateral Movement	live
+T1021.008	Direct Cloud VM Connections	Lateral Movement	live
+T1022	Data Encrypted	Exfiltration	revoked-by T1560
+T1023	Shortcut Modification	Persistence	revoked-by T1547.009
+T1024	Custom Cryptographic Protocol	Command and Control	revoked-by T1573
+T1025	Data from Removable Media	Collection	live
+T1026	Multiband Communication	Command and Control	deprecated
+T1027	Obfuscated Files or Information	Stealth	live
+T1027.001	Binary Padding	Stealth	live
+T1027.002	Software Packing	Stealth	live
+T1027.003	Steganography	Stealth	live
+T1027.004	Compile After Delivery	Stealth	live
+T1027.005	Indicator Removal from Tools	Stealth	live
+T1027.006	HTML Smuggling	Stealth	live
+T1027.007	Dynamic API Resolution	Stealth	live
+T1027.008	Stripped Payloads	Stealth	live
+T1027.009	Embedded Payloads	Stealth	live
+T1027.010	Command Obfuscation	Stealth	live
+T1027.011	Fileless Storage	Stealth	live
+T1027.012	LNK Icon Smuggling	Stealth	live
+T1027.013	Encrypted/Encoded File	Stealth	live
+T1027.014	Polymorphic Code	Stealth	live
+T1027.015	Compression	Stealth	live
+T1027.016	Junk Code Insertion	Stealth	live
+T1027.017	SVG Smuggling	Stealth	live
+T1027.018	Invisible Unicode	Stealth	live
+T1028	Windows Remote Management	Execution, Lateral Movement	revoked-by T1021.006
+T1029	Scheduled Transfer	Exfiltration	live
+T1030	Data Transfer Size Limits	Exfiltration	live
+T1031	Modify Existing Service	Persistence	revoked-by T1543.003
+T1032	Standard Cryptographic Protocol	Command and Control	revoked-by T1573
+T1033	System Owner/User Discovery	Discovery	live
+T1034	Path Interception	Persistence, Privilege Escalation	deprecated
+T1035	Service Execution	Execution	revoked-by T1569.002
+T1036	Masquerading	Stealth	live
+T1036.001	Invalid Code Signature	Stealth	live
+T1036.002	Right-to-Left Override	Stealth	live
+T1036.003	Rename Legitimate Utilities	Stealth	live
+T1036.004	Masquerade Task or Service	Stealth	live
+T1036.005	Match Legitimate Resource Name or Location	Stealth	live
+T1036.006	Space after Filename	Stealth	live
+T1036.007	Double File Extension	Stealth	live
+T1036.008	Masquerade File Type	Stealth	live
+T1036.009	Break Process Trees	Stealth	live
+T1036.010	Masquerade Account Name	Stealth	live
+T1036.011	Overwrite Process Arguments	Stealth	live
+T1036.012	Browser Fingerprint	Stealth	live
+T1037	Boot or Logon Initialization Scripts	Persistence, Privilege Escalation	live
+T1037.001	Logon Script (Windows)	Persistence, Privilege Escalation	live
+T1037.002	Login Hook	Persistence, Privilege Escalation	live
+T1037.003	Network Logon Script	Persistence, Privilege Escalation	live
+T1037.004	RC Scripts	Persistence, Privilege Escalation	live
+T1037.005	Startup Items	Persistence, Privilege Escalation	live
+T1038	DLL Search Order Hijacking	Persistence, Privilege Escalation, Stealth	revoked-by T1574.001
+T1039	Data from Network Shared Drive	Collection	live
+T1040	Network Sniffing	Credential Access, Discovery	live
+T1041	Exfiltration Over C2 Channel	Exfiltration	live
+T1042	Change Default File Association	Persistence	revoked-by T1546.001
+T1043	Commonly Used Port	Command and Control	deprecated
+T1044	File System Permissions Weakness	Persistence, Privilege Escalation	revoked-by T1574.010
+T1045	Software Packing	Stealth	revoked-by T1027.002
+T1046	Network Service Discovery	Discovery	live
+T1047	Windows Management Instrumentation	Execution	live
+T1048	Exfiltration Over Alternative Protocol	Exfiltration	live
+T1048.001	Exfiltration Over Symmetric Encrypted Non-C2 Protocol	Exfiltration	live
+T1048.002	Exfiltration Over Asymmetric Encrypted Non-C2 Protocol	Exfiltration	live
+T1048.003	Exfiltration Over Unencrypted Non-C2 Protocol	Exfiltration	live
+T1049	System Network Connections Discovery	Discovery	live
+T1050	New Service	Persistence, Privilege Escalation	revoked-by T1543.003
+T1051	Shared Webroot	Lateral Movement	deprecated
+T1052	Exfiltration Over Physical Medium	Exfiltration	live
+T1052.001	Exfiltration over USB	Exfiltration	live
+T1053	Scheduled Task/Job	Execution, Persistence, Privilege Escalation	live
+T1053.001	At (Linux)	Execution, Persistence, Privilege Escalation	revoked-by T1053.002
+T1053.002	At	Execution, Persistence, Privilege Escalation	live
+T1053.003	Cron	Execution, Persistence, Privilege Escalation	live
+T1053.004	Launchd	Execution, Persistence, Privilege Escalation	deprecated
+T1053.005	Scheduled Task	Execution, Persistence, Privilege Escalation	live
+T1053.006	Systemd Timers	Execution, Persistence, Privilege Escalation	live
+T1053.007	Container Orchestration Job	Execution, Persistence, Privilege Escalation	live
+T1054	Indicator Blocking	Stealth	revoked-by T1685
+T1055	Process Injection	Privilege Escalation, Stealth	live
+T1055.001	Dynamic-link Library Injection	Privilege Escalation, Stealth	live
+T1055.002	Portable Executable Injection	Privilege Escalation, Stealth	live
+T1055.003	Thread Execution Hijacking	Privilege Escalation, Stealth	live
+T1055.004	Asynchronous Procedure Call	Privilege Escalation, Stealth	live
+T1055.005	Thread Local Storage	Privilege Escalation, Stealth	live
+T1055.008	Ptrace System Calls	Privilege Escalation, Stealth	live
+T1055.009	Proc Memory	Privilege Escalation, Stealth	live
+T1055.011	Extra Window Memory Injection	Privilege Escalation, Stealth	live
+T1055.012	Process Hollowing	Privilege Escalation, Stealth	live
+T1055.013	Process Doppelganging	Privilege Escalation, Stealth	live
+T1055.014	VDSO Hijacking	Privilege Escalation, Stealth	live
+T1055.015	ListPlanting	Privilege Escalation, Stealth	live
+T1056	Input Capture	Collection, Credential Access	live
+T1056.001	Keylogging	Collection, Credential Access	live
+T1056.002	GUI Input Capture	Collection, Credential Access	live
+T1056.003	Web Portal Capture	Collection, Credential Access	live
+T1056.004	Credential API Hooking	Collection, Credential Access	live
+T1057	Process Discovery	Discovery	live
+T1058	Service Registry Permissions Weakness	Persistence, Privilege Escalation	revoked-by T1574.011
+T1059	Command and Scripting Interpreter	Execution	live
+T1059.001	PowerShell	Execution	live
+T1059.002	AppleScript	Execution	live
+T1059.003	Windows Command Shell	Execution	live
+T1059.004	Unix Shell	Execution	live
+T1059.005	Visual Basic	Execution	live
+T1059.006	Python	Execution	live
+T1059.007	JavaScript	Execution	live
+T1059.008	Network Device CLI	Execution	live
+T1059.009	Cloud API	Execution	live
+T1059.010	AutoHotKey & AutoIT	Execution	live
+T1059.011	Lua	Execution	live
+T1059.012	Hypervisor CLI	Execution	live
+T1059.013	Container CLI/API	Execution	live
+T1060	Registry Run Keys / Startup Folder	Persistence	revoked-by T1547.001
+T1061	Graphical User Interface	Execution	deprecated
+T1062	Hypervisor	Persistence	deprecated
+T1063	Security Software Discovery	Discovery	revoked-by T1518.001
+T1064	Scripting	Execution, Stealth	deprecated
+T1065	Uncommonly Used Port	Command and Control	revoked-by T1571
+T1066	Indicator Removal from Tools	Stealth	revoked-by T1027.005
+T1067	Bootkit	Persistence	revoked-by T1542.003
+T1068	Exploitation for Privilege Escalation	Privilege Escalation	live
+T1069	Permission Groups Discovery	Discovery	live
+T1069.001	Local Groups	Discovery	live
+T1069.002	Domain Groups	Discovery	live
+T1069.003	Cloud Groups	Discovery	live
+T1070	Indicator Removal	Stealth	live
+T1070.001	Clear Windows Event Logs	Stealth	revoked-by T1685.005
+T1070.002	Clear Linux or Mac System Logs	Stealth	revoked-by T1685.006
+T1070.003	Clear Command History	Stealth	live
+T1070.004	File Deletion	Stealth	live
+T1070.005	Network Share Connection Removal	Stealth	live
+T1070.006	Timestomp	Stealth	live
+T1070.007	Clear Network Connection History and Configurations	Stealth	live
+T1070.008	Clear Mailbox Data	Stealth	live
+T1070.009	Clear Persistence	Stealth	live
+T1070.010	Relocate Malware	Stealth	live
+T1071	Application Layer Protocol	Command and Control	live
+T1071.001	Web Protocols	Command and Control	live
+T1071.002	File Transfer Protocols	Command and Control	live
+T1071.003	Mail Protocols	Command and Control	live
+T1071.004	DNS	Command and Control	live
+T1071.005	Publish/Subscribe Protocols	Command and Control	live
+T1072	Software Deployment Tools	Execution, Lateral Movement	live
+T1073	DLL Side-Loading	Stealth	revoked-by T1574.002
+T1074	Data Staged	Collection	live
+T1074.001	Local Data Staging	Collection	live
+T1074.002	Remote Data Staging	Collection	live
+T1075	Pass the Hash	Lateral Movement	revoked-by T1550.002
+T1076	Remote Desktop Protocol	Lateral Movement	revoked-by T1021.001
+T1077	Windows Admin Shares	Lateral Movement	revoked-by T1021.002
+T1078	Valid Accounts	Initial Access, Persistence, Privilege Escalation, Stealth	live
+T1078.001	Default Accounts	Initial Access, Persistence, Privilege Escalation, Stealth	live
+T1078.002	Domain Accounts	Initial Access, Persistence, Privilege Escalation, Stealth	live
+T1078.003	Local Accounts	Initial Access, Persistence, Privilege Escalation, Stealth	live
+T1078.004	Cloud Accounts	Initial Access, Persistence, Privilege Escalation, Stealth	live
+T1079	Multilayer Encryption	Command and Control	revoked-by T1573
+T1080	Taint Shared Content	Lateral Movement	live
+T1081	Credentials in Files	Credential Access	revoked-by T1552.001
+T1082	System Information Discovery	Discovery	live
+T1083	File and Directory Discovery	Discovery	live
+T1084	Windows Management Instrumentation Event Subscription	Persistence	revoked-by T1546.003
+T1085	Rundll32	Execution, Stealth	revoked-by T1218.011
+T1086	PowerShell	Execution	revoked-by T1059.001
+T1087	Account Discovery	Discovery	live
+T1087.001	Local Account	Discovery	live
+T1087.002	Domain Account	Discovery	live
+T1087.003	Email Account	Discovery	live
+T1087.004	Cloud Account	Discovery	live
+T1088	Bypass User Account Control	Privilege Escalation, Stealth	revoked-by T1548.002
+T1089	Disabling Security Tools	Stealth	revoked-by T1685
+T1090	Proxy	Command and Control	live
+T1090.001	Internal Proxy	Command and Control	live
+T1090.002	External Proxy	Command and Control	live
+T1090.003	Multi-hop Proxy	Command and Control	live
+T1090.004	Domain Fronting	Command and Control	live
+T1091	Replication Through Removable Media	Initial Access, Lateral Movement	live
+T1092	Communication Through Removable Media	Command and Control	live
+T1093	Process Hollowing	Stealth	revoked-by T1055.012
+T1094	Custom Command and Control Protocol	Command and Control	revoked-by T1095
+T1095	Non-Application Layer Protocol	Command and Control	live
+T1096	NTFS File Attributes	Stealth	revoked-by T1564.004
+T1097	Pass the Ticket	Lateral Movement	revoked-by T1550.003
+T1098	Account Manipulation	Persistence, Privilege Escalation	live
+T1098.001	Additional Cloud Credentials	Persistence, Privilege Escalation	live
+T1098.002	Additional Email Delegate Permissions	Persistence, Privilege Escalation	live
+T1098.003	Additional Cloud Roles	Persistence, Privilege Escalation	live
+T1098.004	SSH Authorized Keys	Persistence, Privilege Escalation	live
+T1098.005	Device Registration	Persistence, Privilege Escalation	live
+T1098.006	Additional Container Cluster Roles	Persistence, Privilege Escalation	live
+T1098.007	Additional Local or Domain Groups	Persistence, Privilege Escalation	live
+T1099	Timestomp	Stealth	revoked-by T1070.006
+T1100	Web Shell	Persistence, Privilege Escalation	revoked-by T1505.003
+T1101	Security Support Provider	Persistence	revoked-by T1547.005
+T1102	Web Service	Command and Control	live
+T1102.001	Dead Drop Resolver	Command and Control	live
+T1102.002	Bidirectional Communication	Command and Control	live
+T1102.003	One-Way Communication	Command and Control	live
+T1103	AppInit DLLs	Persistence, Privilege Escalation	revoked-by T1546.010
+T1104	Multi-Stage Channels	Command and Control	live
+T1105	Ingress Tool Transfer	Command and Control	live
+T1106	Native API	Execution	live
+T1107	File Deletion	Stealth	revoked-by T1070.004
+T1108	Redundant Access	Persistence, Stealth	deprecated
+T1109	Component Firmware	Persistence, Stealth	revoked-by T1542.002
+T1110	Brute Force	Credential Access	live
+T1110.001	Password Guessing	Credential Access	live
+T1110.002	Password Cracking	Credential Access	live
+T1110.003	Password Spraying	Credential Access	live
+T1110.004	Credential Stuffing	Credential Access	live
+T1111	Multi-Factor Authentication Interception	Credential Access	live
+T1112	Modify Registry	Defense Impairment, Persistence	live
+T1113	Screen Capture	Collection	live
+T1114	Email Collection	Collection	live
+T1114.001	Local Email Collection	Collection	live
+T1114.002	Remote Email Collection	Collection	live
+T1114.003	Email Forwarding Rule	Collection	live
+T1115	Clipboard Data	Collection	live
+T1116	Code Signing	Stealth	revoked-by T1553.002
+T1117	Regsvr32	Execution, Stealth	revoked-by T1218.010
+T1118	InstallUtil	Execution, Stealth	revoked-by T1218.004
+T1119	Automated Collection	Collection	live
+T1120	Peripheral Device Discovery	Discovery	live
+T1121	Regsvcs/Regasm	Execution, Stealth	revoked-by T1218.009
+T1122	Component Object Model Hijacking	Persistence, Stealth	revoked-by T1546.015
+T1123	Audio Capture	Collection	live
+T1124	System Time Discovery	Discovery	live
+T1125	Video Capture	Collection	live
+T1126	Network Share Connection Removal	Stealth	revoked-by T1070.005
+T1127	Trusted Developer Utilities Proxy Execution	Execution, Stealth	live
+T1127.001	MSBuild	Execution, Stealth	live
+T1127.002	ClickOnce	Execution, Stealth	live
+T1127.003	JamPlus	Execution, Stealth	live
+T1128	Netsh Helper DLL	Persistence	revoked-by T1546.007
+T1129	Shared Modules	Execution	live
+T1130	Install Root Certificate	Stealth	revoked-by T1553.004
+T1131	Authentication Package	Persistence	revoked-by T1547.002
+T1132	Data Encoding	Command and Control	live
+T1132.001	Standard Encoding	Command and Control	live
+T1132.002	Non-Standard Encoding	Command and Control	live
+T1133	External Remote Services	Initial Access, Persistence	live
+T1134	Access Token Manipulation	Privilege Escalation, Stealth	live
+T1134.001	Token Impersonation/Theft	Privilege Escalation, Stealth	live
+T1134.002	Create Process with Token	Privilege Escalation, Stealth	live
+T1134.003	Make and Impersonate Token	Privilege Escalation, Stealth	live
+T1134.004	Parent PID Spoofing	Privilege Escalation, Stealth	live
+T1134.005	SID-History Injection	Privilege Escalation, Stealth	live
+T1135	Network Share Discovery	Discovery	live
+T1136	Create Account	Persistence	live
+T1136.001	Local Account	Persistence	live
+T1136.002	Domain Account	Persistence	live
+T1136.003	Cloud Account	Persistence	live
+T1137	Office Application Startup	Persistence	live
+T1137.001	Office Template Macros	Persistence	live
+T1137.002	Office Test	Persistence	live
+T1137.003	Outlook Forms	Persistence	live
+T1137.004	Outlook Home Page	Persistence	live
+T1137.005	Outlook Rules	Persistence	live
+T1137.006	Add-ins	Persistence	live
+T1138	Application Shimming	Persistence, Privilege Escalation	revoked-by T1546.011
+T1139	Bash History	Credential Access	revoked-by T1552.003
+T1140	Deobfuscate/Decode Files or Information	Stealth	live
+T1141	Input Prompt	Credential Access	revoked-by T1056.002
+T1142	Keychain	Credential Access	revoked-by T1555.001
+T1143	Hidden Window	Stealth	revoked-by T1564.003
+T1144	Gatekeeper Bypass	Stealth	revoked-by T1553.001
+T1145	Private Keys	Credential Access	revoked-by T1552.004
+T1146	Clear Command History	Stealth	revoked-by T1070.003
+T1147	Hidden Users	Stealth	revoked-by T1564.002
+T1148	HISTCONTROL	Stealth	revoked-by T1690
+T1149	LC_MAIN Hijacking	Stealth	deprecated
+T1150	Plist Modification	Persistence, Privilege Escalation, Stealth	revoked-by T1547.011
+T1151	Space after Filename	Execution, Stealth	revoked-by T1036.006
+T1152	Launchctl	Execution, Persistence, Stealth	revoked-by T1569.001
+T1153	Source	Execution	deprecated
+T1154	Trap	Execution, Persistence	revoked-by T1546.005
+T1155	AppleScript	Execution	revoked-by T1059.002
+T1156	Malicious Shell Modification	Persistence	revoked-by T1546.004
+T1157	Dylib Hijacking	Persistence, Privilege Escalation	revoked-by T1574.004
+T1158	Hidden Files and Directories	Persistence, Stealth	revoked-by T1564.001
+T1159	Launch Agent	Persistence	revoked-by T1543.001
+T1160	Launch Daemon	Persistence, Privilege Escalation	revoked-by T1543.004
+T1161	LC_LOAD_DYLIB Addition	Persistence	revoked-by T1546.006
+T1162	Login Item	Persistence	revoked-by T1547.011
+T1163	Rc.common	Persistence	revoked-by T1037.004
+T1164	Re-opened Applications	Persistence	revoked-by T1547.007
+T1165	Startup Items	Persistence, Privilege Escalation	revoked-by T1037.005
+T1166	Setuid and Setgid	Persistence, Privilege Escalation	revoked-by T1548.001
+T1167	Securityd Memory	Credential Access	revoked-by T1555.002
+T1168	Local Job Scheduling	Execution, Persistence	revoked-by T1053
+T1169	Sudo	Privilege Escalation	revoked-by T1548.003
+T1170	Mshta	Execution, Stealth	revoked-by T1218.005
+T1171	LLMNR/NBT-NS Poisoning and Relay	Credential Access	revoked-by T1557.001
+T1172	Domain Fronting	Command and Control	revoked-by T1090.004
+T1173	Dynamic Data Exchange	Execution	revoked-by T1559.002
+T1174	Password Filter DLL	Credential Access	revoked-by T1556.002
+T1175	Component Object Model and Distributed COM	Execution, Lateral Movement	deprecated
+T1176	Software Extensions	Persistence	live
+T1176.001	Browser Extensions	Persistence	live
+T1176.002	IDE Extensions	Persistence	live
+T1177	LSASS Driver	Execution, Persistence	revoked-by T1547.008
+T1178	SID-History Injection	Privilege Escalation	revoked-by T1134.005
+T1179	Hooking	Credential Access, Persistence, Privilege Escalation	revoked-by T1056.004
+T1180	Screensaver	Persistence	revoked-by T1546.002
+T1181	Extra Window Memory Injection	Privilege Escalation, Stealth	revoked-by T1055.011
+T1182	AppCert DLLs	Persistence, Privilege Escalation	revoked-by T1546.009
+T1183	Image File Execution Options Injection	Persistence, Privilege Escalation, Stealth	revoked-by T1546.012
+T1184	SSH Hijacking	Lateral Movement	revoked-by T1563.001
+T1185	Browser Session Hijacking	Collection	live
+T1186	Process Doppelganging	Stealth	revoked-by T1055.013
+T1187	Forced Authentication	Credential Access	live
+T1188	Multi-hop Proxy	Command and Control	revoked-by T1090.003
+T1189	Drive-by Compromise	Initial Access	live
+T1190	Exploit Public-Facing Application	Initial Access	live
+T1191	CMSTP	Execution, Stealth	revoked-by T1218.003
+T1192	Spearphishing Link	Initial Access	revoked-by T1566.002
+T1193	Spearphishing Attachment	Initial Access	revoked-by T1566.001
+T1194	Spearphishing via Service	Initial Access	revoked-by T1566.003
+T1195	Supply Chain Compromise	Initial Access	live
+T1195.001	Compromise Software Dependencies and Development Tools	Initial Access	live
+T1195.002	Compromise Software Supply Chain	Initial Access	live
+T1195.003	Compromise Hardware Supply Chain	Initial Access	live
+T1196	Control Panel Items	Execution, Stealth	revoked-by T1218.002
+T1197	BITS Jobs	Execution, Persistence, Stealth	live
+T1198	SIP and Trust Provider Hijacking	Persistence, Stealth	revoked-by T1553.003
+T1199	Trusted Relationship	Initial Access	live
+T1200	Hardware Additions	Initial Access	live
+T1201	Password Policy Discovery	Discovery	live
+T1202	Indirect Command Execution	Stealth	live
+T1203	Exploitation for Client Execution	Execution	live
+T1204	User Execution	Execution	live
+T1204.001	Malicious Link	Execution	live
+T1204.002	Malicious File	Execution	live
+T1204.003	Malicious Image	Execution	live
+T1204.004	Malicious Copy and Paste	Execution	live
+T1204.005	Malicious Library	Execution	live
+T1205	Traffic Signaling	Command and Control, Persistence, Stealth	live
+T1205.001	Port Knocking	Command and Control, Persistence, Stealth	live
+T1205.002	Socket Filters	Command and Control, Persistence, Stealth	live
+T1206	Sudo Caching	Privilege Escalation	revoked-by T1548.003
+T1207	Rogue Domain Controller	Defense Impairment	live
+T1208	Kerberoasting	Credential Access	revoked-by T1558.003
+T1209	Time Providers	Persistence	revoked-by T1547.003
+T1210	Exploitation of Remote Services	Lateral Movement	live
+T1211	Exploitation for Stealth	Stealth	live
+T1212	Exploitation for Credential Access	Credential Access	live
+T1213	Data from Information Repositories	Collection	live
+T1213.001	Confluence	Collection	live
+T1213.002	Sharepoint	Collection	live
+T1213.003	Code Repositories	Collection	live
+T1213.004	Customer Relationship Management Software	Collection	live
+T1213.005	Messaging Applications	Collection	live
+T1213.006	Databases	Collection	live
+T1214	Credentials in Registry	Credential Access	revoked-by T1552.002
+T1215	Kernel Modules and Extensions	Persistence	revoked-by T1547.006
+T1216	System Script Proxy Execution	Stealth	live
+T1216.001	PubPrn	Stealth	live
+T1216.002	SyncAppvPublishingServer	Stealth	live
+T1217	Browser Information Discovery	Discovery	live
+T1218	System Binary Proxy Execution	Stealth	live
+T1218.001	Compiled HTML File	Stealth	live
+T1218.002	Control Panel	Stealth	live
+T1218.003	CMSTP	Stealth	live
+T1218.004	InstallUtil	Stealth	live
+T1218.005	Mshta	Stealth	live
+T1218.007	Msiexec	Stealth	live
+T1218.008	Odbcconf	Stealth	live
+T1218.009	Regsvcs/Regasm	Stealth	live
+T1218.010	Regsvr32	Stealth	live
+T1218.011	Rundll32	Stealth	live
+T1218.012	Verclsid	Stealth	live
+T1218.013	Mavinject	Stealth	live
+T1218.014	MMC	Stealth	live
+T1218.015	Electron Applications	Stealth	live
+T1219	Remote Access Tools	Command and Control	live
+T1219.001	IDE Tunneling	Command and Control	live
+T1219.002	Remote Desktop Software	Command and Control	live
+T1219.003	Remote Access Hardware	Command and Control	live
+T1220	XSL Script Processing	Stealth	live
+T1221	Template Injection	Stealth	live
+T1222	File and Directory Permissions Modification	Defense Impairment	live
+T1222.001	Windows Permissions	Defense Impairment	live
+T1222.002	Linux and Mac Permissions	Defense Impairment	live
+T1223	Compiled HTML File	Execution, Stealth	revoked-by T1218.001
+T1480	Execution Guardrails	Stealth	live
+T1480.001	Environmental Keying	Stealth	live
+T1480.002	Mutual Exclusion	Stealth	live
+T1482	Domain Trust Discovery	Discovery	live
+T1483	Domain Generation Algorithms	Command and Control	revoked-by T1568.002
+T1484	Domain or Tenant Policy Modification	Defense Impairment, Privilege Escalation	live
+T1484.001	Group Policy Modification	Defense Impairment, Privilege Escalation	live
+T1484.002	Trust Modification	Defense Impairment, Privilege Escalation	live
+T1485	Data Destruction	Impact	live
+T1485.001	Lifecycle-Triggered Deletion	Impact	live
+T1486	Data Encrypted for Impact	Impact	live
+T1487	Disk Structure Wipe	Impact	revoked-by T1561.002
+T1488	Disk Content Wipe	Impact	revoked-by T1561.001
+T1489	Service Stop	Impact	live
+T1490	Inhibit System Recovery	Impact	live
+T1491	Defacement	Impact	live
+T1491.001	Internal Defacement	Impact	live
+T1491.002	External Defacement	Impact	live
+T1492	Stored Data Manipulation	Impact	revoked-by T1565.001
+T1493	Transmitted Data Manipulation	Impact	revoked-by T1565.002
+T1494	Runtime Data Manipulation	Impact	revoked-by T1565.003
+T1495	Firmware Corruption	Impact	live
+T1496	Resource Hijacking	Impact	live
+T1496.001	Compute Hijacking	Impact	live
+T1496.002	Bandwidth Hijacking	Impact	live
+T1496.003	SMS Pumping	Impact	live
+T1496.004	Cloud Service Hijacking	Impact	live
+T1497	Virtualization/Sandbox Evasion	Discovery, Stealth	live
+T1497.001	System Checks	Discovery, Stealth	live
+T1497.002	User Activity Based Checks	Discovery, Stealth	live
+T1497.003	Time Based Checks	Discovery, Stealth	live
+T1498	Network Denial of Service	Impact	live
+T1498.001	Direct Network Flood	Impact	live
+T1498.002	Reflection Amplification	Impact	live
+T1499	Endpoint Denial of Service	Impact	live
+T1499.001	OS Exhaustion Flood	Impact	live
+T1499.002	Service Exhaustion Flood	Impact	live
+T1499.003	Application Exhaustion Flood	Impact	live
+T1499.004	Application or System Exploitation	Impact	live
+T1500	Compile After Delivery	Stealth	revoked-by T1027.004
+T1501	Systemd Service	Persistence	revoked-by T1543.002
+T1502	Parent PID Spoofing	Privilege Escalation, Stealth	revoked-by T1134.004
+T1503	Credentials from Web Browsers	Credential Access	revoked-by T1555.003
+T1504	PowerShell Profile	Persistence, Privilege Escalation	revoked-by T1546.013
+T1505	Server Software Component	Persistence	live
+T1505.001	SQL Stored Procedures	Persistence	live
+T1505.002	Transport Agent	Persistence	live
+T1505.003	Web Shell	Persistence	live
+T1505.004	IIS Components	Persistence	live
+T1505.005	Terminal Services DLL	Persistence	live
+T1505.006	vSphere Installation Bundles	Persistence	live
+T1506	Web Session Cookie	Lateral Movement, Stealth	revoked-by T1550.004
+T1514	Elevated Execution with Prompt	Privilege Escalation	revoked-by T1548.004
+T1518	Software Discovery	Discovery	live
+T1518.001	Security Software Discovery	Discovery	live
+T1518.002	Backup Software Discovery	Discovery	live
+T1519	Emond	Persistence, Privilege Escalation	revoked-by T1546.014
+T1522	Cloud Instance Metadata API	Credential Access	revoked-by T1552.005
+T1525	Implant Internal Image	Persistence	live
+T1526	Cloud Service Discovery	Discovery	live
+T1527	Application Access Token	Lateral Movement, Stealth	revoked-by T1550.001
+T1528	Steal Application Access Token	Credential Access	live
+T1529	System Shutdown/Reboot	Impact	live
+T1530	Data from Cloud Storage	Collection	live
+T1531	Account Access Removal	Impact	live
+T1534	Internal Spearphishing	Lateral Movement	live
+T1535	Unused/Unsupported Cloud Regions	Stealth	live
+T1536	Revert Cloud Instance	Stealth	revoked-by T1578.004
+T1537	Transfer Data to Cloud Account	Exfiltration	live
+T1538	Cloud Service Dashboard	Discovery	live
+T1539	Steal Web Session Cookie	Credential Access	live
+T1542	Pre-OS Boot	Persistence, Stealth	live
+T1542.001	System Firmware	Persistence, Stealth	live
+T1542.002	Component Firmware	Persistence, Stealth	live
+T1542.003	Bootkit	Persistence, Stealth	live
+T1542.004	ROMMONkit	Persistence, Stealth	live
+T1542.005	TFTP Boot	Persistence, Stealth	live
+T1543	Create or Modify System Process	Persistence, Privilege Escalation	live
+T1543.001	Launch Agent	Persistence, Privilege Escalation	live
+T1543.002	Systemd Service	Persistence, Privilege Escalation	live
+T1543.003	Windows Service	Persistence, Privilege Escalation	live
+T1543.004	Launch Daemon	Persistence, Privilege Escalation	live
+T1543.005	Container Service	Persistence, Privilege Escalation	live
+T1546	Event Triggered Execution	Persistence, Privilege Escalation	live
+T1546.001	Change Default File Association	Persistence, Privilege Escalation	live
+T1546.002	Screensaver	Persistence, Privilege Escalation	live
+T1546.003	Windows Management Instrumentation Event Subscription	Persistence, Privilege Escalation	live
+T1546.004	Unix Shell Configuration Modification	Persistence, Privilege Escalation	live
+T1546.005	Trap	Persistence, Privilege Escalation	live
+T1546.006	LC_LOAD_DYLIB Addition	Persistence, Privilege Escalation	live
+T1546.007	Netsh Helper DLL	Persistence, Privilege Escalation	live
+T1546.008	Accessibility Features	Persistence, Privilege Escalation	live
+T1546.009	AppCert DLLs	Persistence, Privilege Escalation	live
+T1546.010	AppInit DLLs	Persistence, Privilege Escalation	live
+T1546.011	Application Shimming	Persistence, Privilege Escalation	live
+T1546.012	Image File Execution Options Injection	Persistence, Privilege Escalation	live
+T1546.013	PowerShell Profile	Persistence, Privilege Escalation	live
+T1546.014	Emond	Persistence, Privilege Escalation	live
+T1546.015	Component Object Model Hijacking	Persistence, Privilege Escalation	live
+T1546.016	Installer Packages	Persistence, Privilege Escalation	live
+T1546.017	Udev Rules	Persistence, Privilege Escalation	live
+T1546.018	Python Startup Hooks	Persistence, Privilege Escalation	live
+T1547	Boot or Logon Autostart Execution	Persistence, Privilege Escalation	live
+T1547.001	Registry Run Keys / Startup Folder	Persistence, Privilege Escalation	live
+T1547.002	Authentication Package	Persistence, Privilege Escalation	live
+T1547.003	Time Providers	Persistence, Privilege Escalation	live
+T1547.004	Winlogon Helper DLL	Persistence, Privilege Escalation	live
+T1547.005	Security Support Provider	Persistence, Privilege Escalation	live
+T1547.006	Kernel Modules and Extensions	Persistence, Privilege Escalation	live
+T1547.007	Re-opened Applications	Persistence, Privilege Escalation	live
+T1547.008	LSASS Driver	Persistence, Privilege Escalation	live
+T1547.009	Shortcut Modification	Persistence, Privilege Escalation	live
+T1547.010	Port Monitors	Persistence, Privilege Escalation	live
+T1547.011	Plist Modification	Persistence, Privilege Escalation	revoked-by T1647
+T1547.012	Print Processors	Persistence, Privilege Escalation	live
+T1547.013	XDG Autostart Entries	Persistence, Privilege Escalation	live
+T1547.014	Active Setup	Persistence, Privilege Escalation	live
+T1547.015	Login Items	Persistence, Privilege Escalation	live
+T1548	Abuse Elevation Control Mechanism	Privilege Escalation	live
+T1548.001	Setuid and Setgid	Privilege Escalation	live
+T1548.002	Bypass User Account Control	Privilege Escalation	live
+T1548.003	Sudo and Sudo Caching	Privilege Escalation	live
+T1548.004	Elevated Execution with Prompt	Privilege Escalation	live
+T1548.005	Temporary Elevated Cloud Access	Privilege Escalation	live
+T1548.006	TCC Manipulation	Privilege Escalation	live
+T1550	Use Alternate Authentication Material	Lateral Movement	live
+T1550.001	Application Access Token	Lateral Movement	live
+T1550.002	Pass the Hash	Lateral Movement	live
+T1550.003	Pass the Ticket	Lateral Movement	live
+T1550.004	Web Session Cookie	Lateral Movement	live
+T1552	Unsecured Credentials	Credential Access	live
+T1552.001	Credentials In Files	Credential Access	live
+T1552.002	Credentials in Registry	Credential Access	live
+T1552.003	Shell History	Credential Access	live
+T1552.004	Private Keys	Credential Access	live
+T1552.005	Cloud Instance Metadata API	Credential Access	live
+T1552.006	Group Policy Preferences	Credential Access	live
+T1552.007	Container API	Credential Access	live
+T1552.008	Chat Messages	Credential Access	live
+T1553	Subvert Trust Controls	Defense Impairment	live
+T1553.001	Gatekeeper Bypass	Defense Impairment	live
+T1553.002	Code Signing	Defense Impairment	live
+T1553.003	SIP and Trust Provider Hijacking	Defense Impairment	live
+T1553.004	Install Root Certificate	Defense Impairment	live
+T1553.005	Mark-of-the-Web Bypass	Defense Impairment	live
+T1553.006	Code Signing Policy Modification	Defense Impairment	live
+T1554	Compromise Host Software Binary	Persistence	live
+T1555	Credentials from Password Stores	Credential Access	live
+T1555.001	Keychain	Credential Access	live
+T1555.002	Securityd Memory	Credential Access	live
+T1555.003	Credentials from Web Browsers	Credential Access	live
+T1555.004	Windows Credential Manager	Credential Access	live
+T1555.005	Password Managers	Credential Access	live
+T1555.006	Cloud Secrets Management Stores	Credential Access	live
+T1556	Modify Authentication Process	Credential Access, Defense Impairment, Persistence	live
+T1556.001	Domain Controller Authentication	Credential Access, Defense Impairment, Persistence	live
+T1556.002	Password Filter DLL	Credential Access, Defense Impairment, Persistence	live
+T1556.003	Pluggable Authentication Modules	Credential Access, Defense Impairment, Persistence	live
+T1556.004	Network Device Authentication	Credential Access, Defense Impairment, Persistence	live
+T1556.005	Reversible Encryption	Credential Access, Defense Impairment, Persistence	live
+T1556.006	Multi-Factor Authentication	Credential Access, Defense Impairment, Persistence	live
+T1556.007	Hybrid Identity	Credential Access, Defense Impairment, Persistence	live
+T1556.008	Network Provider DLL	Credential Access, Defense Impairment, Persistence	live
+T1556.009	Conditional Access Policies	Credential Access, Defense Impairment, Persistence	live
+T1557	Adversary-in-the-Middle	Collection, Credential Access	live
+T1557.001	Name Resolution Poisoning and SMB Relay	Collection, Credential Access	live
+T1557.002	ARP Cache Poisoning	Collection, Credential Access	live
+T1557.003	DHCP Spoofing	Collection, Credential Access	live
+T1557.004	Evil Twin	Collection, Credential Access	live
+T1558	Steal or Forge Kerberos Tickets	Credential Access	live
+T1558.001	Golden Ticket	Credential Access	live
+T1558.002	Silver Ticket	Credential Access	live
+T1558.003	Kerberoasting	Credential Access	live
+T1558.004	AS-REP Roasting	Credential Access	live
+T1558.005	Ccache Files	Credential Access	live
+T1559	Inter-Process Communication	Execution	live
+T1559.001	Component Object Model	Execution	live
+T1559.002	Dynamic Data Exchange	Execution	live
+T1559.003	XPC Services	Execution	live
+T1560	Archive Collected Data	Collection	live
+T1560.001	Archive via Utility	Collection	live
+T1560.002	Archive via Library	Collection	live
+T1560.003	Archive via Custom Method	Collection	live
+T1561	Disk Wipe	Impact	live
+T1561.001	Disk Content Wipe	Impact	live
+T1561.002	Disk Structure Wipe	Impact	live
+T1562	Impair Defenses	Stealth	revoked-by T1685
+T1562.001	Disable or Modify Tools	Stealth	revoked-by T1685
+T1562.002	Disable Windows Event Logging	Stealth	revoked-by T1685.001
+T1562.003	Impair Command History Logging	Stealth	revoked-by T1690
+T1562.004	Disable or Modify System Firewall	Stealth	revoked-by T1686
+T1562.006	Indicator Blocking	Stealth	revoked-by T1685
+T1562.007	Disable or Modify Cloud Firewall	Stealth	revoked-by T1686.001
+T1562.008	Disable or Modify Cloud Logs	Stealth	revoked-by T1685.002
+T1562.009	Safe Mode Boot	Stealth	revoked-by T1688
+T1562.010	Downgrade Attack	Stealth	revoked-by T1689
+T1562.011	Spoof Security Alerting	Stealth	revoked-by T1685.003
+T1562.012	Disable or Modify Linux Audit System	Stealth	revoked-by T1685.004
+T1562.013	Disable or Modify Network Device Firewall	Stealth	revoked-by T1686.002
+T1563	Remote Service Session Hijacking	Lateral Movement	live
+T1563.001	SSH Hijacking	Lateral Movement	live
+T1563.002	RDP Hijacking	Lateral Movement	live
+T1564	Hide Artifacts	Stealth	live
+T1564.001	Hidden Files and Directories	Stealth	live
+T1564.002	Hidden Users	Stealth	live
+T1564.003	Hidden Window	Stealth	live
+T1564.004	NTFS File Attributes	Stealth	live
+T1564.005	Hidden File System	Stealth	live
+T1564.006	Run Virtual Instance	Stealth	live
+T1564.007	VBA Stomping	Stealth	live
+T1564.008	Email Hiding Rules	Stealth	live
+T1564.009	Resource Forking	Stealth	live
+T1564.010	Process Argument Spoofing	Stealth	live
+T1564.011	Ignore Process Interrupts	Stealth	live
+T1564.012	File/Path Exclusions	Stealth	live
+T1564.013	Bind Mounts	Stealth	live
+T1564.014	Extended Attributes	Stealth	live
+T1565	Data Manipulation	Impact	live
+T1565.001	Stored Data Manipulation	Impact	live
+T1565.002	Transmitted Data Manipulation	Impact	live
+T1565.003	Runtime Data Manipulation	Impact	live
+T1566	Phishing	Initial Access	live
+T1566.001	Spearphishing Attachment	Initial Access	live
+T1566.002	Spearphishing Link	Initial Access	live
+T1566.003	Spearphishing via Service	Initial Access	live
+T1566.004	Spearphishing Voice	Initial Access	live
+T1567	Exfiltration Over Web Service	Exfiltration	live
+T1567.001	Exfiltration to Code Repository	Exfiltration	live
+T1567.002	Exfiltration to Cloud Storage	Exfiltration	live
+T1567.003	Exfiltration to Text Storage Sites	Exfiltration	live
+T1567.004	Exfiltration Over Webhook	Exfiltration	live
+T1568	Dynamic Resolution	Command and Control	live
+T1568.001	Fast Flux DNS	Command and Control	live
+T1568.002	Domain Generation Algorithms	Command and Control	live
+T1568.003	DNS Calculation	Command and Control	live
+T1569	System Services	Execution	live
+T1569.001	Launchctl	Execution	live
+T1569.002	Service Execution	Execution	live
+T1569.003	Systemctl	Execution	live
+T1570	Lateral Tool Transfer	Lateral Movement	live
+T1571	Non-Standard Port	Command and Control	live
+T1572	Protocol Tunneling	Command and Control	live
+T1573	Encrypted Channel	Command and Control	live
+T1573.001	Symmetric Cryptography	Command and Control	live
+T1573.002	Asymmetric Cryptography	Command and Control	live
+T1574	Hijack Execution Flow	Execution, Stealth	live
+T1574.001	DLL	Execution, Stealth	live
+T1574.002	DLL Side-Loading	Execution, Stealth	revoked-by T1574.001
+T1574.004	Dylib Hijacking	Execution, Stealth	live
+T1574.005	Executable Installer File Permissions Weakness	Execution, Stealth	live
+T1574.006	Dynamic Linker Hijacking	Execution, Stealth	live
+T1574.007	Path Interception by PATH Environment Variable	Execution, Stealth	live
+T1574.008	Path Interception by Search Order Hijacking	Execution, Stealth	live
+T1574.009	Path Interception by Unquoted Path	Execution, Stealth	live
+T1574.010	Services File Permissions Weakness	Execution, Stealth	live
+T1574.011	Services Registry Permissions Weakness	Execution, Stealth	live
+T1574.012	COR_PROFILER	Execution, Stealth	live
+T1574.013	KernelCallbackTable	Execution, Stealth	live
+T1574.014	AppDomainManager	Execution, Stealth	live
+T1578	Modify Cloud Compute Infrastructure	Defense Impairment	live
+T1578.001	Create Snapshot	Defense Impairment	live
+T1578.002	Create Cloud Instance	Defense Impairment	live
+T1578.003	Delete Cloud Instance	Defense Impairment	live
+T1578.004	Revert Cloud Instance	Defense Impairment	live
+T1578.005	Modify Cloud Compute Configurations	Defense Impairment	live
+T1580	Cloud Infrastructure Discovery	Discovery	live
+T1583	Acquire Infrastructure	Resource Development	live
+T1583.001	Domains	Resource Development	live
+T1583.002	DNS Server	Resource Development	live
+T1583.003	Virtual Private Server	Resource Development	live
+T1583.004	Server	Resource Development	live
+T1583.005	Botnet	Resource Development	live
+T1583.006	Web Services	Resource Development	live
+T1583.007	Serverless	Resource Development	live
+T1583.008	Malvertising	Resource Development	live
+T1584	Compromise Infrastructure	Resource Development	live
+T1584.001	Domains	Resource Development	live
+T1584.002	DNS Server	Resource Development	live
+T1584.003	Virtual Private Server	Resource Development	live
+T1584.004	Server	Resource Development	live
+T1584.005	Botnet	Resource Development	live
+T1584.006	Web Services	Resource Development	live
+T1584.007	Serverless	Resource Development	live
+T1584.008	Network Devices	Resource Development	live
+T1585	Establish Accounts	Resource Development	live
+T1585.001	Social Media Accounts	Resource Development	live
+T1585.002	Email Accounts	Resource Development	live
+T1585.003	Cloud Accounts	Resource Development	live
+T1586	Compromise Accounts	Resource Development	live
+T1586.001	Social Media Accounts	Resource Development	live
+T1586.002	Email Accounts	Resource Development	live
+T1586.003	Cloud Accounts	Resource Development	live
+T1587	Develop Capabilities	Resource Development	live
+T1587.001	Malware	Resource Development	live
+T1587.002	Code Signing Certificates	Resource Development	live
+T1587.003	Digital Certificates	Resource Development	live
+T1587.004	Exploits	Resource Development	live
+T1588	Obtain Capabilities	Resource Development	live
+T1588.001	Malware	Resource Development	live
+T1588.002	Tool	Resource Development	live
+T1588.003	Code Signing Certificates	Resource Development	live
+T1588.004	Digital Certificates	Resource Development	live
+T1588.005	Exploits	Resource Development	live
+T1588.006	Vulnerabilities	Resource Development	live
+T1588.007	Artificial Intelligence	Resource Development	live
+T1589	Gather Victim Identity Information	Reconnaissance	live
+T1589.001	Credentials	Reconnaissance	live
+T1589.002	Email Addresses	Reconnaissance	live
+T1589.003	Employee Names	Reconnaissance	live
+T1590	Gather Victim Network Information	Reconnaissance	live
+T1590.001	Domain Properties	Reconnaissance	live
+T1590.002	DNS	Reconnaissance	live
+T1590.003	Network Trust Dependencies	Reconnaissance	live
+T1590.004	Network Topology	Reconnaissance	live
+T1590.005	IP Addresses	Reconnaissance	live
+T1590.006	Network Security Appliances	Reconnaissance	live
+T1591	Gather Victim Org Information	Reconnaissance	live
+T1591.001	Determine Physical Locations	Reconnaissance	live
+T1591.002	Business Relationships	Reconnaissance	live
+T1591.003	Identify Business Tempo	Reconnaissance	live
+T1591.004	Identify Roles	Reconnaissance	live
+T1592	Gather Victim Host Information	Reconnaissance	live
+T1592.001	Hardware	Reconnaissance	live
+T1592.002	Software	Reconnaissance	live
+T1592.003	Firmware	Reconnaissance	live
+T1592.004	Client Configurations	Reconnaissance	live
+T1593	Search Open Websites/Domains	Reconnaissance	live
+T1593.001	Social Media	Reconnaissance	live
+T1593.002	Search Engines	Reconnaissance	live
+T1593.003	Code Repositories	Reconnaissance	live
+T1594	Search Victim-Owned Websites	Reconnaissance	live
+T1595	Active Scanning	Reconnaissance	live
+T1595.001	Scanning IP Blocks	Reconnaissance	live
+T1595.002	Vulnerability Scanning	Reconnaissance	live
+T1595.003	Wordlist Scanning	Reconnaissance	live
+T1596	Search Open Technical Databases	Reconnaissance	live
+T1596.001	DNS/Passive DNS	Reconnaissance	live
+T1596.002	WHOIS	Reconnaissance	live
+T1596.003	Digital Certificates	Reconnaissance	live
+T1596.004	CDNs	Reconnaissance	live
+T1596.005	Scan Databases	Reconnaissance	live
+T1597	Search Closed Sources	Reconnaissance	live
+T1597.001	Threat Intel Vendors	Reconnaissance	live
+T1597.002	Purchase Technical Data	Reconnaissance	live
+T1598	Phishing for Information	Reconnaissance	live
+T1598.001	Spearphishing Service	Reconnaissance	live
+T1598.002	Spearphishing Attachment	Reconnaissance	live
+T1598.003	Spearphishing Link	Reconnaissance	live
+T1598.004	Spearphishing Voice	Reconnaissance	live
+T1599	Network Boundary Bridging	Defense Impairment	live
+T1599.001	Network Address Translation Traversal	Defense Impairment	live
+T1600	Weaken Encryption	Defense Impairment	live
+T1600.001	Reduce Key Space	Defense Impairment	live
+T1600.002	Disable Crypto Hardware	Defense Impairment	live
+T1601	Modify System Image	Defense Impairment	live
+T1601.001	Patch System Image	Defense Impairment	live
+T1601.002	Downgrade System Image	Defense Impairment	live
+T1602	Data from Configuration Repository	Collection	live
+T1602.001	SNMP (MIB Dump)	Collection	live
+T1602.002	Network Device Configuration Dump	Collection	live
+T1606	Forge Web Credentials	Credential Access	live
+T1606.001	Web Cookies	Credential Access	live
+T1606.002	SAML Tokens	Credential Access	live
+T1608	Stage Capabilities	Resource Development	live
+T1608.001	Upload Malware	Resource Development	live
+T1608.002	Upload Tool	Resource Development	live
+T1608.003	Install Digital Certificate	Resource Development	live
+T1608.004	Drive-by Target	Resource Development	live
+T1608.005	Link Target	Resource Development	live
+T1608.006	SEO Poisoning	Resource Development	live
+T1608.007	AI Result Poisoning	Resource Development	live
+T1609	Container Administration Command	Execution	live
+T1610	Deploy Container	Execution	live
+T1611	Escape to Host	Privilege Escalation	live
+T1612	Build Image on Host	Stealth	live
+T1613	Container and Resource Discovery	Discovery	live
+T1614	System Location Discovery	Discovery	live
+T1614.001	System Language Discovery	Discovery	live
+T1615	Group Policy Discovery	Discovery	live
+T1619	Cloud Storage Object Discovery	Discovery	live
+T1620	Reflective Code Loading	Stealth	live
+T1621	Multi-Factor Authentication Request Generation	Credential Access	live
+T1622	Debugger Evasion	Discovery, Stealth	live
+T1647	Plist File Modification	Defense Impairment	live
+T1648	Serverless Execution	Execution	live
+T1649	Steal or Forge Authentication Certificates	Credential Access	live
+T1650	Acquire Access	Resource Development	live
+T1651	Cloud Administration Command	Execution	live
+T1652	Device Driver Discovery	Discovery	live
+T1653	Power Settings	Persistence	live
+T1654	Log Enumeration	Discovery	live
+T1656	Impersonation	Stealth	revoked-by T1684.001
+T1657	Financial Theft	Impact	live
+T1659	Content Injection	Command and Control, Initial Access	live
+T1665	Hide Infrastructure	Command and Control	live
+T1666	Modify Cloud Resource Hierarchy	Defense Impairment	live
+T1667	Email Bombing	Impact	live
+T1668	Exclusive Control	Persistence	live
+T1669	Wi-Fi Networks	Initial Access	live
+T1671	Cloud Application Integration	Persistence	live
+T1672	Email Spoofing	Stealth	revoked-by T1684.002
+T1673	Virtual Machine Discovery	Discovery	live
+T1674	Input Injection	Execution	live
+T1675	ESXi Administration Command	Execution	live
+T1677	Poisoned Pipeline Execution	Execution	live
+T1678	Delay Execution	Stealth	live
+T1679	Selective Exclusion	Stealth	live
+T1680	Local Storage Discovery	Discovery	live
+T1681	Search Threat Vendor Data	Reconnaissance	live
+T1682	Query Public AI Services	Reconnaissance	live
+T1683	Generate Content	Resource Development	live
+T1683.001	Written Content	Resource Development	live
+T1683.002	Audio-Visual Content	Resource Development	live
+T1684	Social Engineering	Stealth	live
+T1684.001	Impersonation	Stealth	live
+T1684.002	Email Spoofing	Stealth	live
+T1685	Disable or Modify Tools	Defense Impairment	live
+T1685.001	Disable or Modify Windows Event Log	Defense Impairment	live
+T1685.002	Disable or Modify Cloud Log	Defense Impairment	live
+T1685.003	Modify or Spoof Tool UI	Defense Impairment	live
+T1685.004	Disable or Modify Linux Audit System Log	Defense Impairment	live
+T1685.005	Clear Windows Event Logs	Defense Impairment	live
+T1685.006	Clear Linux or Mac System Logs	Defense Impairment	live
+T1685.007	Impair Autonomous Defenses	Defense Impairment	live
+T1686	Disable or Modify System Firewall	Defense Impairment	live
+T1686.001	Cloud Firewall	Defense Impairment	live
+T1686.002	Network Device Firewall	Defense Impairment	live
+T1686.003	Windows Host Firewall	Defense Impairment	live
+T1687	Exploitation for Defense Impairment	Defense Impairment	live
+T1688	Safe Mode Boot	Defense Impairment	live
+T1689	Downgrade Attack	Defense Impairment	live
+T1690	Prevent Command History Logging	Defense Impairment	live
+T1696	Anti-Automation Evasion	Stealth	live
+T1696.001	Automate CAPTCHA Completion	Stealth	live
+T1696.002	Avoid CAPTCHA	Stealth	live
+T1697	Steal Application Specific Passwords	Credential Access	live
+T1698	Indirect Prompt Injection	Execution	live
+T1699	Direct Prompt Injection	Execution	live
+T1700	AI-Enabled Exfiltration	Exfiltration	live

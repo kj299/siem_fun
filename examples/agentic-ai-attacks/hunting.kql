@@ -13,7 +13,7 @@
 // --- H-AGT-010  Slow enumeration trajectory (port of Morpheus R-P-L7-010) ----------------------
 // Daily distinct paths per client climbing on a straight line while its busiest 10-minute window stays
 // under R-D-AGT-001's 200-path floor (same guard as the Splunk rule's peak lookup).
-let web = _Im_WebSession(starttime=ago(14d)) | extend Path = tostring(parse_url(Url).Path);
+let web = _Im_WebSession(starttime=ago(14d)) | extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]));
 let peak10 = web | summarize Paths = dcount(Path) by SrcIpAddr, bin(TimeGenerated, 10m) | summarize Peak10m = max(Paths) by SrcIpAddr;
 web
 | make-series Paths = dcount(Path) default = 0 on TimeGenerated step 1d by SrcIpAddr
@@ -44,12 +44,30 @@ AADServicePrincipalSignInLogs
 | where SignIns > 50
 | order by SignIns desc
 
-// --- H-AGT-013  Script files written into web roots by the web server (polyglot upload) ---------
+// --- H-AGT-013  Script files written into web folders by a web or database server process ------
+// Microsoft (2026-11-25): "New or modified script files ... this includes files written by a
+// database server process after its logging settings were changed to point a log file at a web
+// directory", and "Several short-lived web shells with incrementing names". The process and
+// extension lists are Microsoft's, extended with the .exe forms of its Linux names and the php5
+// and phar extensions; the threshold (any database write, or three files in ten minutes) is
+// Microsoft's. A single polyglot upload by the web server is below that threshold: delete the
+// last where to list every write. Deleted is a column only, not a trigger: it counts the same
+// names removed in the window by the server process itself, so a shell removed by its own rm
+// (a different process) is not counted, and a content management update writes and removes
+// script files in one window. Updates and deployments also write script files: read the names.
+let web = dynamic(["w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "node", "node.exe"]);
+let db = dynamic(["mysqld", "mysqld.exe", "mariadbd", "mariadbd.exe", "postgres", "postgres.exe", "sqlservr", "sqlservr.exe"]);
 DeviceFileEvents
 | where TimeGenerated > ago(14d)
-| where InitiatingProcessFileName in~ ("w3wp.exe","php-cgi.exe","httpd.exe","java.exe","node.exe","php-fpm","apache2","httpd","nginx","java","node")
+| where ActionType in ("FileCreated", "FileModified", "FileRenamed", "FileDeleted")
 | where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|asp|aspx|ashx|asmx)$"
-| project TimeGenerated, DeviceName, FolderPath, FileName, InitiatingProcessFileName, SHA256
+| where InitiatingProcessFileName in~ (web) or InitiatingProcessFileName in~ (db) or InitiatingProcessFileName startswith "php"
+| summarize Files = dcountif(FileName, ActionType != "FileDeleted"), Deleted = dcountif(FileName, ActionType == "FileDeleted"),
+            DatabaseWrites = countif(InitiatingProcessFileName in~ (db) and ActionType != "FileDeleted"),
+            Names = make_set(FileName, 25), Folders = make_set(FolderPath, 10), Hashes = make_set(SHA256, 10)
+            by DeviceName, InitiatingProcessFileName, bin(TimeGenerated, 10m)
+| where DatabaseWrites > 0 or Files >= 3
+| order by DatabaseWrites desc, Files desc, Deleted desc
 
 // --- H-AGT-014  CyberStrikeAI implant artifacts (Kaspersky Securelist 2026-11-02) -------------
 // Beacon and tool names, the SystemUpdate persistence pair, comsvcs MiniDump of LSASS and certutil
@@ -99,10 +117,12 @@ union isfuzzy=true
 // The compromised ConnectWise apps normally call Graph as kiota-dotnet; the operator's token loop
 // used Python-urllib/3.12, one request per tenant a few minutes apart. Baseline each watched app's
 // user-agent over the prior 14 days and alert when a new one appears in the last 24 hours. Needs
-// the Microsoft Graph activity logs connector. App IDs are the compromised ConnectWise ones.
+// the Microsoft Graph activity logs connector. The watched list is every entra_app_id row of iocs.csv: the
+// three ConnectWise applications Microsoft named and the five further ConnectWise/SkyKick ones Expel
+// listed (exposure, not compromise). A test keeps this list equal to those rows.
 // Tenants counts AadTenantId: TenantId in this table is the Log Analytics workspace ID, so it is
 // always 1. In a single-tenant workspace AadTenantId is 1 as well; read Requests and IPs there.
-let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827"]);
+let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827", "c921256f-04a7-44e8-9b2a-69c33929ba19", "b78f6a77-d4e5-46fb-87e5-d1648bd02519", "b2b55f5b-7758-4719-8d8f-88ae172e6bdb", "2399d300-6fca-4e6a-a686-399fefe75b83", "412dcf96-176d-4b3a-a1b0-4981ad66971e"]);
 let baseline = MicrosoftGraphActivityLogs
     | where TimeGenerated between (ago(14d) .. ago(1d)) and AppId in (watched)
     | summarize KnownAgents = make_set(UserAgent) by AppId;
@@ -156,11 +176,12 @@ signins
 // --- H-AGT-019  ARTEX task artifacts on a compromised host (S-RM 2026-11-04) -------------------
 // S-RM found /opt/artex/data/task/<task>/i4028/i4028.asp on a victim, disposable GitHub branches
 // named artex-wtest-<n>, and placeholder emails at example.invalid. The i<number> is the agent's
-// intent counter, so hunt the shape, not one name. ScopeWeaver (an ARTEX derivative) renames the
-// binary and its variables; both are included.
+// intent counter, so hunt the shape, not one name: Wiz (2026-11-25) catalogued counters from i49
+// to i808807, so two to seven digits are matched, ignoring case. ScopeWeaver (an ARTEX derivative)
+// renames the binary and its variables; both are included.
 union
   (DeviceFileEvents | where TimeGenerated > ago(30d)
-     | where FolderPath contains "/opt/artex" or FolderPath contains @"\artex\data\task" or FileName matches regex @"^i[0-9]{3,5}\.(asp|aspx|php|jsp|jspx)$"
+     | where FolderPath contains "/opt/artex" or FolderPath contains @"\artex\data\task" or FileName matches regex @"(?i)^i[0-9]{2,7}\.(asp|aspx|ashx|php|jsp|jspx)$"
      | project TimeGenerated, DeviceName, Signal = "task artifact", Detail = strcat(FolderPath, " ", FileName)),
   (DeviceProcessEvents | where TimeGenerated > ago(30d)
      | where ProcessCommandLine has_any ("artex-wtest-", "example.invalid", "SCOPEWEAVER_LLM_", "/opt/artex/") or FileName in~ ("scopeweaver", "scopeweaver.exe")
@@ -183,6 +204,11 @@ SigninLogs
 // domain (admin@, billing@, security@ ...), or API-friendly disposable mail (maxxspace.com via mail.tm),
 // then sign in with nonexistent users and abuse password recovery. Entra shown (self-service sign-up
 // writes an "Add user" audit event); apply the same regexes to your Okta or Auth0 event export.
+// The account shape is wider than Okta's: the counter runs two to seven digits (Wiz 2026-11-25),
+// joined to probe or canary (i3694canary), and Wiz's Black October list (from Bitrise) adds
+// pentest-probe and pentestprob sign-up names and two short probe<digits> usernames, which it
+// rates "low confidence; correlate only, not alone"; monitoring accounts named like probe001
+// match that last arm too.
 let shared = dynamic(["accounting", "admin", "billing", "careers", "compliance", "digital", "info", "investors", "ir", "legal", "marketing", "marketoperations", "membership", "noreply", "sales", "security", "support"]);
 let disposable = dynamic(["maxxspace.com"]);
 union
@@ -194,7 +220,7 @@ union
      | extend upn = tolower(UserPrincipalName)
      | project TimeGenerated, Signal = "failed sign-in", upn, Actor = IPAddress)
 | extend local = tostring(split(upn, "@")[0]), domain = tostring(split(upn, "@")[1])
-| where upn matches regex @"^i[0-9]{2}probe[0-9]{10}@" or domain in (disposable) or local in (shared)
+| where upn matches regex @"^(i[0-9]{2,7}[-_]?(probe|canary)|pentest[-_]?prob|[a-z]{0,2}probe[-_]?[0-9]{3,})" or domain in (disposable) or local in (shared)
 | summarize Events = count(), Signals = make_set(Signal, 3), Accounts = make_set(upn, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Actor
 | order by Events desc
 
@@ -204,7 +230,9 @@ union
 // by a success from the same IP being urgent. 199.19.77.84 was the primary source; hunt the shape.
 // This table has no AppDisplayName column (that one belongs to SigninLogs); the name is in
 // ServicePrincipalName. Microsoft's table reference and its own sample query disagree on whether the
-// error number sits in ResultType or ResultSignature, so both are read.
+// error number sits in ResultType or ResultSignature, so both are read. Microsoft (2026-11-05)
+// blocked its primary address "as a named location in a Conditional Access policy targeting
+// workload identities"; R-D-AGT-020 carries the same response.
 AADServicePrincipalSignInLogs
 | where TimeGenerated > ago(30d)
 | extend Ok = ResultType in ("0", "Success")
@@ -333,7 +361,7 @@ _Im_WebSession(starttime=ago(1h))
 // into a range no more than twice as wide. The identifier is the last numeric path segment.
 _Im_WebSession(starttime=ago(1d))
 | where EventResultDetails == "200"
-| extend Path = tostring(parse_url(Url).Path)
+| extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]))
 | extend Parts = extract_all(@"^(.*/)(\d{1,12})((?:/[^/\d][^/]*)*/?)$", Path)
 | extend Template = strcat(tostring(Parts[0][0]), "{id}", tostring(Parts[0][2])), ObjectId = tolong(Parts[0][1])
 | where isnotnull(ObjectId)
@@ -348,13 +376,16 @@ _Im_WebSession(starttime=ago(1d))
 // self-hosted LLM gateway or reseller software (CLIProxyAPI, New API). Matched by the projects'
 // own binary names, which an operator can change. VShell is also a commercial SSH server. WISP,
 // which the FBI also names, has no known process name and is not matched. Unit 42 (2026-11-24)
-// adds GSocket, whose client is gs-netcat.
+// adds GSocket, whose client is gs-netcat. GSocket's installer saves that client as defunct
+// (older versions: gs-dbus, gs-db) and runs it under a kernel-thread name, so those file names
+// and any command line naming gsocket are matched as well.
 DeviceProcessEvents
 | where TimeGenerated > ago(30d)
 | where FileName in~ ("chisel", "chisel.exe", "vpnserver", "vpnserver.exe", "vpnserver_x64.exe", "vpnbridge", "vpnbridge.exe", "vpnbridge_x64.exe",
-                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "gs-netcat", "gs-netcat.exe", "new-api", "new-api.exe", "one-api", "one-api.exe")
+                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "gs-netcat", "gs-netcat.exe", "gs-dbus", "gs-db", "defunct", "new-api", "new-api.exe", "one-api", "one-api.exe")
      or ProcessCommandLine contains "softether" or ProcessCommandLine contains "adaptix"
      or ProcessCommandLine contains "CLIProxyAPI" or ProcessCommandLine contains "cli-proxy-api"
+     or ProcessCommandLine contains "gsocket" or ProcessCommandLine contains "gs-netcat"
 | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Commands = make_set(ProcessCommandLine, 5), Accounts = make_set(AccountName, 5)
             by DeviceName, FileName
 | order by LastSeen desc
@@ -364,7 +395,8 @@ DeviceProcessEvents
 // dynamically generated PowerShell and batch scripts". Microsoft 2026-11-06: agents used netcat
 // and curl to download remote-access tools. Amazon 2026-11-20: a Cairn agent wrote
 // sitecustomize.py through an upload flaw, and a new Python process imported it. PostgreSQL
-// starts a shell for every archived log segment, so for it only a download tool counts.
+// starts a shell for every archived log segment, so for it only a download tool counts. A
+// first-seen view of the discovery commands a SQL Server service runs is H-AGT-057.
 union
   (DeviceProcessEvents | where TimeGenerated > ago(14d)
      | where (InitiatingProcessFileName in~ ("sqlservr.exe", "mysqld.exe", "mysqld", "oracle.exe", "redis-server")
@@ -381,7 +413,9 @@ union
 
 
 // ===== Added 2026-11-27: hunts from reporting published 2026-11-23 to 2026-11-25, and from ======
-// ===== Datadog (2026-11-09) and Google (2026-11-02, 2026-11-16), which the pack had not read ===
+// ===== Datadog (2026-11-09) and Google (2026-11-02), which the pack had not read ===============
+// One (H-AGT-044) rests on the FBI FLASH and Google's 2026-10-30 report, which it had. Google's
+// 2026-11-16 report was read with these; the reference cites it, and no hunt here rests on it.
 // Each hunt names the source of its hypothesis. Thresholds are the source's where it gives one.
 // Unit 42 (2026-11-24) found no compiled implant in more than ten agent-run campaigns: hashes and
 // malware signatures come back empty, and what is left to hunt is behaviour and the names an
@@ -391,14 +425,20 @@ union
 // The model names what it creates after the task identifier in front of it. Wiz found the labels
 // in role session names, SSM command comments, bucket, role, policy and security-group names,
 // tags, Azure run-command and VM names and Entra app registrations, and notes that "for denied
-// calls, the names survive in error messages", so failed calls are read too. Shapes: pentest-i and
-// artex-i followed by the counter, the artx- and csai- prefixes (csai- is CyberStrikeAI), and the
-// counter joined to probe or canary. Wiz: "pair i<N> with an anchor before alerting"; a bare
-// i<digits> is never matched here. Counter values seen run from two digits to six; seven are
-// allowed for. The pattern runs over whole records with no index to help: shorten the range if
-// it times out.
-let label = @"(?i)(pentest-i\d{2,7}|artex-i\d{2,7}|artex-verify-i\d{2,7}|\bartx-[a-z0-9][a-z0-9_-]*|\bcsai-[a-z0-9][a-z0-9_-]*|\bi\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\d{2,7}|tasks/[^/\s]+/i\d{2,7})";
-union
+// calls, the names survive in error messages", so failed calls are read too. Shapes: the
+// pentest-, artex-, artx-, art18- and csai- prefixes, with or without a counter after them (Wiz
+// names "pentest-* workspaces and pods" and artex-verify-*; csai- is CyberStrikeAI; CrowdStrike
+// (2026-10-29) asks for "artx-prefixed cloud roles, art18- administration-command comments"
+// from VAPOR PANDA's ARTEX use), the counter joined
+// to probe or canary, a tasks/<task>/i<N> path and the exp<N>-worker-i<N> session name. Each shape
+// must start the text or follow a character that is not a letter or digit; an underscore counts,
+// so _artx-dnsproof, a DNS proof-record label, is matched. Wiz: "pair i<N> with an anchor before
+// alerting"; a bare i<digits> is never matched here. Counter values seen run from two digits to
+// six; seven are allowed for. The pattern runs over whole records with no index to help: shorten
+// the range if it times out. The union is fuzzy, so a workspace that lacks one of the three
+// tables still runs the other two.
+let label = @"(?i)(?:^|[^a-z0-9])((?:pentest|artex|artx|art18|csai)-[a-z0-9][a-z0-9_-]*|i\d{2,7}[-_]?(?:probe|canary)|(?:probe|canary)[-_]?i\d{2,7}|tasks/[^/\s]+/i\d{2,7}|exp\d+-worker-i\d{2,7})";
+union isfuzzy=true
   (AWSCloudTrail | where TimeGenerated > ago(30d)
      | extend Text = strcat(RequestParameters, " ", ErrorMessage, " ", UserIdentityArn)
      | where Text matches regex label
@@ -412,16 +452,18 @@ union
      | where Text matches regex label
      | project TimeGenerated, Plane = "entra", Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
                Source = tostring(InitiatedBy.user.ipAddress), Operation = OperationName, Label = extract(label, 1, Text))
-| extend Counter = tolong(extract(@"i(\d{2,7})", 1, Label))
+| extend Label = trim_start(@"[^A-Za-z0-9]+", Label)
+| extend Counter = tolong(extract(@"(?i)(?:^|[^a-z0-9]|probe|canary)i(\d{2,7})", 1, Label))
 | summarize Events = count(), Labels = make_set(Label, 20), LowestCounter = min(Counter), HighestCounter = max(Counter), Sources = make_set(Source, 20),
             Operations = make_set(Operation, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Plane, Actor
 | order by FirstSeen asc
 
 // --- H-AGT-033  CloudWatch Logs searched for secrets (Datadog 2026-11-09) -----------------------
-// "ARTEX's most frequent action was FilterLogEvents", and "every FilterLogEvents call was set
+// "ARTEX's most frequent action was FilterLogEvents", and "Every FilterLogEvents call was set
 // with a limit of 1000 ... That constant shows up across sessions." The filter patterns Datadog
 // published look for credentials and data locations. One principal, an hour. A person searching
-// their own logs for "password" matches the first condition once; the agent matches it for hours.
+// their own logs for "password" matches the first condition once; an agent working through log
+// groups matches it call after call.
 // If this returns nothing at all, count FilterLogEvents by ManagementEvent first to see whether
 // your trail records the call.
 AWSCloudTrail
@@ -447,24 +489,25 @@ union
                  PrivilegeAttribute = countif(RequestParameters contains "isAdmin" or ErrorMessage contains "isAdmin"),
                  FirstSeen = min(TimeGenerated) by Key = SourceIpAddress, bin(TimeGenerated, 1h)
      | where DistinctErrors >= 3 or PrivilegeAttribute > 0
-     | project FirstSeen, Signal = "sign-up errors that vary per attempt", Key, Detail = strcat(Attempts, " attempts; ", tostring(Errors))),
+     | project FirstSeen, Signal = iff(DistinctErrors >= 3, "sign-up errors that vary per attempt", "sign-up naming a privilege attribute"), Key, Detail = strcat(Attempts, " attempts; ", tostring(Errors))),
   (AWSCloudTrail | where TimeGenerated > ago(14d) and UserIdentityArn contains "CognitoIdentityCredentials"
      | summarize Denied = countif(ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"), DeniedActions = dcountif(EventName, ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"),
                  Actions = make_set(EventName, 20), FirstSeen = min(TimeGenerated) by Key = SourceIpAddress, UserIdentityArn, bin(TimeGenerated, 1h)
      | where Denied >= 20 and DeniedActions >= 5
-     | project FirstSeen, Signal = "identity-pool session refused across many calls", Key, Detail = strcat(Denied, " denials; ", tostring(Actions)))
+     | project FirstSeen, Signal = "identity-pool session refused across many calls", Key, Detail = strcat(UserIdentityArn, ": ", Denied, " denials; ", tostring(Actions)))
 | order by FirstSeen desc
 
 // --- H-AGT-035  One AWS session sweeping services and regions (Unit 42 2026-11-24) --------------
 // After taking instance-role credentials from the metadata service, "the AI agent enumerated 20
 // AWS services across eight regions". One session, ten or more services and four or more regions
-// in half an hour. Calls AWS services make on your behalf are left out. A deployment tool or a
-// posture scanner does this too: read the source address and the user-agent.
+// in half an hour. Calls AWS services make on your behalf are left out: a source that is a
+// service DNS name or AWS Internal, or a call with an invoking service recorded. A deployment
+// tool or a posture scanner does this too: read the source address and the user-agent.
 // Datadog and Wiz both add the stronger test, an instance role used from an address that is not
-// AWS, which needs your own list of expected egress and is left to you.
+// the instance's own: that is H-AGT-047, which needs no list of expected egress.
 AWSCloudTrail
 | where TimeGenerated > ago(14d)
-| where UserIdentityType == "AssumedRole" and SourceIpAddress !endswith ".amazonaws.com"
+| where UserIdentityType == "AssumedRole" and SourceIpAddress !endswith ".amazonaws.com" and SourceIpAddress !startswith "AWS Internal" and isempty(UserIdentityInvokedBy)
 | summarize Services = dcount(EventSource), Regions = dcount(AWSRegion), Calls = count(), Denied = countif(isnotempty(ErrorCode)),
             ServiceList = make_set(EventSource, 25), Sources = make_set(SourceIpAddress, 5), UserAgents = make_set(UserAgent, 5)
             by UserIdentityArn, bin(TimeGenerated, 30m)
@@ -477,10 +520,12 @@ AWSCloudTrail
 // (2026-11-24): "the median inter-command gap dropped to 1.4 seconds" against 23.9 for a person,
 // "in every campaign ... AI operators used section headers in shell commands and scripts, such as
 // ===[Title]===", and 40 to 100 different Base64 payloads in a session. Parent and child lists
-// are Microsoft's. Build servers that run shells under Java or Node.js will match: exclude them.
+// are Microsoft's, with the .exe forms, tomcat and python added, and jspawnhelper, the helper
+// through which a JVM starts a shell in one of Wiz's 2026-10-29 cases (java, jspawnhelper, sh).
+// Build servers that run shells under Java or Node.js will match: exclude them.
 DeviceProcessEvents
 | where TimeGenerated > ago(14d)
-| where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "node", "node.exe") or InitiatingProcessFileName startswith "php" or InitiatingProcessFileName startswith "tomcat"
+| where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "jspawnhelper", "node", "node.exe") or InitiatingProcessFileName startswith "php" or InitiatingProcessFileName startswith "tomcat"
 | where FileName in~ ("sh", "bash", "dash", "zsh", "cmd.exe", "powershell.exe", "pwsh", "pwsh.exe", "curl", "curl.exe", "wget", "wget.exe", "nc", "nc.exe", "ncat", "ncat.exe", "certutil.exe", "python", "python3", "python.exe", "perl")
 | extend Header = ProcessCommandLine contains "===",
          Encoded = ProcessCommandLine contains "base64" or ProcessCommandLine contains "FromBase64String" or ProcessCommandLine contains " -enc"
@@ -493,9 +538,14 @@ DeviceProcessEvents
 
 // --- H-AGT-037  Three or more kinds of secret file in ten minutes (Microsoft 2026-11-25) --------
 // "Rapid reads of /etc/shadow, .env and configuration files, private keys, and cloud credential
-// files." The file list and the threshold are Microsoft's. Read from command lines, so a tool
-// that opens files without naming them on a command line is not seen. One command naming three
-// kinds counts as three.
+// files". The file list is Microsoft's; the grouping into nine kinds is this pack's. Microsoft
+// counts each of its fourteen patterns separately and fires on three, so three SSH key types, or
+// wp-config.php with web.config and appsettings.json, reach its threshold and are one kind here.
+// Count the patterns separately to reproduce Microsoft's query. Microsoft also matches .env
+// anywhere in the line; this hunt needs a slash, a backslash or a space before it, so a name
+// such as =.env or ".env" in quotes is missed. Read from command lines, so a tool that opens files without naming them on a command
+// line is not seen. One command naming three kinds counts as three. Every process event in the
+// range is scanned with substring tests: shorten the range if it times out.
 DeviceProcessEvents
 | where TimeGenerated > ago(14d)
 | extend c = ProcessCommandLine
@@ -505,7 +555,7 @@ DeviceProcessEvents
     iff(c contains "id_rsa" or c contains "id_ecdsa" or c contains "id_ed25519", "ssh private key", ""),
     iff(c contains ".git-credentials", "git credentials", ""), iff(c contains ".pgpass" or c contains ".my.cnf", "database client password", ""),
     iff(c contains "wp-config.php" or c contains "web.config" or c contains "appsettings.json", "application config", ""),
-    iff(c contains "/.env" or c contains " .env", "env file", ""))
+    iff(c contains "/.env" or c contains @"\.env" or c contains " .env", "env file", ""))
 | where array_length(set_difference(Kinds, dynamic([""]))) > 0
 | mv-expand Kind = Kinds to typeof(string)
 | where Kind != ""
@@ -519,13 +569,15 @@ DeviceProcessEvents
 // find "excluding three different security vendors", and checked "for the presence of 16 different
 // security scanners (nmap, nessus, openvas, nikto, masscan, nuclei, lynis and others)". The first
 // is rare enough to read every hit. The other two are counted: a find with three or more
-// exclusions, and one command line naming four or more of the scanners.
+// exclusions (a -not or ! before -path, -name, -wholename or -regex, or their case-insensitive
+// -i forms, or a -prune), and one command line naming four or more of the scanners. Every process
+// event in the range is scanned with substring tests: shorten the range if it times out.
 DeviceProcessEvents
 | where TimeGenerated > ago(30d)
 | extend Scanners = iff(ProcessCommandLine contains "nmap", 1, 0) + iff(ProcessCommandLine contains "nessus", 1, 0) + iff(ProcessCommandLine contains "openvas", 1, 0)
                   + iff(ProcessCommandLine contains "nikto", 1, 0) + iff(ProcessCommandLine contains "masscan", 1, 0) + iff(ProcessCommandLine contains "nuclei", 1, 0)
                   + iff(ProcessCommandLine contains "lynis", 1, 0),
-         Exclusions = countof(ProcessCommandLine, @"(-not|!)\s+-(path|name)", "regex") + countof(ProcessCommandLine, "-prune")
+         Exclusions = countof(ProcessCommandLine, @"(-not|!)\s+-i?(path|name|wholename|regex)", "regex") + countof(ProcessCommandLine, "-prune")
 | extend Signal = case(
     (ProcessCommandLine contains "wdavdaemon" or InitiatingProcessCommandLine contains "wdavdaemon") and (FileName =~ "strace" or FileName =~ "ltrace" or FileName =~ "gdb"), "tracing the endpoint agent",
     FileName =~ "find" and Exclusions >= 3, "find that skips several directories",
@@ -540,15 +592,36 @@ DeviceProcessEvents
 // "privileged container creation, nsenter, IMDS kube-env queries and drifted scripts reaching for
 // cloud credentials", and a userland rootkit loaded through ld.so.preload "disguised as a
 // fontconfig service". Unit 42 (2026-11-24): "When IMDSv1 was blocked, the agent immediately
-// adapted and switched to IMDSv2 token acquisition." Host-level telemetry only; the cluster's own
-// audit log is where the privileged pod and the cluster-admin binding show.
+// adapted and switched to IMDSv2 token acquisition". The same credential request on Azure (the
+// managed identity token) and on Google Cloud (the service account token) is matched as well.
+// Wiz (2026-10-29) adds the rest of the ladder (the ECS credential address and the IPv6 metadata
+// address), a wrapper that truncates each command's output to 49152 bytes and posts it back, the
+// service account token read or tested from a shell, a capability check, and port checks against
+// container and cluster control ports. Its self-deleting /tmp script is printed only as a
+// placeholder (.cXXXX.sh), so that arm's shape is inferred from it. One source each: leads, not
+// alerts. Init scripts that read the service account token and ECS entrypoints that call
+// 169.254.170.2 match too. nsenter is matched as -t 1, a bundled form such as -at 1, --target 1
+// or a /proc/1/ns/ path. The port check reads the program from the command line as well as the
+// image name, because nc is often a link to nc.openbsd or nc.traditional, or a busybox applet,
+// and a sensor names the image the link resolves to. Host-level telemetry only; the cluster's own audit log is where the
+// privileged pod and the cluster-admin binding show. Every process event in the range is scanned
+// with substring tests: shorten the range if it times out.
 union
   (DeviceProcessEvents | where TimeGenerated > ago(30d)
      | extend Signal = case(
-         FileName =~ "nsenter" and ProcessCommandLine matches regex @"(-t\s*|--target[=\s]+)1(\s|$)", "nsenter into the host",
+         FileName =~ "nsenter" and ProcessCommandLine matches regex @"(\s-[a-zA-Z]*t\s*|--target[=\s]+)1(\s|$)|/proc/1/ns/", "nsenter into the host",
          ProcessCommandLine contains "kube-env", "node bootstrap secrets requested from the metadata service",
          ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "api/token", "metadata service token requested",
          ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "security-credentials", "role credentials requested from the metadata service",
+         ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "identity/oauth2/token", "managed identity token requested from the metadata service",
+         ProcessCommandLine contains "computeMetadata/v1" and ProcessCommandLine contains "service-accounts" and ProcessCommandLine contains "token", "service account token requested from the metadata service",
+         ProcessCommandLine contains "169.254.170.2" or ProcessCommandLine contains "fd00:ec2::254", "container or IPv6 credential endpoint requested",
+         ProcessCommandLine contains "head -c 49152" or (ProcessCommandLine contains "--post-data" and ProcessCommandLine contains "/result/"), "command output posted back by a beacon wrapper",
+         ProcessCommandLine contains "selfsubjectrulesreviews" or (ProcessCommandLine contains "serviceaccount/token" and FileName in~ ("cat", "curl", "wget", "sh", "bash", "dash")), "service account token read or tested from a shell",
+         FileName =~ "capsh" and ProcessCommandLine contains "--print", "container capability check",
+         ProcessCommandLine matches regex @"/tmp/\.c[0-9A-Za-z]{4,5}\.sh", "self-deleting script in /tmp",
+         FileName in~ ("nc", "ncat", "netcat", "nc.openbsd", "nc.traditional", "busybox") and ProcessCommandLine matches regex @"(^|[\s/])(nc|ncat|netcat)(\.[a-z]+)?\s"
+              and ProcessCommandLine matches regex @"\s-[a-z]*z" and ProcessCommandLine matches regex @"\s(2375|2376|10250|10255|2379|61678|8200)(\s|$)", "port check against a container or cluster control port",
          "")
      | where Signal != ""
      | project TimeGenerated, DeviceName, Signal, Detail = strcat(InitiatingProcessFileName, " > ", ProcessCommandLine)),
@@ -564,9 +637,11 @@ union
 // shells over SMB. Over the next 26 minutes it pushed webshells to more than 40 locations ...
 // uploading custom web.config files to enable script execution." A file that arrives over SMB is
 // created by the System process, not by the web server, which is why H-AGT-013 does not see it.
-// Microsoft (2026-11-25) describes the same from the other side: "several short-lived web shells
-// with incrementing names". Ten or more folders in half an hour. A deployment that copies a
-// site over a share looks the same; the remote address tells them apart.
+// Microsoft (2026-11-25) reports a different habit on the web server itself, "Several
+// short-lived web shells with incrementing names"; its hunt for that reads files written by
+// web or database server processes, which is H-AGT-013's ground, not this hunt's. Ten or more
+// folders in half an hour, or a web.config written with two or more script files. A deployment
+// that copies a site over a share looks the same; the remote address tells them apart.
 DeviceFileEvents
 | where TimeGenerated > ago(30d)
 | where ActionType in ("FileCreated", "FileModified", "FileRenamed")
@@ -582,9 +657,11 @@ DeviceFileEvents
 // "Find users or applications that both add or change application credentials and assign
 // directory roles or application permissions within an hour." In one case "an application
 // assigned itself the Global Administrator role". R-B-AGT-008 matches these operations one at a
-// time; the pairing by actor is the new part. SelfGrants counts the grants whose targets
-// include the actor's own object id. Privileged Identity Management writes its activations under
-// its own name, so they do not pair with a person's credential change.
+// time; the pairing by actor is the new part. SelfGrants counts the distinct grants, within the
+// hour of a credential change, whose targets include the actor's own object id; Operations
+// lists each credential change and grant as a pair. An application with no display name is
+// named by its service principal name, then by its object id. Privileged Identity Management
+// writes its activations under its own name, so they do not pair with a person's credential change.
 let acts = AuditLogs
     | where TimeGenerated > ago(30d)
     | extend Stage = case(
@@ -592,17 +669,18 @@ let acts = AuditLogs
         OperationName == "Add member to role" or OperationName == "Add app role assignment to service principal", "grant",
         "")
     | where Stage != ""
-    | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
+    | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName),
+                                      tostring(InitiatedBy.app.servicePrincipalName), tostring(InitiatedBy.user.id), tostring(InitiatedBy.app.servicePrincipalId))),
              ActorId = coalesce(tostring(InitiatedBy.user.id), tostring(InitiatedBy.app.servicePrincipalId)),
              Target = tostring(TargetResources[0].displayName), TargetText = tostring(TargetResources)
     | where isnotempty(Actor);
 acts
 | where Stage == "credential"
 | project Actor, ActorId, CredentialTime = TimeGenerated, CredentialOperation = OperationName, CredentialTarget = Target
-| join kind=inner (acts | where Stage == "grant" | project Actor, GrantTime = TimeGenerated, GrantOperation = OperationName, GrantTarget = Target, TargetText) on Actor
+| join kind=inner (acts | where Stage == "grant" | project Actor, GrantId = Id, GrantTime = TimeGenerated, GrantOperation = OperationName, GrantTarget = Target, TargetText) on Actor
 | where abs(datetime_diff("minute", GrantTime, CredentialTime)) <= 60
 | extend SelfGrant = isnotempty(ActorId) and TargetText contains ActorId
-| summarize SelfGrants = countif(SelfGrant), Operations = make_set(pack_array(CredentialOperation, GrantOperation), 10), CredentialTargets = make_set(CredentialTarget, 10),
+| summarize SelfGrants = dcountif(GrantId, SelfGrant), Operations = make_set(strcat(CredentialOperation, " + ", GrantOperation), 10), CredentialTargets = make_set(CredentialTarget, 10),
             GrantTargets = make_set(GrantTarget, 10), FirstSeen = min(CredentialTime), LastSeen = max(GrantTime) by Actor, ActorId
 | order by SelfGrants desc, FirstSeen desc
 
@@ -612,14 +690,17 @@ acts
 // PutUseCaseForModelAccess, CreateFoundationModelAgreement. Hiding: changes to the model
 // invocation logging configuration. Use: Converse, InvokeModel, InvokeModelWithResponseStream,
 // with "high-volume spikes in ThrottlingException, ValidationException, or
-// ResourceNotFoundException". "In multiple incidents ... LLM services were not enabled at the
-// time of compromise ... treat any unauthorized enablement as a critical security event."
+// ResourceNotFoundException". GTIG: "treat any unauthorized enablement as a critical security
+// event. In multiple incidents that Mandiant investigated, LLM services were not enabled at the
+// time of compromise." PutFoundationModelEntitlement (enabling) and
+// ListFoundationModelAgreementOffers (scoping) are added from other LLMjacking reports (Permiso,
+// Lacework), not from Mandiant.
 AWSCloudTrail
 | where TimeGenerated > ago(30d) and EventSource == "bedrock.amazonaws.com"
 | extend Stage = case(
-    EventName in ("PutUseCaseForModelAccess", "CreateFoundationModelAgreement"), "enable",
+    EventName in ("PutUseCaseForModelAccess", "CreateFoundationModelAgreement", "PutFoundationModelEntitlement"), "enable",
     EventName in ("PutModelInvocationLoggingConfiguration", "DeleteModelInvocationLoggingConfiguration"), "logging changed",
-    EventName in ("ListFoundationModels", "ListInferenceProfiles", "GetFoundationModelAvailability", "GetModelInvocationLoggingConfiguration"), "scope",
+    EventName in ("ListFoundationModels", "ListInferenceProfiles", "GetFoundationModelAvailability", "GetModelInvocationLoggingConfiguration", "ListFoundationModelAgreementOffers"), "scope",
     EventName in ("Converse", "ConverseStream", "InvokeModel", "InvokeModelWithResponseStream"), "invoke",
     "")
 | where Stage != ""
@@ -652,20 +733,23 @@ AzureActivity
 // The FBI asks defenders to "monitor unusual certificate enrollment involving privileged users or
 // unexpected requesting systems"; GTIG (2026-10-30) saw the agents audit certificate templates.
 // Certification authority events 4886 (request received) and 4887 (certificate issued); the
-// requester and the request attributes are read from their columns, or from EventData where the
-// agent left them there. The template is in the attributes only when the client sent it as one;
-// autoenrolment puts it in the request itself, and Template is then empty. Needs certificate
-// services auditing on the CA. Lists requester and template pairs first seen today.
+// requester and the request attributes are read from their columns, or from EventData when the
+// log collector did not parse them into columns. The template is in the attributes only when the
+// client sent it as one; autoenrolment puts it in the request itself, and Template is then empty.
+// The CA ignores case, spaces and hyphens in attribute names, so the name is matched in any case
+// with one space or hyphen allowed between its two words; a name respelled further still gives
+// an empty Template. Requests counts event 4886 only. Needs certificate services auditing on the
+// CA. Lists requester and template pairs first seen today.
 let requests = SecurityEvent
     | where TimeGenerated > ago(30d) and EventID in (4886, 4887)
     | extend Attrs = coalesce(Attributes, extract(@'Name="Attributes">([^<]*)<', 1, EventData))
     | extend Requester = tolower(coalesce(Requester, extract(@'Name="Requester">([^<]*)<', 1, EventData))),
-             Template = extract(@"CertificateTemplate:([^\s<&]+)", 1, Attrs)
+             Template = extract(@"(?i)certificate[ -]?template\s*:\s*([^\s<&]+)", 1, Attrs)
     | where isnotempty(Requester);
 requests
 | where TimeGenerated > ago(1d)
 | join kind=leftanti (requests | where TimeGenerated < ago(1d) | summarize by Requester, Template) on Requester, Template
-| summarize Requests = count(), Issued = countif(EventID == 4887), FirstSeen = min(TimeGenerated) by Requester, Template, Computer
+| summarize Requests = countif(EventID == 4886), Issued = countif(EventID == 4887), FirstSeen = min(TimeGenerated) by Requester, Template, Computer
 | order by Issued desc, FirstSeen asc
 
 // --- H-AGT-045  Published agent addresses in your sign-in and cloud logs (Wiz 2026-11-23) -------
@@ -674,20 +758,733 @@ requests
 // attempt". Wiz gives no instruction to block and many sit in shared hosting, so this is a
 // look back, not a list to deny. It reads Wiz's own file, so it follows their corrections; a
 // workspace that cannot reach GitHub needs the list loaded as a watchlist instead. The values
-// are published with [.] in them and are restored here.
+// are published with [.] in them and are restored here. A failed AWS console sign-in carries no
+// error code (the failure is in the response and the error message), so it is read as Failed,
+// and its record has no ARN, so the user name is shown instead. The union is fuzzy, so a
+// workspace that lacks one of the five tables still runs the others.
 let published = externaldata(Type: string, Value: string, Description: string)
     [@"https://raw.githubusercontent.com/wiz-sec-public/wiz-research-iocs/main/reports/agentic_attacks_in_the_wild_iocs.csv"]
     with (format="csv", ignoreFirstRecord=true)
     | where Type == "IP Address"
     | project Address = replace_string(Value, "[.]", "."), Description;
 let addresses = toscalar(published | summarize make_set(Address));
-union
+union isfuzzy=true
   (AADNonInteractiveUserSignInLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses) | project TimeGenerated, Address = IPAddress, Log = "non-interactive sign-in", Who = UserPrincipalName, Result = ResultType),
   (SigninLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses) | project TimeGenerated, Address = IPAddress, Log = "user sign-in", Who = UserPrincipalName, Result = ResultType),
   (AADServicePrincipalSignInLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses) | project TimeGenerated, Address = IPAddress, Log = "service principal sign-in", Who = ServicePrincipalName, Result = ResultType),
-  (AWSCloudTrail | where TimeGenerated > ago(90d) and SourceIpAddress in (addresses) | project TimeGenerated, Address = SourceIpAddress, Log = "aws", Who = UserIdentityArn, Result = ErrorCode),
+  (AWSCloudTrail | where TimeGenerated > ago(90d) and SourceIpAddress in (addresses)
+     | project TimeGenerated, Address = SourceIpAddress, Log = "aws", Who = coalesce(UserIdentityArn, UserIdentityUserName),
+               Result = case(isnotempty(ErrorCode), ErrorCode,
+                             isnotempty(ErrorMessage) or (EventSource == "signin.amazonaws.com" and ResponseElements has "Failure"), "Failed", "")),
   (AzureActivity | where TimeGenerated > ago(90d) and CallerIpAddress in (addresses) | project TimeGenerated, Address = CallerIpAddress, Log = "azure", Who = Caller, Result = ActivityStatusValue)
 | lookup kind=inner published on Address
 | summarize Events = count(), Succeeded = countif(Result in ("0", "", "Success", "Succeeded")), Identities = make_set(Who, 20),
             FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Address, Log, Description
 | order by Succeeded desc, LastSeen desc
+
+
+// ===== Added 2026-11-28: AWS hunts from reporting the pack had read and not yet hunted =======
+// ===== (Datadog, Unit 42, Wiz, GTIG, FBI), Datadog's Cloud SIEM rules, and two secondaries ====
+// Elastic and Dragos are read only through The Hacker News, and say so where they are used.
+// AWS field names were checked against AWS's archived documentation sources and Microsoft's
+// table reference; where a name is still from memory, the hunt says so. None has run in a
+// workspace.
+
+// --- H-AGT-046  S3 probing: placeholder keys, anonymous sweeps, write-then-delete (Datadog 2026-11-09; Unit 42)
+// Datadog: "every session we reviewed opened with unauthenticated S3 requests. In CloudTrail, these
+// show a userIdentity.type of AWSAccount and an accountId of anonymous, calling GetObject,
+// ListObjects and similar read APIs", and of keys such as zzz_nonexistent_abc.txt and Notexist-xyz:
+// "A request for an object named like a placeholder, right before a burst of guesses, is a useful
+// signal to hunt on." Unit 42 published nonexistent-i3185 and zz-no-such-key-1a2b3c.html
+// (2026-10-30) and saw the agent "testing its ability to write into production cloud environments,
+// immediately deleting test files and examining the bucket's policy and Access Control List (ACL)"
+// (2026-11-24). Three signals per source address and bucket: a refused request for a key that opens
+// like those (zz, nonexist, notexist, no-such or no_such) among 20 or more distinct keys in ten
+// minutes; 50 or more anonymous calls with 20 or more refused in ten minutes; an object written and
+// deleted within two seconds, with the bucket's policy and ACL reads counted beside it (GTIG timed
+// the same test in Azure at 330 to 400 ms; CloudTrail times are to the second). The thresholds are
+// this pack's; no source gives one. Object-level calls are data events: a trail that records
+// management events only returns nothing here, and that is not a clean result. The object key is
+// read as key or Key, because AWS's own examples print both. A public website bucket takes
+// anonymous reads all day, which is why that signal needs refusals; backup and sync tools write and
+// delete marker objects. Every S3 data event in the range is read: shorten it if it times out.
+let s3 = AWSCloudTrail
+    | where TimeGenerated > ago(14d) and EventSource == "s3.amazonaws.com"
+    | extend Request = parse_json(RequestParameters)
+    | extend Bucket = coalesce(tostring(Request.bucketName), "(unknown)"), ObjectKey = coalesce(tostring(Request.key), tostring(Request.Key), "(none)")
+    | extend Anonymous = UserIdentityType == "AWSAccount" and UserIdentityAccountId contains "anonymous",
+             Canary = isnotempty(ErrorCode) and ObjectKey matches regex @"(?i)(^|/)(zz|nonexist|notexist|no[-_]such)";
+let sweeps = s3
+    | summarize Requests = count(), Keys = dcount(ObjectKey), Refused = countif(isnotempty(ErrorCode)), AnonymousCalls = countif(Anonymous),
+                CanaryRefusals = countif(Canary), CanaryKeys = make_set_if(ObjectKey, Canary, 5),
+                PolicyReads = countif(EventName in ("GetBucketPolicy", "GetBucketAcl")), FirstSeen = min(TimeGenerated)
+                by SourceIpAddress, Bucket, bin(TimeGenerated, 10m)
+    | where (CanaryRefusals > 0 and Keys >= 20) or (AnonymousCalls >= 50 and Refused >= 20)
+    | project FirstSeen, SourceIpAddress, Bucket,
+              Signal = iff(CanaryRefusals > 0 and Keys >= 20, "placeholder key, then a burst of guesses", "anonymous sweep with refusals"),
+              Detail = strcat(Requests, " requests, ", Keys, " keys, ", Refused, " refused, ", AnonymousCalls, " anonymous, ", PolicyReads, " policy or ACL reads; ", tostring(CanaryKeys));
+let policy = s3
+    | where EventName in ("GetBucketPolicy", "GetBucketAcl")
+    | summarize PolicyReads = count() by SourceIpAddress, Bucket;
+let probes = s3
+    | where EventName in ("PutObject", "DeleteObject") and isempty(ErrorCode)
+    | summarize PutTime = minif(TimeGenerated, EventName == "PutObject"), DeleteTime = minif(TimeGenerated, EventName == "DeleteObject") by SourceIpAddress, Bucket, ObjectKey
+    | where isnotnull(PutTime) and isnotnull(DeleteTime) and DeleteTime >= PutTime and datetime_diff("second", DeleteTime, PutTime) <= 2
+    | summarize FirstSeen = min(PutTime), Probes = count(), ProbeKeys = make_set(ObjectKey, 5) by SourceIpAddress, Bucket
+    | join kind=leftouter policy on SourceIpAddress, Bucket
+    | project FirstSeen, SourceIpAddress, Bucket, Signal = "object written and deleted within two seconds",
+              Detail = strcat(Probes, " objects, ", coalesce(PolicyReads, 0), " policy or ACL reads; ", tostring(ProbeKeys));
+union sweeps, probes
+| order by FirstSeen desc
+
+// --- H-AGT-047  Instance-role credentials used from more than one address (Wiz 2026-11-23; Datadog 2026-11-09)
+// Wiz: "Credential use off-platform: node, IRSA and Terraform-runner credentials were used from the
+// attacker's own server to read Terraform state and Secrets Manager, and to open SSM sessions."
+// Datadog lists "credentials vended from an EC2 instance role being used by a non-AWS IP" among
+// ARTEX's noisy habits, and Unit 42 (2026-11-11) hunts "First use of a cloud key from a new IP
+// address". Credentials the instance metadata service hands out carry ec2RoleDelivery (1.0 or 2.0,
+// per AWS's CloudTrail userIdentity reference) wherever they are later used, so each such session is
+// its own baseline and no list of egress addresses is needed: sessions seen from two or more source
+// addresses are listed, one row per address, and the busiest address is marked Home. Home is only
+// the busiest: an agent sweeping services from its own server can out-call the instance, and then
+// the instance's own address is the row that looks odd, so read both. An instance behind several
+// NAT addresses, or one reaching AWS both directly and through a VPC endpoint (VpcEndpointId says
+// which), shows two addresses. Pod-identity (IRSA) and Terraform-runner sessions carry no
+// ec2RoleDelivery and are not covered. GuardDuty's own finding for this, InstanceCredentialExfiltration,
+// is listed beside the CloudTrail rows. H-AGT-035 looks for the service sweep that such credentials
+// are put to. Microsoft Learn describes the EC2RoleDelivery column with the same text as
+// SessionIssuerUserName, so check in ten rows that it holds 1.0 or 2.0 before trusting the filter;
+// the filter keeps those two values only, so a column filled with a role name returns nothing
+// rather than every role session.
+let used = AWSCloudTrail
+    | where TimeGenerated > ago(14d) and EC2RoleDelivery in ("1.0", "2.0")
+    | where SourceIpAddress !endswith ".amazonaws.com" and SourceIpAddress !startswith "AWS Internal"
+    | summarize Calls = count(), Refused = countif(isnotempty(ErrorCode)), Services = dcount(EventSource),
+                Sensitive = make_set_if(EventName, EventName in ("GetSecretValue", "StartSession", "SendCommand", "GetParameter", "GetParameters", "GetParametersByPath", "GetObject"), 10),
+                Endpoints = make_set(VpcEndpointId, 3), UserAgents = make_set(UserAgent, 5), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+                by Session = UserIdentityArn, Address = SourceIpAddress;
+let sessions = used
+    | summarize Addresses = dcount(Address), HomeCalls = max(Calls) by Session
+    | where Addresses >= 2;
+union
+  (used | join kind=inner sessions on Session
+     | project FirstSeen, LastSeen, Source = "CloudTrail", Session, Address, Home = Calls == HomeCalls, Addresses, Calls, Refused, Services, Sensitive, Endpoints, UserAgents),
+  (AWSGuardDuty | where TimeGenerated > ago(14d) and ActivityType contains "InstanceCredentialExfiltration"
+     | project FirstSeen = TimeCreated, LastSeen = TimeGenerated, Source = "GuardDuty", Finding = ActivityType, Title, Severity, Region, Detail = tostring(ResourceDetails))
+| order by Source asc, Session asc, Calls desc
+
+// --- H-AGT-048  A CI workload identity assuming a role from a branch not seen before (Wiz 2026-11-23)
+// Wiz: "The attack pivoted from CI to the cloud environment by creating branches that abused CI
+// workload identity trust relationships", then "Harvest workflows dumped CI-accessible secrets and
+// Terraform state". Wiz's Black October indicator file, compiling Barracuda's disclosure, lists
+// GitHub workflow files i19ghci.yml and i19ci2.yml and the "GitHub branch name prefix" i19ghci- and
+// i19ci2-; S-RM (2026-11-04) saw disposable branches named artex-wtest-<n>. AWS logs
+// AssumeRoleWithWebIdentity with the token's subject in userIdentity.userName and in
+// responseElements.subjectFromWebIdentityToken (AWS's CloudTrail and IAM references), and GitHub
+// Actions writes the subject of a run on a branch as repo:<org>/<repo>:ref:refs/heads/<branch>
+// (GitHub's OpenID Connect reference). Only subjects of that shape are read, which keeps pod
+// identity and Cognito federation out; subjects issued for environments or pull requests, and other
+// CI providers, are not covered. Lists subject and role pairs first seen in the last day against
+// thirty days, refused calls included: a trust policy that rejects the branch is the good outcome
+// and still worth reading. AgentLabel marks a branch that opens like the published names: i and a
+// counter followed by two or more letters or digits and a hyphen (i18n-, i386- and i686- are not
+// matched, but a branch named after the i18next library, such as i18next-upgrade, is), or an
+// artex-, artx-, pentest- or csai- prefix. The label only sorts the rows and filters nothing, so
+// an i18next- branch is still listed, near the top. Every new feature branch that deploys is
+// a first appearance too: the role it reached is what to read. The branch and the workflow file
+// themselves are in the source-control audit log, for which no table is catalogued here.
+let federated = AWSCloudTrail
+    | where TimeGenerated > ago(30d) and EventName == "AssumeRoleWithWebIdentity"
+    | extend Subject = coalesce(UserIdentityUserName, tostring(parse_json(ResponseElements).subjectFromWebIdentityToken), "(unknown)"),
+             Role = coalesce(tostring(parse_json(RequestParameters).roleArn), "(unknown)")
+    | where Subject contains ":ref:refs/heads/"
+    | extend Branch = coalesce(extract(@":ref:refs/heads/(.+)", 1, Subject), "(unknown)");
+federated
+| where TimeGenerated > ago(1d)
+| join kind=leftanti (federated | where TimeGenerated < ago(1d) | summarize by Subject, Role) on Subject, Role
+| summarize Calls = count(), Refused = countif(isnotempty(ErrorCode)), Errors = make_set(ErrorCode, 5), Sources = make_set(SourceIpAddress, 5),
+            UserAgents = make_set(UserAgent, 5), FirstSeen = min(TimeGenerated) by Subject, Branch, Role
+| extend AgentLabel = Branch matches regex @"(?i)^(i\d{2,7}[a-z0-9]{2,}-|(artex|artx|pentest|csai)-)"
+| order by AgentLabel desc, Refused desc, FirstSeen asc
+
+// --- H-AGT-049  An instance profile passed by a principal for the first time (GTIG 2026-10-30; FBI FLASH-20261113-001)
+// GTIG: ARTEX "Attempted to escalate privileges by launching cloud compute instances with
+// potentially high-value IAM roles with the intention of fetching the role's temporary credentials
+// and thereby escalating privileges in doing so. These attempts however seemed to have failed due to
+// invalid instance profile ARNs." The FBI lists "unexpected IAM role assumptions, PassRole
+// operations, or instance profile modifications" among the cloud activity to review. PassRole is a
+// permission, not an event: AWS's EC2 guide says it is needed to launch an instance with a role or
+// to attach or replace one, which CloudTrail records as RunInstances, AssociateIamInstanceProfile
+// and ReplaceIamInstanceProfileAssociation. Lists actor and instance-profile pairs first seen in the
+// last day against thirty days, refused calls included, because GTIG's attempts failed. The profile
+// is read from the request paths R-D-AGT-021 already uses, or else as the first instance-profile ARN
+// in the request, the error message or the response; a profile named in one call and given by ARN
+// in another shows as two pairs. A refused call whose error message mentions the instance profile
+// is kept when no profile can be read. So is a successful ReplaceIamInstanceProfileAssociation, as
+// Profile "(not read)": AWS's EC2 guide shows the replace done by name, no request path for that call
+// has been checked against a logged record, and a by-name replace has no ARN to fall back on, so it
+// would otherwise be dropped. Every such replace by one actor shares that one pair, so only the
+// actor's first is new. R-D-AGT-021 alerts on successful calls only, and only with a second
+// foothold action; this reads what it leaves out. Auto Scaling, launch templates and
+// deployment tools pass roles all day: read the actor first.
+let handed = AWSCloudTrail
+    | where TimeGenerated > ago(30d) and EventName in ("RunInstances", "AssociateIamInstanceProfile", "ReplaceIamInstanceProfileAssociation")
+    | extend Request = parse_json(RequestParameters)
+    | extend Profile = coalesce(tostring(Request.iamInstanceProfile.arn), tostring(Request.iamInstanceProfile.name),
+                                tostring(Request.AssociateIamInstanceProfileRequest.IamInstanceProfile.Arn),
+                                tostring(Request.AssociateIamInstanceProfileRequest.IamInstanceProfile.Name),
+                                extract(@"(arn:aws:iam::\d{12}:instance-profile/[A-Za-z0-9+=,.@_/-]+)", 1, strcat(RequestParameters, " ", ErrorMessage, " ", ResponseElements)))
+    | extend ReplaceUnread = isempty(Profile) and EventName == "ReplaceIamInstanceProfileAssociation" and isempty(ErrorCode)
+    | where isnotempty(Profile) or ReplaceUnread or ErrorMessage contains "instance profile" or ErrorMessage contains "iamInstanceProfile"
+    | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn, UserIdentityPrincipalid, "(unknown)"), Profile = coalesce(Profile, iff(ReplaceUnread, "(not read)", "(named in the error only)"));
+handed
+| where TimeGenerated > ago(1d)
+| join kind=leftanti (handed | where TimeGenerated < ago(1d) | summarize by Actor, Profile) on Actor, Profile
+| summarize Calls = count(), Refused = countif(isnotempty(ErrorCode)), Actions = make_set(EventName), Errors = make_set(ErrorCode, 5),
+            Sources = make_set(SourceIpAddress, 5), UserAgents = make_set(UserAgent, 5), FirstSeen = min(TimeGenerated) by Actor, Profile
+| order by Refused desc, FirstSeen asc
+
+// --- H-AGT-050  Bedrock reconnaissance by a long-term key, and Bedrock quota increases (Datadog rules)
+// Two of Datadog's Cloud SIEM default rules, which name no framework. "Amazon Bedrock model
+// discovery probing with a long term access key": "a two-step sequence indicating deliberate
+// AI-resource reconnaissance. The first step detects identity verification through
+// GetCallerIdentity against sts.amazonaws.com", then "calls to both ListInferenceProfiles and
+// ListModelInvocationJobs against bedrock.amazonaws.com", successful or AccessDenied, "from the same
+// ARN within a short time period using a long term access key". A long-term key is one whose id
+// starts AKIA, Datadog's own test ("a long-term key (AKIA) or temporary credential (ASIA)"); the
+// short period is one hour here, because Datadog gives no figure. "AWS Bedrock service quota
+// increase requested": RequestServiceQuotaIncrease to servicequotas.amazonaws.com with service code
+// bedrock, because "Quota increases raise the volume of inference an account can run, which
+// attackers use to scale LLMjacking after they obtain AWS credentials". Datadog raises it when the
+// requested value is the AWS maximum, which the log does not carry: read the desired value against
+// the quota's maximum in Service Quotas. The serviceCode, quotaCode and desiredValue names are taken
+// from Datadog's OCSF mapping of the request, not from AWS documentation; a name that is wrong
+// shows as ? in Detail. H-AGT-042 counts the later stages (enablement, invocation, logging changes).
+let calls = AWSCloudTrail
+    | where TimeGenerated > ago(30d)
+    | where (EventSource == "sts.amazonaws.com" and EventName == "GetCallerIdentity" and UserIdentityAccessKeyId startswith "AKIA")
+         or (EventSource == "bedrock.amazonaws.com" and EventName in ("ListInferenceProfiles", "ListModelInvocationJobs") and UserIdentityAccessKeyId startswith "AKIA")
+         or (EventSource == "servicequotas.amazonaws.com" and EventName == "RequestServiceQuotaIncrease")
+    | extend Actor = coalesce(UserIdentityArn, UserIdentityPrincipalid, "(unknown)"), Request = parse_json(RequestParameters);
+union
+  (calls | where EventSource != "servicequotas.amazonaws.com"
+     | summarize IdentityCheck = minif(TimeGenerated, EventName == "GetCallerIdentity"), ProfilesListed = minif(TimeGenerated, EventName == "ListInferenceProfiles"),
+                 JobsListed = minif(TimeGenerated, EventName == "ListModelInvocationJobs"), Denied = countif(ErrorCode contains "AccessDenied"),
+                 Regions = make_set(AWSRegion, 10), Sources = make_set(SourceIpAddress, 5), UserAgents = make_set(UserAgent, 5)
+                 by Actor, AccessKey = UserIdentityAccessKeyId, bin(TimeGenerated, 1h)
+     | where isnotnull(IdentityCheck) and isnotnull(ProfilesListed) and isnotnull(JobsListed) and IdentityCheck <= ProfilesListed and IdentityCheck <= JobsListed
+     | project FirstSeen = IdentityCheck, Actor, Signal = "identity check, then inference profiles and invocation jobs listed",
+               Detail = strcat(Denied, " denied; regions ", tostring(Regions), "; sources ", tostring(Sources), "; ", tostring(UserAgents))),
+  (calls | where EventSource == "servicequotas.amazonaws.com" and tostring(Request.serviceCode) == "bedrock"
+     | project FirstSeen = TimeGenerated, Actor, Signal = "Bedrock quota increase requested",
+               Detail = strcat("quota ", coalesce(tostring(Request.quotaCode), "?"), " to ", coalesce(tostring(Request.desiredValue), "?"), "; ", ErrorCode, "; ", SourceIpAddress, "; ", UserAgent))
+| order by FirstSeen desc
+
+
+// --- H-AGT-051  One source working an AWS key through secrets, user data and commands (Elastic, Dragos via THN)
+// Both read only through The Hacker News; neither primary was read. Elastic (THN 2026-11-23):
+// CyberStrikeAI was used "to validate stolen AWS credentials, harvest secrets from Secrets Manager,
+// pull EC2 user data, decrypt an SSM parameter, and send a remote command", and "The audit log does
+// not show what the command was or whether it succeeded". Dragos (THN 2026-11-22), on AWS keys
+// stolen from prompts at AI inference providers: "The thief tested keys within hours in some cases,
+// listed S3 buckets, searched Secrets Manager and Parameter Store, and tried to create Bedrock API
+// keys and add IAM users to keep access"; the same attacker later used ARTEX "only to confirm that
+// keys it already held were still live", and two of its user agents, artex-agent and
+// artex-judge-r121, "are worth adding to detections". Seven stages, counted by source address and
+// hour: an identity check (GetCallerIdentity, this pack's reading of "validate" and "tested"),
+// buckets listed, Secrets Manager listed or read, Parameter Store described or read, EC2 user data
+// read (DescribeInstanceAttribute for the userData attribute, per AWS's EC2 guide), a Run Command
+// sent, and an IAM user created. Four or more stages from one address in an hour, which is this
+// pack's threshold, or any call whose user agent has artex at the start of a word, the test the
+// pack's web-log rule uses. What was read does not say where Dragos saw the user agents, so the
+// CloudTrail arm is a hypothesis. Bedrock API key creation is left out: neither text names its
+// event. Elastic's post is titled with a call count and a duration that were seen only in a search
+// summary, so no burst threshold is taken from it. A deployment script that reads a secret and a
+// parameter and sends a command can reach four stages: read the identities and the user agents.
+// Calls AWS services make on your behalf are left out, as in H-AGT-035.
+AWSCloudTrail
+| where TimeGenerated > ago(14d)
+| where SourceIpAddress !endswith ".amazonaws.com" and SourceIpAddress !startswith "AWS Internal" and isempty(UserIdentityInvokedBy)
+| extend Stage = case(
+    EventName == "GetCallerIdentity", "identity check",
+    EventName == "ListBuckets", "buckets listed",
+    EventName in ("ListSecrets", "GetSecretValue"), "secrets",
+    EventName in ("DescribeParameters", "GetParameter", "GetParameters", "GetParametersByPath"), "parameters",
+    EventName == "DescribeInstanceAttribute" and RequestParameters contains "userData", "user data",
+    EventName == "SendCommand", "remote command",
+    EventName == "CreateUser", "IAM user created",
+    "")
+| extend ArtexAgent = UserAgent matches regex @"(?i)(^|[^a-z])artex($|[^a-z]|probe|bot)"
+| where Stage != "" or ArtexAgent
+| extend Identity = coalesce(UserIdentityArn, UserIdentityAccessKeyId, "(unknown)")
+| summarize Stages = dcountif(Stage, Stage != ""), StageList = make_set_if(Stage, Stage != ""), ArtexCalls = countif(ArtexAgent), Calls = count(),
+            Refused = countif(isnotempty(ErrorCode)), Identities = dcount(Identity), IdentityList = make_set(Identity, 10),
+            UserAgents = make_set(UserAgent, 5), FirstSeen = min(TimeGenerated) by SourceIpAddress, bin(TimeGenerated, 1h)
+| where Stages >= 4 or ArtexCalls > 0
+| order by Stages desc, ArtexCalls desc
+
+// ===== Added 2026-11-28: Azure and Kubernetes hunts for gaps the reference listed ===============
+// The cluster half of H-AGT-039, model calls on Azure AI accounts, Kudu and FTP publishing
+// log-ons, and Microsoft's abnormal-deny-rate method applied to web-server egress. Table and
+// column names were checked against Microsoft's table reference on that date; the Kubernetes
+// audit field names against the Kubernetes API server's own audit types. None has run in a
+// workspace.
+
+// --- H-AGT-052  Privileged pods, cluster-admin bindings and agent names in the Kubernetes audit log (Wiz 2026-11-23, 2026-10-29)
+// The cluster-side half of H-AGT-039, which reads host telemetry only. Wiz (2026-11-23): a stolen
+// service-account token "could create privileged pods with the node's root filesystem mounted";
+// in a case across seven EKS clusters a stolen Terraform-runner session "created a privileged pod
+// and a cluster-admin binding"; and CyberStrikeAI left "csai-escape pods". Wiz (2026-10-29): the agent
+// sent the stolen token to selfsubjectrulesreviews to "enumerate what the token can do", then
+// requested https://kubernetes.default.svc/api/v1/secrets, the secrets of every namespace at once.
+// Wiz's Black October list (Chainstack) adds the names artx-sa, artx-observer, artx-vant,
+// artx-relay and others, and two pods named rt-agent and rt-node-probe. Names are matched by the
+// pentest-, artex-, artx- and csai- prefixes of H-AGT-032 at the start of the object name, and those two names exactly.
+// H-AGT-032's art18- prefix is left out on purpose: CrowdStrike (2026-10-29) gives it as a prefix
+// of administration-command comments, not of the names of objects an agent creates, and no
+// source read names a Kubernetes object that carries it.
+// AKS writes its API server audit log to AzureDiagnostics (categories kube-audit and
+// kube-audit-admin, the event as JSON in log_s) in Azure diagnostics mode, and to AKSAudit and
+// AKSAuditAdmin in resource-specific mode; all four are read, and an event in two of them is
+// counted once by its audit ID. kube-audit-admin and AKSAuditAdmin leave out get and list, so the
+// secrets signal needs kube-audit or AKSAudit. The request body is recorded only at the Request
+// audit level or higher, and a body too large to record is the string
+// "skipped-too-big-size-object"; where the body is missing, the workload and binding tests find
+// nothing and the name, review and list tests still work. Network plugins, storage drivers and
+// monitoring agents run privileged by design, and controllers such as cert-manager and Argo CD
+// list secrets in every namespace: SeenBefore marks a cluster, user and signal already present
+// before the last day, so read the rows where it is false first. EKS and GKE audit logs are not
+// read here.
+let named = @"^((pentest|artex|artx|csai)-[a-z0-9]|rt-(agent|node-probe)(-|$))";
+let workload = @"[^a-zA-Z](privileged|hostPID)[^a-zA-Z]{1,6}true|[^a-zA-Z]hostPath[^}]*[^a-zA-Z]path[^a-zA-Z]{1,6}/[^a-zA-Z0-9_.-]";
+union isfuzzy=true
+  (AzureDiagnostics | where TimeGenerated > ago(14d) and Category in ("kube-audit", "kube-audit-admin")
+     | extend e = parse_json(log_s)
+     | project TimeGenerated, Cluster = _ResourceId, AuditId = tostring(e.auditID), Stage = tostring(e.stage), Verb = tostring(e.verb),
+               Resource = tostring(e.objectRef.resource), Namespace = tostring(e.objectRef.namespace), ObjectName = tostring(e.objectRef.name),
+               RequestUri = tostring(e.requestURI), Username = tostring(e.user.username), SourceIp = tostring(e.sourceIPs[0]),
+               Code = toint(e.responseStatus.code), Body = e.requestObject),
+  (AKSAudit | where TimeGenerated > ago(14d)
+     | project TimeGenerated, Cluster = _ResourceId, AuditId, Stage, Verb, Resource = tostring(ObjectRef.resource), Namespace = tostring(ObjectRef.namespace),
+               ObjectName = tostring(ObjectRef.name), RequestUri, Username = tostring(User.username), SourceIp = tostring(SourceIps[0]),
+               Code = toint(ResponseStatus.code), Body = RequestObject),
+  (AKSAuditAdmin | where TimeGenerated > ago(14d)
+     | project TimeGenerated, Cluster = _ResourceId, AuditId, Stage, Verb, Resource = tostring(ObjectRef.resource), Namespace = tostring(ObjectRef.namespace),
+               ObjectName = tostring(ObjectRef.name), RequestUri, Username = tostring(User.username), SourceIp = tostring(SourceIps[0]),
+               Code = toint(ResponseStatus.code), Body = RequestObject)
+| where Stage == "ResponseComplete" and Verb in ("create", "list")
+| extend Name = tolower(coalesce(ObjectName, tostring(Body.metadata.name), tostring(Body.metadata.generateName))), Spec = tostring(Body.spec)
+| extend Signal = case(
+    Verb == "create" and Name matches regex named, "agent-named object",
+    Verb == "create" and Resource in ("clusterrolebindings", "rolebindings") and tostring(Body.roleRef.name) == "cluster-admin", "cluster-admin binding",
+    Verb == "create" and Resource in ("pods", "deployments", "daemonsets", "statefulsets", "replicasets", "jobs", "cronjobs") and Spec matches regex workload, "privileged or host-mounting workload",
+    Verb == "create" and Resource == "selfsubjectrulesreviews" and Username startswith "system:serviceaccount:", "service account asking what it may do",
+    Verb == "list" and RequestUri startswith "/api/v1/secrets" and Username startswith "system:serviceaccount:", "service account listing secrets in every namespace",
+    "")
+| where Signal != ""
+| summarize Events = dcount(AuditId), Refused = dcountif(AuditId, Code >= 400), Names = make_set(Name, 20), Namespaces = make_set(Namespace, 10),
+            Sources = make_set(SourceIp, 5), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Cluster, Username, Signal
+| extend SeenBefore = FirstSeen < ago(1d)
+| order by SeenBefore asc, LastSeen desc
+
+// --- H-AGT-053  Model calls on Azure AI accounts, by account, caller and hour (Google GTIG 2026-11-02)
+// "In Azure, model invocations occur on the data plane and require Diagnostic Logs to be enabled.
+// Look for high volumes of POST requests to inference endpoints such as Completions or Chat
+// Completions APIs." H-AGT-043 reads the control-plane half, the deployment writes. Azure OpenAI
+// and other Foundry (Cognitive Services) accounts write their request log to AzureDiagnostics,
+// category RequestResponse, with the HTTP response code in ResultSignature, once a diagnostic
+// setting sends it (Microsoft Learn: Azure OpenAI monitoring data reference; Enable diagnostic
+// logging for Microsoft Foundry). An account with no such setting returns nothing, which is not a
+// clean result. GTIG gives no threshold; these are this pack's: hours in the last day with at
+// least ten times the median hourly calls of that account and caller over two weeks, and at least
+// 100 calls, and callers first seen on the account in the last day. Whether CallerIPAddress is
+// filled for these records was not confirmed; where it is empty every call shares one caller and
+// only the volume test works. A new application going live, a batch job and a load test do both:
+// read the operations and the refused share. Microsoft's AI threat protection raises its own
+// "volume anomaly" alert for the same thing where that plan is on.
+let calls = AzureDiagnostics
+    | where TimeGenerated > ago(14d) and ResourceProvider =~ "MICROSOFT.COGNITIVESERVICES" and Category == "RequestResponse"
+    | extend Caller = coalesce(CallerIPAddress, "(not recorded)")
+    | summarize Calls = count(), Refused = countif(toint(ResultSignature) >= 400), Operations = make_set(OperationName, 10)
+                by Account = _ResourceId, Caller, Hour = bin(TimeGenerated, 1h);
+let usual = calls
+    | summarize MedianCalls = percentile(Calls, 50), CallerFirstSeen = min(Hour) by Account, Caller;
+calls
+| where Hour >= bin(ago(1d), 1h)
+| join kind=inner usual on Account, Caller
+| extend NewCaller = CallerFirstSeen >= bin(ago(1d), 1h), Surge = Calls >= 10 * MedianCalls and Calls >= 100
+| where NewCaller or Surge
+| project Hour, Account, Caller, Calls, MedianCalls, Refused, Operations, NewCaller, Surge
+| order by Calls desc
+
+// --- H-AGT-054  Kudu and FTP publishing log-ons to App Service (Google GTIG 2026-10-30; Microsoft 2026-11-25)
+// GTIG: ARTEX "Abused Kudu administrative APIs to execute arbitrary commands and stage custom
+// Python, C#, and malicious PowerShell scripts", and "If an attacker obtains publishing credentials
+// or another identity capable of accessing that interface, automation can quickly test
+// authentication, enumerate functionality, interact with application files, execute commands,
+// retrieve output, and remove staged artifacts." Microsoft: "ARTEX agents have run commands through
+// cloud administration interfaces such as Kudu when they had credentials for them." R-D-AGT-023
+// sees the publishing profile and the app settings being read through Resource Manager; this is
+// the use. AppServiceAuditLogs records log-ons by publishing users over FTP and Kudu, with the
+// user, the client address and the protocol (Microsoft Learn); Microsoft's example record has
+// OperationName Authorization, Protocol FTP and the application-scope user, a dollar sign and the
+// app name. Learn calls the records successful log-ons in one place and all successful and
+// attempted ones in another, so read the record before relying on either. Three signals per app:
+// a publishing log-on in the last day from an address that app had no log-on from in the 29 days
+// before; a log-on within an hour after someone read that app's publishing profile or settings;
+// and script files of the kinds GTIG names (.py, .cs, .csx, .ps1) changed in the site content, from
+// AppServiceFileAuditLogs, which Microsoft documents for the Premium tier and above only. Neither
+// table is written until a diagnostic setting sends it. The command a Kudu session ran is not in
+// either table. A deployment pipeline that uses the publishing profile from a new runner address
+// does the first two: read the user, the protocol and who read the profile.
+let site = @"(?i)^(/subscriptions/[^/]+/resourcegroups/[^/]+/providers/microsoft\.web/sites/[^/]+)";
+let logons = AppServiceAuditLogs
+    | where TimeGenerated > ago(30d)
+    | extend Site = tolower(extract(site, 1, _ResourceId)), Address = coalesce(UserAddress, "(not recorded)");
+let reads = AzureActivity
+    | where TimeGenerated > ago(30d)
+    | where OperationNameValue in~ ("Microsoft.Web/sites/publishxml/action", "Microsoft.Web/sites/config/list/action")
+    | project ReadTime = TimeGenerated, Site = tolower(extract(site, 1, _ResourceId)), Reader = Caller;
+let known = logons | where TimeGenerated < ago(1d) | summarize by Site, Address;
+union
+  (logons | where TimeGenerated > ago(1d)
+     | join kind=leftanti known on Site, Address
+     | project TimeGenerated, Site, Signal = "publishing log-on from an address new to this app", Detail = strcat(Protocol, " ", User, " from ", Address)),
+  (logons | where TimeGenerated > ago(1d)
+     | join kind=inner reads on Site
+     | where TimeGenerated >= ReadTime and datetime_diff("second", TimeGenerated, ReadTime) <= 3600
+     | project TimeGenerated, Site, Signal = "publishing log-on within an hour of a profile read", Detail = strcat(Protocol, " ", User, " from ", Address, " after a read by ", Reader)),
+  (AppServiceFileAuditLogs | where TimeGenerated > ago(1d)
+     | where Path matches regex @"(?i)\.(py|cs|csx|ps1)$"
+     | project TimeGenerated, Site = tolower(extract(site, 1, _ResourceId)), Signal = "script file changed in site content", Detail = strcat(OperationName, " ", Path, " by ", Process))
+| where isnotempty(Site)
+| summarize Signals = make_set(Signal, 3), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Site
+| order by array_length(Signals) desc, LastSeen desc
+
+
+// --- H-AGT-055  A web server denied outbound above its own baseline (Microsoft 2026-11-25) -------
+// Microsoft: "Restrict outbound connections from web servers. Allow only the destinations each
+// server needs", naming Azure Firewall, because "ARTEX agents have used curl and netcat
+// to download remote access trojans, and curl with rotating webhook.site URLs to deliver scripts
+// and return command output." Where that restriction is in place, an agent on a web server runs
+// into it, and the denials are the signal. Microsoft lists the Sentinel rule "Abnormal Deny Rate
+// for Source IP (Azure Firewall solution)" among the rules that "might also indicate ARTEX-driven
+// activity". Its method is kept: per source and destination, hourly denials above the mean plus
+// three standard deviations of the learning period, never fewer than 5, and a pair needs more than
+// five hourly buckets of history before its own mean counts. Three changes: only web servers are
+// judged (a device whose web or application server process, from H-AGT-036's list, used local
+// port 80, 443, 8080 or 8443 in the last week; its address is the one it used); the learning
+// period is the five days the rule's description gives as its default, where its query uses one;
+// and every hour of the last day is judged, not only the last hour. Reads the Azure Firewall
+// application and network rule logs in resource-specific mode and the legacy AzureDiagnostics
+// form, parsed as Microsoft's rule parses it. A web server without the Defender for Endpoint
+// sensor is not seen, an IPv4-mapped local address (the ::ffff: prefix) is reduced to IPv4, and a
+// server behind source NAT appears under the NAT address, which matches none. A server whose egress
+// was just tightened fires too: compare the first denied hour with the policy change. Denials are
+// counted and the learning hours taken per source address and destination before any device is
+// attached, as in Microsoft's rule, so an address two devices used in the week is counted once
+// per hour; DeviceNames lists the devices that used it.
+let web = DeviceNetworkEvents
+    | where TimeGenerated > ago(7d) and LocalPort in (80, 443, 8080, 8443)
+    | where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "jspawnhelper", "node", "node.exe")
+         or InitiatingProcessFileName startswith "php" or InitiatingProcessFileName startswith "tomcat"
+    | where isnotempty(LocalIP)
+    | summarize by SourceIp = replace_string(LocalIP, "::ffff:", ""), DeviceName;
+let denied = union isfuzzy=true
+    (AZFWApplicationRule | where TimeGenerated > ago(6d) and Action == "Deny" | project TimeGenerated, SourceIp, Destination = Fqdn),
+    (AZFWNetworkRule | where TimeGenerated > ago(6d) and Action == "Deny" | project TimeGenerated, SourceIp, Destination = DestinationIp),
+    (AzureDiagnostics | where TimeGenerated > ago(6d) and OperationName in ("AzureFirewallApplicationRuleLog", "AzureFirewallNetworkRuleLog")
+       | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Destination ":" DestinationPort:int ". " * "Action: " Action "." *
+       | where Action == "Deny"
+       | project TimeGenerated, SourceIp, Destination)
+    | where isnotempty(SourceIp) and isnotempty(Destination)
+    | join kind=leftsemi web on SourceIp
+    | summarize Denied = count() by SourceIp, Destination, Hour = bin(TimeGenerated, 1h);
+let learned = denied
+    | where Hour < bin(ago(1d), 1h)
+    | summarize LearnAvg = avg(Denied), LearnStd = stdev(Denied), LearnBuckets = count() by SourceIp, Destination
+    | where LearnBuckets > 5;
+denied
+| where Hour >= bin(ago(1d), 1h)
+| join kind=leftouter learned on SourceIp, Destination
+| extend Threshold = iff(isnull(LearnAvg), 5.0, max_of(LearnAvg + 3 * LearnStd, 5.0))
+| where Denied > Threshold
+| summarize Hours = count(), Denials = sum(Denied), WorstHour = max(Denied), Threshold = max(Threshold), FirstHour = min(Hour) by SourceIp, Destination
+| join kind=inner (web | summarize DeviceNames = make_set(DeviceName, 5) by SourceIp) on SourceIp
+| project-away SourceIp1
+| order by Denials desc
+
+// ===== Added 2026-11-28: endpoint, web and appliance hunts ======================================
+// Unit 42, F5 Labs (summarising Malbear Labs), CrowdStrike, Microsoft, the artex-global fork's own
+// correlation rules, and Cisco Talos's indicator file; GreyNoise and Rapid7 are read only through
+// The Hacker News, and say so. Columns were checked against Microsoft's table reference, the
+// NetScaler layout against Microsoft's own Citrix ADC parser. None has run in a workspace.
+
+// --- H-AGT-056  A web server's account compiling, escalating or switching tools (Unit 42 2026-11-24; F5 Labs 2026-11-20) ---
+// Unit 42: "the AI agent first uploaded a pre-compiled PwnKit binary ... When that binary
+// failed, the agent fetched a pre-compiled CVE-2024-1086 privilege escalation exploit. Only
+// after exhausting both public binaries did the AI agent begin writing custom C source code on
+// the target, iterating through compilers and linkers", and in another case "built custom
+// Python spray scripts on top of it using the open-source paramiko library". F5, summarising
+// Malbear Labs: "When Trend Micro Deep Security killed a `CVE-2021-4034` attempt, it used a
+// `sudo vi` escape; when `suo5` was blocked, a worker agent wrote a Perl tunnel." GreyNoise,
+// as The Hacker News carries it (2026-11-25): commands that included "adding an SSH key to the
+// "/root/.ssh/authorized_keys" file" on a compromised file server, and "Paramiko" among the
+// tools. Six signals, each from a web server's account or from a process whose parent or
+// grandparent is a web server: a compiler or linker, pkexec (what a PwnKit binary runs),
+// sudo into vi or vim, paramiko installed or run, perl opening a connection, and root's
+// authorized_keys written. Compilers and linkers are matched by name and by the name a link
+// resolves to, because a sensor names the resolved image (as in H-AGT-039): on Debian and Ubuntu
+// gcc, cc and g++ are links to x86_64-linux-gnu-gcc-13 and the like, and ld to
+// x86_64-linux-gnu-ld.bfd. The sudo test allows an option with its own argument (sudo -u root
+// vi) as well as bare flags. Methods counts the distinct signals on one host in an hour; two or
+// more is the switch the sources describe. The block that set off the switch is not read:
+// prevention records live in each product's own log. Parent lists are H-AGT-036's; the account
+// list is a starting set, so add the accounts your application servers run as. False
+// positives: npm or pip installs with native modules start make, cc and g++ under node or a
+// web account on build and deploy hosts; a CGI site runs perl under the web account (the
+// network arm needs perl to open a connection, which a CGI script that talks to a database
+// also does); configuration management writes authorized_keys, but not as a child of a web
+// server. Exclude build hosts by name.
+let web_parents = dynamic(["w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "jspawnhelper", "node", "node.exe"]);
+let web_accounts = dynamic(["www-data", "apache", "nginx", "httpd", "tomcat", "jboss", "wildfly"]);
+union
+  (DeviceProcessEvents | where TimeGenerated > ago(30d)
+     | where AccountName in~ (web_accounts) or InitiatingProcessAccountName in~ (web_accounts)
+          or InitiatingProcessFileName in~ (web_parents) or InitiatingProcessParentFileName in~ (web_parents)
+          or InitiatingProcessFileName startswith "php" or InitiatingProcessParentFileName startswith "php"
+          or InitiatingProcessFileName startswith "tomcat" or InitiatingProcessParentFileName startswith "tomcat"
+     | extend Signal = case(
+         FileName =~ "make" or FileName matches regex @"(?i)^(?:[a-z0-9_-]+-linux-gnu-)?(?:(?:gcc|g\+\+|cc|c\+\+|clang)(?:-\d+)?|ld(?:\.bfd|\.gold)?)$", "compiler or linker",
+         FileName =~ "pkexec", "pkexec (PwnKit)",
+         FileName =~ "sudo" and ProcessCommandLine matches regex @"(?i)(?:^|[\s/])sudo(?:\s+-[A-Za-z]*[CDghpRrTtUu]\s+\S+|\s+-\S+)*\s+(?:\S*/)?(?:vi|vim)(?:\s|\z)", "sudo into vi",
+         ProcessCommandLine contains "paramiko", "paramiko installed or run",
+         "")
+     | where Signal != ""
+     | project TimeGenerated, DeviceName, Account = coalesce(InitiatingProcessAccountName, AccountName), Signal,
+               Detail = strcat(InitiatingProcessParentFileName, " > ", InitiatingProcessFileName, " > ", ProcessCommandLine)),
+  (DeviceNetworkEvents | where TimeGenerated > ago(30d)
+     | where InitiatingProcessFileName startswith "perl" and InitiatingProcessAccountName in~ (web_accounts) and RemoteIPType != "Loopback"
+     | project TimeGenerated, DeviceName, Account = InitiatingProcessAccountName, Signal = "perl opened a connection",
+               Detail = strcat(InitiatingProcessCommandLine, " <> ", RemoteIP, ":", tostring(RemotePort), " ", ActionType)),
+  (DeviceFileEvents | where TimeGenerated > ago(30d)
+     | where FileName =~ "authorized_keys" and FolderPath startswith "/root/.ssh" and ActionType in ("FileCreated", "FileModified", "FileRenamed")
+     | where InitiatingProcessFileName in~ (web_parents) or InitiatingProcessParentFileName in~ (web_parents)
+          or InitiatingProcessParentFileName startswith "php" or InitiatingProcessAccountName in~ (web_accounts)
+     | project TimeGenerated, DeviceName, Account = InitiatingProcessAccountName, Signal = "root authorized_keys written",
+               Detail = strcat(InitiatingProcessParentFileName, " > ", InitiatingProcessFileName, " > ", InitiatingProcessCommandLine))
+| summarize Methods = dcount(Signal), Signals = make_set(Signal, 10), Accounts = make_set(Account, 5), Details = make_set(Detail, 10),
+            FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DeviceName, bin(TimeGenerated, 1h)
+| extend Switched = Methods >= 2
+| order by Methods desc, LastSeen desc
+
+// --- H-AGT-057  A database service running discovery commands it had not run before (CrowdStrike 2026-11-24) ---
+// "In intrusions that threat hunters attributed to likely LLM-driven attackers, the same kind
+// of reconnaissance ran under compromised servers: On one Windows web and database server, the
+// SQL Server service began issuing identity, privilege, and network discovery commands that it
+// had not run before." CrowdStrike names "domain-trust enumeration with nltest.exe, an
+// antivirus inventory query in PowerShell" among indicators that "fire constantly across any
+// large environment", and says what set the cases apart was appearing "on hosts where they were
+// out of character (for example, a database service that does not normally launch commands)".
+// Discovery commands started by sqlservr.exe or by a shell it started (xp_cmdshell runs cmd.exe
+// /c), keyed by the command's verb, listed when the verb's first appearance on the host in 30
+// days falls in the last day. The verb list maps CrowdStrike's three classes (identity,
+// privilege, network) and its two named examples to commands; the mapping is this pack's.
+// A host with less than 30 days of telemetry makes every verb new. A DBA job that runs
+// ipconfig or whoami through xp_cmdshell appears once, the day it starts. CrowdStrike's third
+// example, "remote authentication from a Python script", has no shape on the database host
+// and is not matched.
+let discovery = @"(?i)(?:^|[^a-z0-9_.-])(whoami|nltest|ipconfig|systeminfo|quser|netstat|arp|route|nslookup|tasklist|net1?(?:\.exe)?\s+(?:user|group|localgroup|view|share|accounts|session|use)|get-mpcomputerstatus|antivirusproduct)(?:\.exe)?(?:[^a-z0-9_.-]|\z)";
+let runs = DeviceProcessEvents
+    | where TimeGenerated > ago(30d)
+    | where InitiatingProcessFileName =~ "sqlservr.exe" or InitiatingProcessParentFileName =~ "sqlservr.exe"
+    | extend Verb = tolower(extract(discovery, 1, ProcessCommandLine))
+    | where isnotempty(Verb)
+    | extend Verb = replace_regex(replace_string(Verb, ".exe", ""), @"\s+", " ");
+runs
+| summarize FirstSeen = min(TimeGenerated), Runs = count(), Sample = take_any(ProcessCommandLine), Account = take_any(AccountName) by DeviceName, Verb
+| where FirstSeen > ago(1d)
+| summarize NewVerbs = make_set(Verb), NewVerbCount = dcount(Verb), Commands = make_set(Sample, 10), Accounts = make_set(Account, 5), FirstSeen = min(FirstSeen) by DeviceName
+| order by NewVerbCount desc, FirstSeen asc
+
+// --- H-AGT-058  One-minute request bursts at Microsoft's threshold (Microsoft 2026-11-25) --------
+// "Find client IP addresses that request 100 or more distinct paths with 50 or more client
+// errors in one minute". R-D-AGT-001 asks for more than 200 distinct paths in ten minutes
+// against the client's own history; this is the vendor's fixed threshold, for a burst that ends
+// inside a minute. Microsoft reads IIS, App Service and Application Gateway logs directly; this
+// reads them, and any other web source, through the web session parser. Microsoft also flags
+// curl, Wget, Python and headless-browser user-agents, "common in legitimate automation, so
+// don't alert on them alone"; they are listed here, not filtered on. A crawler, a link checker
+// on a site full of dead links, or a vulnerability scanner you run matches.
+_Im_WebSession(starttime=ago(1d))
+| extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]))
+| summarize Requests = count(), DistinctPaths = dcount(Path), ClientErrors = countif(EventResultDetails startswith "4"),
+            UserAgents = make_set(HttpUserAgent, 10), Targets = make_set(coalesce(DstHostname, DstIpAddr), 10)
+            by SrcIpAddr, bin(TimeGenerated, 1m)
+| where DistinctPaths >= 100 and ClientErrors >= 50
+| order by DistinctPaths desc
+
+// --- H-AGT-059  ARTEX enrichment rate and breadth (jiwoochris/artex-global 2026-10-05) ----------
+// The ARTEX Global Edition fork ships two Sigma correlation rules over its own enrichment
+// user-agent. Velocity (id 1d07c5f1-e0ff-4a6a-8017-6008fa790889): 30 or more requests from one
+// client in 5 minutes, because "ARTEX enriches assets with a default concurrency of 4 and ships
+// no built-in rate limit (enrich/enrich.go)". Fan-out (id 6fba3b7c-1dd9-4e18-bf55-d93fc1d2e2e0):
+// one client reaching 20 or more distinct hosts in 10 minutes, because "breadth" is "what
+// separates it from a person browsing a few pages". R-D-AGT-011 already alerts on any request
+// with this user-agent; this hunt says which sources met either threshold and how many of your
+// hosts each touched. Sigma's windows slide; these are fixed bins, so a burst split across a
+// bin boundary can be counted short. The fork itself says: "An operator can change the
+// User-Agent, so a quiet result is inconclusive, not proof of safety". Matched as a prefix, as
+// R-D-AGT-011 does; the Sigma base rule matches artex-enrich/1.0 exactly. False positives, from
+// the fork: asset-management or monitoring tools that set this user-agent, and shared egress.
+// Response named by the fork: "escalate any matched source to isolation and session
+// invalidation".
+let enrich = _Im_WebSession(starttime=ago(7d))
+    | where HttpUserAgent startswith "artex-enrich/"
+    | extend Dst = coalesce(DstHostname, DstIpAddr);
+let velocity = enrich
+    | summarize Requests = count() by SrcIpAddr, bin(TimeGenerated, 5m)
+    | summarize PeakRequestsIn5m = max(Requests) by SrcIpAddr;
+let fanout = enrich
+    | summarize Hosts = dcount(Dst) by SrcIpAddr, bin(TimeGenerated, 10m)
+    | summarize PeakHostsIn10m = max(Hosts) by SrcIpAddr;
+enrich
+| summarize Requests = count(), Hosts = dcount(Dst), SampleHosts = make_set(Dst, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by SrcIpAddr
+| join kind=inner velocity on SrcIpAddr
+| join kind=inner fanout on SrcIpAddr
+| where PeakRequestsIn5m >= 30 or PeakHostsIn10m >= 20
+| project SrcIpAddr, PeakRequestsIn5m, PeakHostsIn10m, Requests, Hosts, SampleHosts, FirstSeen, LastSeen
+| order by PeakHostsIn10m desc, PeakRequestsIn5m desc
+
+// --- H-AGT-060  A NetScaler session used from a second address (Unit 42 2026-07-30) -------------
+// Unit 42 (Hermes Agent campaign): "The three successful exploitations had memory data
+// exfiltrated through the Citrix NetScaler out-of-bounds memory read vulnerability
+// (CVE-2026-3055). The actor searched the exfiltrated data for NetScaler authentication cookies
+// (NSC_AAAC=), indicating session hijacking intent." Unit 42 reports the search, not a replay;
+// a replayed cookie would show as one NetScaler session id seen from a second client address.
+// Read through CitrixADCEvent(), the parser Microsoft ships in the Citrix ADC solution for
+// Microsoft Sentinel, which reads Syslog and splits "Context <user@ip> - SessionId: <n>" and the
+// Client_ip key out of each message; install that solution first, or nothing returns.
+// Sessions with two or more client addresses in 30 days, per appliance. False positives: a user
+// whose address changes mid-session (mobile network, VPN reconnect) keeps one session; a session
+// id reused after an appliance restart appears with two users, which the Users column shows.
+// This pack's advice, not Unit 42's, which gives no NetScaler response: patch, then invalidate
+// every session on an affected appliance; reuse found after the patch is a cookie taken before it.
+CitrixADCEvent()
+| where TimeGenerated > ago(30d)
+| where SessionId > 0 and isnotempty(Client_ip)
+| summarize Addresses = dcount(Client_ip), AddressList = make_set(Client_ip, 10), Users = make_set(User, 5), Kinds = make_set(strcat(Feature, " ", MessageType), 10),
+            FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Computer, SessionId
+| where Addresses >= 2
+| order by Addresses desc, FirstSeen desc
+
+// --- H-AGT-061  Check Point management task bursts (GreyNoise via The Hacker News 2026-11-25) ----
+// GreyNoise (GT13), as The Hacker News carries it: the actor used "a script for a now-patched
+// Check Point flaw ( CVE-2026-16232) to launch over 100 management tasks on multiple Check Point
+// Management Servers" to "Steal firewall databases and internal certificate authority files",
+// "Mint a new certificate" and "Unload security policies, effectively disabling firewall
+// protections". Its sources were "either egresses through ExpressVPN or compromised victim Check
+// Point devices", so an address list is no help; the shape is the burst. One administrator and
+// source address with 100 or more audit records on two or more management servers in a day,
+// marked when that pair has no audit record in the previous 29 days. The day window is this
+// pack's: the source gives a count, not a period. Check Point audit records arrive in
+// CommonSecurityLog with DeviceVendor "Check Point" (Microsoft's UEBA reference); which
+// DeviceProduct value carries management audit is not confirmed, so find it first:
+//   CommonSecurityLog | where TimeGenerated > ago(1d) and DeviceVendor == "Check Point" | summarize count() by DeviceProduct, Activity
+// and replace the placeholder. Whether the administrator lands in SourceUserName and the
+// management server in DeviceName is not confirmed either; check ten rows. A policy push or a
+// scripted change window by your own team matches.
+let audit_products = dynamic(["<CHECKPOINT_AUDIT_PRODUCT>"]);
+let audit = CommonSecurityLog
+    | where TimeGenerated > ago(30d) and DeviceVendor == "Check Point" and DeviceProduct in (audit_products)
+    | extend Admin = tolower(SourceUserName), Server = coalesce(DeviceName, Computer, DeviceAddress);
+let earlier = audit | where TimeGenerated <= ago(1d) | summarize EarlierTasks = count() by Admin, SourceIP;
+audit
+| where TimeGenerated > ago(1d)
+| summarize Tasks = count(), Servers = dcount(Server), ServerList = make_set(Server, 10), Activities = make_set(Activity, 20),
+            FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Admin, SourceIP
+| where Tasks >= 100 and Servers >= 2
+| join kind=leftouter earlier on Admin, SourceIP
+| extend NewSource = isnull(EarlierTasks)
+| project Admin, SourceIP, NewSource, Tasks, Servers, ServerList, Activities, FirstSeen, LastSeen
+| order by NewSource desc, Tasks desc
+
+// --- H-AGT-062  A self-hosted model server used from outside (Rapid7 via The Hacker News 2026-11-26) ---
+// Rapid7, as The Hacker News carries it: "More than half of the exposed Ollama servers in this
+// scan have already been touched by someone who is not the owner"; "79% of exposed Ollama hosts
+// list at least one :cloud model"; "An exposed, signed-in server can provide access to someone
+// else's paid subscription, with the bill landing on the owner. This is the self-hosted version
+// of LLMjacking, and it requires no exploit at all." Ollama's own documentation: "Ollama binds
+// 127.0.0.1 port 11434 by default. Change the bind address with the OLLAMA_HOST environment
+// variable." Two views, per server: clients from public addresses reaching port 11434 (on the
+// server's own endpoint telemetry, or at a firewall), with how many first appeared in the last
+// day; and the host commands that pull or run a :cloud model, which is what turns an exposed
+// server into a stranger's free subscription. A server published through a reverse proxy, as
+// Ollama's documentation shows with nginx, is reached on the proxy's port and is not seen by
+// the port test: its API paths (/api/generate, /api/chat, /api/pull and others) are generic
+// enough elsewhere that they are not matched here. False positives: your own users reaching a
+// server you meant to publish; exclude their addresses. Any public client on 11434 means the
+// server is reachable from the internet, which is the finding even before it is used. Public on
+// the firewall arm is outside the private ranges ipv4_is_private tests and outside loopback
+// (127.0.0.0/8, which ipv4_is_private does not count as private), link-local (169.254.0.0/16)
+// and shared address space (100.64.0.0/10), so local clients of a default install are not
+// reported; the ipv4_ functions return null for an IPv6 address, so that arm reads IPv4 clients
+// only. The endpoint arm reads Defender's own RemoteIPType, which names loopback separately.
+let local = dynamic(["127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10"]);
+let contacts = union
+  (DeviceNetworkEvents | where TimeGenerated > ago(30d)
+     | where LocalPort == 11434 and RemoteIPType == "Public"
+     | project TimeGenerated, Server = DeviceName, Client = RemoteIP, Seen = strcat("endpoint ", InitiatingProcessFileName, " ", ActionType)),
+  (CommonSecurityLog | where TimeGenerated > ago(30d)
+     | where DestinationPort == 11434 and isnotempty(SourceIP) and not(ipv4_is_private(SourceIP)) and not(ipv4_is_in_any_range(SourceIP, local))
+     | project TimeGenerated, Server = DestinationIP, Client = SourceIP, Seen = strcat("firewall ", DeviceVendor, " ", DeviceAction));
+let cloud_models = DeviceProcessEvents
+    | where TimeGenerated > ago(30d)
+    | where FileName startswith "ollama" and ProcessCommandLine contains ":cloud"
+    | summarize CloudModelCommands = make_set(ProcessCommandLine, 5) by Server = DeviceName;
+contacts
+| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Contacts = count(), Seen = take_any(Seen) by Server, Client
+| summarize Clients = dcount(Client), NewClients = dcountif(Client, FirstSeen > ago(1d)), ClientList = make_set(Client, 20), SeenIn = make_set(Seen, 5),
+            FirstSeen = min(FirstSeen), LastSeen = max(LastSeen) by Server
+| join kind=fullouter cloud_models on Server
+| extend Server = coalesce(Server, Server1)
+| project-away Server1
+| order by NewClients desc, Clients desc
+
+// --- H-AGT-063  Talos ARTEX addresses, destinations first (Cisco Talos 2026-11-13) --------------
+// Cisco Talos published 2,546 IPv4 addresses for "ARTEX and beyond: AI-enabled penetration
+// testing platforms" under the single header "ARTEX IPs:", with no role, date or context per
+// address; the STIX copy types every one ip-dst. The list includes the ARTEX command-and-control
+// cluster hosts Check Point Research described (all of 38.11.173.1-125 and 38.11.221.1-125), so
+// it is read here first as DESTINATIONS (a host of yours connecting out, a firewall or proxy
+// allowing it) and only then as sources of traffic and sign-ins. Talos gives no instruction
+// beyond its repository's generic one, and most addresses sit in shared hosting, so this is a
+// look back, not a list to deny. It reads Talos's own file, so it follows their corrections; a
+// workspace that cannot reach GitHub needs the list loaded as a watchlist instead. Endpoint rows
+// carry the peer address of a connection in either direction; ActionType and the ports say
+// which. Up to 90 days of firewall data is large: shorten the range if it times out.
+let talos = externaldata(Line: string)
+    [@"https://raw.githubusercontent.com/Cisco-Talos/IOCs/main/2026/11/artex-and-beyond.txt"]
+    with (format="txt")
+    | extend Address = trim(@"\s+", Line)
+    | where Address matches regex @"^\d{1,3}(\.\d{1,3}){3}$"
+    | distinct Address;
+let addresses = toscalar(talos | summarize make_set(Address));
+union
+  (CommonSecurityLog | where TimeGenerated > ago(90d) and DestinationIP in (addresses)
+     | project TimeGenerated, Address = DestinationIP, Role = "destination", Log = "firewall or proxy", Who = SourceIP, Detail = strcat(DeviceVendor, " ", DeviceProduct, " ", DeviceAction)),
+  (DeviceNetworkEvents | where TimeGenerated > ago(90d) and RemoteIP in (addresses)
+     | project TimeGenerated, Address = RemoteIP, Role = "endpoint peer", Log = "endpoint connection", Who = DeviceName,
+               Detail = strcat(InitiatingProcessFileName, " ", ActionType, " local ", tostring(LocalPort), " remote ", tostring(RemotePort))),
+  (CommonSecurityLog | where TimeGenerated > ago(90d) and SourceIP in (addresses)
+     | project TimeGenerated, Address = SourceIP, Role = "source", Log = "firewall or proxy", Who = DestinationIP, Detail = strcat(DeviceVendor, " ", DeviceProduct, " ", DeviceAction)),
+  (SigninLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses)
+     | project TimeGenerated, Address = IPAddress, Role = "source", Log = "user sign-in", Who = UserPrincipalName, Detail = ResultType),
+  (AADNonInteractiveUserSignInLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses)
+     | project TimeGenerated, Address = IPAddress, Role = "source", Log = "non-interactive sign-in", Who = UserPrincipalName, Detail = ResultType),
+  (AADServicePrincipalSignInLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses)
+     | project TimeGenerated, Address = IPAddress, Role = "source", Log = "service principal sign-in", Who = ServicePrincipalName, Detail = ResultType)
+| summarize Events = count(), Who = make_set(Who, 20), Details = make_set(Detail, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Address, Role, Log
+| extend RoleOrder = case(Role == "destination", 0, Role == "endpoint peer", 1, 2)
+| order by RoleOrder asc, LastSeen desc
+| project-away RoleOrder

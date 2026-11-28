@@ -198,6 +198,7 @@ siem_fun/
 |-- README.md
 |-- scripts/
 |   |-- tests/
+|   |   |-- attack-enterprise-20.1.tsv
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
 |   |   |-- test_agentic_ai_attacks.py
@@ -580,7 +581,9 @@ under [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/): an IOC
 list with a source and confidence on every row, an ATT&CK Navigator layer,
 Splunk saved searches with Morpheus-native variants, Sentinel scheduled rules,
 hunting KQL, and the lookups those read. The Sentinel tables the new content
-uses were added to the table catalogue with Microsoft citations.
+uses were added to the table catalogue with Microsoft citations. Since
+2026-11-27 the same folder also holds `splunk-hunting.conf`, unscheduled Splunk
+hunts that are the Splunk side of `hunting.kql` from H-AGT-032 on.
 
 What checks it: [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
 keeps `iocs.csv`, the layer and the reference doc's technique table
@@ -588,12 +591,19 @@ consistent. The validator's content checks read markdown only, so the queries
 in the asset files are neither linted nor provenance-checked; CLAUDE.md records
 that boundary. Checked once by hand on 2026-11-21, by running the validator's
 own functions against them: every KQL table is catalogued and every hunt
-bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
+bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`
+in its stanza, or, for the five baselines and R-P-AGT-010, by an `earliest=` in
+the search string;
 the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
 score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
-`lookups/sentinel_watchlist.csv` carry the same 206 indicators, each present
-in `iocs.csv` with the same type, confidence and source, but no test pins
-that.
+`lookups/sentinel_watchlist.csv` carried the same 206 indicators, each present
+in `iocs.csv` with the same type, confidence and source, and no test pinned
+that until the retrospective of 2026-11-28, below. That retrospective also
+turned the hand checks into tests: every table a query reads, through the
+golden-prompt grader's own reader; a time bound on every table a hunt reads;
+a time range on every scheduled search; and every technique ID a query file
+or the layer cites, against the ATT&CK 20.1 list vendored as
+`scripts/tests/attack-enterprise-20.1.tsv`.
 
 A later change added [examples/agentic-ai-attacks/waf/](examples/agentic-ai-attacks/waf/README.md):
 the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
@@ -659,9 +669,122 @@ statements in the reference that went further than their sources. The
 canary-then-admin rule filtered to failures and so missed the successful
 admin login, which is the case that matters.
 
-No golden-prompt fixture exercises the new reference yet. Because the section
+No golden-prompt fixture exercises the new reference yet (true on 2026-11-21;
+fixtures 11 to 21 came later). Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
 marker went stale; the seventh model run, below, recorded it again.
+
+A second retrospective, on 2026-11-28, went back to the first rules rather
+than the newest ones, on the reasoning that every later review had started
+from whatever had just been added. It found three things in content that had
+been read, reviewed and merged several times.
+
+The indicator sweep, R-D-AGT-012, looked the wrong way for half of what it
+carried. Its only address leg matched an indicator as the DESTINATION of a
+connection, which is right for a command-and-control server and wrong for the
+addresses a campaign signs in, sprays and scans FROM: about half of the 82
+addresses then in its lookup, 40 by their own context column. A sign-in from a high-confidence spray source matched nothing
+on Splunk, and on Sentinel only if a Defender-enrolled device happened to log
+the connection. Every report written from this section told a reader to load
+the indicators and hunt, and that instruction was weaker than it read. The
+rule now also matches an address as the source of an allowed connection, a web
+request and an authentication on Splunk, and of a web session and the three
+Entra sign-in tables on Sentinel (columns checked against Microsoft's table
+references). Low-confidence rows are not matched inbound, where a shared VPN
+or CDN egress address fires on ordinary visitors, and are left out of the
+Sentinel rule altogether, since it raised every match as High.
+
+The lookups carried rows nothing read. Eight application IDs sat in a lookup
+whose rule has no leg for them, under a description that counted them; the
+hunt that does watch application IDs hard-coded three of the eight. Five
+shared-egress addresses marked retro-hunt only were in the lookup beside four
+with the identical action that had been left out. The lookup is now exactly
+the rows the rule may alert on, 173 of them, and the hunt watches all eight.
+Merged with the twenty indicators added the day before, the same rule left
+out two of them, both marked retro-hunt only as likely shared egress, so the
+lookups carry 191.
+
+Nine per-event rules still read a window longer than their schedule. The fix
+of 2026-11-25 gave each NEW rule a window as long as its schedule and left the
+first set as it was, so an event in the overlap was written to the risk index
+twice. Two of them carried an `earliest=` inside the search string, which
+overrides the stanza, so correcting the stanza alone would have changed
+nothing. R-D-AGT-020 read a day of raw sign-in events every fifteen minutes.
+The twelve rules that count or pair events across a window still overlap, on
+purpose, and are now named with the reason in the test and in the file header.
+
+None of the three was a matter of syntax or of a wrong name, which is what
+the earlier passes were built to find. Each was a question nobody had put to
+the rule: which way does the traffic run, who reads this row, how often is
+this event counted. What checks them now is in
+[scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py):
+the two lookups equal each other and are held to `iocs.csv`; the lookup is
+exactly the alertable rows of the types the rule has a leg for; the rule has
+a source-side leg on each platform; a rule reads one schedule period unless it
+is listed as sliding, and a listed rule must still overlap; an inline time
+bound agrees with its stanza. Six of the ten tests fail on the files as they
+stood, and eleven mutations, one per defect, are registered in the harness.
+No reference file changed, so the golden-run marker is untouched. Nothing
+here has run against live data either.
+
+The retrospective's second pass, the same day, did two things. It applied
+what the newer reporting teaches: eighteen hunts, H-AGT-046 to H-AGT-063, on
+both platforms (S3 probing, instance-role credentials from a second address,
+CI workload identities, instance profiles passed for the first time, Bedrock
+reconnaissance, the AKS audit log, Azure model calls, Kudu log-ons, NetScaler
+and Check Point management, self-hosted model servers, and the Talos ARTEX
+address list); Sentinel halves for R-D-AGT-017 to R-D-AGT-020, which had
+existed on Splunk only; seven tables added to the Sentinel catalogue with
+Microsoft's references; a containment line on every rule that can score 90 or
+more; and 212.11.64.250 taken off the deny lists, because nothing read for it
+was more than a news account of two reports nobody here had read (the WAF
+deny list is now 43 addresses, and the sweep lookups 196 rows).
+
+It also reviewed the first pass's own fixes, and found six defects in the
+checks themselves, all confirmed by a second reader:
+
+- P2V-1: fixtures 5, 12 and 20 had been loosened to accept the window as a
+  bare `24h`, `1d` or `30d` anywhere in the query block, so an answer
+  searching seven days with a daily `bin()` passed. They now require the value
+  inside `ago()`, or a `let` bound to it and passed to `ago()`.
+- P2V-2: the test that every table a hunt reads is time-bounded found the
+  tables with a regex that saw a table only at the start of a line and only
+  without a digit, so a union leg written on the previous operand's line was
+  never checked. It now takes the tables from the grader's `kql_tables` and
+  checks each place the name stands: 81 legs.
+- P2V-3: the same test file's table registry left out every catalogued table
+  with a digit in its name (W3CIISLog).
+- P2V-4: the validator read a fence as KQL only when its label was exactly
+  `kql`, while the grader lower-cases the label and reads `kusto` as KQL. The
+  validator now does the same; a new `fence_language` section of the shared
+  corpus holds both tools to it.
+- P2V-5: both readers took a dotted union option (`hint.concurrency=4`) for a
+  table named `hint` and missed the first operand. Fixed in both, with a
+  corpus case.
+- P2V-6: three of the grader's reader mutations had no PowerShell
+  counterpart. Added.
+
+The same pass added the tests the content changes needed: the GSocket names
+of H-AGT-030 against R-D-AGT-025 (fixed in the hunt only by the first pass,
+P2H-01), the port check of H-AGT-039 against its Splunk twin and against
+`nc -vz`, the form the hunt is for (the proposed fix's regex missed it,
+P2H-02), the thresholds of every rule written for both platforms, with the
+seven differences a platform forces listed by reason, a block action only on
+a row read at its source, and an inline range in every hunt whose description
+says its range is written into the search (eight now, from two). Running the
+harness also showed four of its own mutations had stopped testing anything:
+three no longer found a unique string once the new hunts and indicators
+repeated it, and one was no longer caught, because the reference had gained a
+backticked mention of `splunk-hunting.conf` and the test looked for the name
+rather than the link. Each new test has a mutation in the harness, and the
+four old ones were repaired.
+
+For the first time, the PowerShell side ran before CI did: PowerShell 7.4 was
+available in the session, with a local stand-in for powershell-yaml (which
+could not be downloaded) that parses with Python's YAML library. The
+validator, its unit suite and the whole mutation harness ran on it, the
+validator mutations under both line endings. The stand-in is not the module
+CI uses, so windows-latest is still the authority on the YAML half.
 
 ## What the seventh model run found
 
@@ -964,6 +1087,26 @@ leaves `EventData` empty, a self-grant test that could not be true, a
 secret-file count that scored the densest command lowest, and a Splunk term
 filter that dropped the labels its own pattern was written for.
 
+The two commits that made these corrections say only "after review", so the
+list is kept here. Sentinel: the label pattern stopped after one character
+(032); the log group was read under one of its two names (033); calls made by
+AWS services were counted (035); process names lacked their .exe forms (036);
+one command naming three kinds of secret file counted once (037); a
+comparison was cast to a number, and exclusions were counted by one literal
+(038); a target of 10 counted as a target of 1, and file events were read
+whatever their action (039); files were counted as folders (040); hour bins
+split a pair and the self-grant test compared a name with a list of other
+names (041); a changed diagnostic setting was not read (043); only EventData
+was read (044); a 90-day union was joined to the list, and non-interactive
+sign-ins were not read (045). Splunk: the same where the hunt is shared, and
+seven of its own: a sort on a time already turned into text (032, 039, 043);
+a statistics command grouping by an actor, requester or template that can be
+empty, which drops the event (032, 033, 043, 044); a search-term filter
+narrower than the pattern after it (032); any error code read as a refusal
+(034); a flag summed after a count, which counts rows and not events (036);
+any nsenter counted (039); every caller listed where the Sentinel hunt lists
+new ones (043).
+
 Seventeenth run, 2026-11-27, because the ATT&CK table was re-derived for the
 reports read that day (73 evidence rows, 17 new techniques): fixtures 1 to 7
 and 11 to 21 re-run, 20 of 21 before correction. Fixture 12 failed a correct
@@ -976,7 +1119,41 @@ the run, so the answers were re-graded: 21 of 21, and the marker records it.
 The same anchored form is still in other fixtures' specs and will fail the
 same way on an answer that opens with a binding.
 
-Nine fixture defects and two skill-content gaps across seventeen runs. Both gaps
+Both of those last claims were wrong or are now settled, and neither was found
+by a model run. The second retrospective (2026-11-28) found that the
+allowlist did not keep every other table out: its reader took no table from a
+union whose operands start on the line after the keyword (how nine of the
+pack's own hunts are written), took a multi-line let's own body for the
+query's source, and read `of` from a comment saying "union of both tables".
+Recorded answers to fixtures 12, 13 and 18 still passed with an invented table
+put in. The grader and the validator now read KQL statement by statement, and
+a `kusto` fence is read as `kql`. Fixtures 3, 5, 12, 18 and 20 no longer
+anchor their table to the start of a block or a line; they name it with
+`tables_required`, which the same reader checks, so a comment, a binding or an
+indent before it changes nothing. Fixtures 5, 12 and 20 no longer demand a
+window or a threshold typed as a literal (the run-13 defect, still in three
+specs), and seven tstats specs accept a leading blank. Bullets in fixtures 11
+to 21 that no spec checks are marked as the reviewer's job. Every recorded
+answer under `out/` keeps its verdict under the new grader and specs. That
+loosening went one step too far and was found by the retrospective's own
+second pass (P2V-1, in the agentic section above): the window had become a
+bare token anywhere in the block, so it now has to sit inside `ago()`, typed
+or through a `let`, and every recorded answer still passes.
+
+Eighteenth run, 2026-11-28, by subagents, because the second retrospective's
+second pass changed agentic-ai-attacks.md (eighteen new hunts named, the
+2026-11-28 developments, table corrections), sentinel-table-catalog.md (seven
+tables) and the specs of fixtures 5, 12 and 20: fixtures 1 to 7 and 11 to 21
+re-run from rebuilt inputs, 21 of 21 on the first grading, the first run since
+the ninth to find neither a fixture defect nor a content gap. Fixtures 8 to 10
+load skills whose files did not change and were not re-run. The marker
+records this run. The retrospective's third pass then corrected two sentences
+in agentic-ai-attacks.md (the WAF deny sentence, and a claim that GreyNoise
+published no addresses, which went beyond the only text read); neither is
+something a fixture asks about, so they were not sent back to a model, and the
+validator's NOTICE names the file until the next scheduled run clears it.
+
+Nine fixture defects and two skill-content gaps across eighteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still

@@ -1,3 +1,10 @@
 norma/0.
 fuzz faster u fool
 pentagi-installer
+reconprobe/
+pentest-probe
+authorized-pentest
+authorized-security-research
+research-readonly
+research; read-only
+read-only-audit
