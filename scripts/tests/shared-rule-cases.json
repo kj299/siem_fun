@@ -180,6 +180,17 @@
       "why": "KQL table names are case-sensitive. The grader read a leading table only if it began with a capital, so an answer whose main query was on auditlogs passed a fixture allowing AuditLogs.",
       "query": "auditlogs\n| where TimeGenerated > ago(1d)",
       "tables": ["auditlogs"]
+    },
+    {
+      "name": "a union option name may carry a dot",
+      "why": "hint.concurrency and hint.spread are documented union options. An option name read as \\w+ stopped at the dot, reported hint as a table and never read SigninLogs (second retrospective, P2V-5).",
+      "query": "union hint.concurrency=4 SigninLogs, AuditLogs\n| take 5",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a dotted union option after another option",
+      "query": "union isfuzzy=true hint.spread=2 SigninLogs, AuditLogs\n| take 5",
+      "tables": ["SigninLogs", "AuditLogs"]
     }
   ],
 
@@ -275,5 +286,21 @@
       "query": "| search index=windows earliest=-24h\n| stats count",
       "reported": false
     }
+  ],
+
+  "_fence_language_comment": [
+    "The language a fenced block's label names, as every rule keyed on the label",
+    "reads it. Lower-cased, and an alias read as the language it names: Microsoft",
+    "Learn fences KQL as kusto. The grader read kusto as kql while the validator",
+    "tested the raw label with -ceq, so a kusto or KQL block in a reference doc",
+    "was checked by no KQL rule at all (second retrospective, P2V-4)."
+  ],
+  "fence_language": [
+    {"name": "kql", "label": "kql", "language": "kql"},
+    {"name": "kusto is kql", "label": "kusto", "language": "kql"},
+    {"name": "upper-case KQL is kql", "label": "KQL", "language": "kql"},
+    {"name": "Kusto is kql", "label": "Kusto", "language": "kql"},
+    {"name": "upper-case SPL is spl", "label": "SPL", "language": "spl"},
+    {"name": "spl", "label": "spl", "language": "spl"}
   ]
 }

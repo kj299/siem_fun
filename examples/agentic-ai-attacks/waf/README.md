@@ -163,10 +163,10 @@ engine tests above are what run them.
 | W-AGT-005 | JWT whose header is `alg` `none` (base64 prefix `eyJhbGciOiJub25l` and casings) | Authorization, cookies, URL | Wiz 2026-10-22 | None. No working deployment issues unsigned tokens. |
 | W-AGT-006 | SQL injection strings tagged `ARTEX'` | Query, body | S-RM 2026-11-04 | Low. |
 | W-AGT-007 | Probe-account identity `i<intent>probe<unix-time>@`, the intent counter two to seven digits | Sign-up, login and recovery bodies | Okta 2026-11-06; Wiz 2026-11-25 (the counter runs from `i49` to `i808807`) | Low. The looser shapes in the reporting (`pentest-probe-...`, `i3694canary`) carry no timestamp and are left to the hunts. |
-| W-AGT-008 | Script named like an agent task artifact, `i<3 to 7 digits>.<asp, aspx, jsp, php ...>`, requested or uploaded, including with path info or a `;parameter` after the name | Path, upload filename | S-RM 2026-11-04 (`i4028.asp`); Wiz 2026-11-25 (the counter runs from `i49` to `i808807`) | Medium. Single-engagement indicator; check your own file naming first. The rule starts at three digits although Wiz saw two, because a two-digit name such as `i18.php` is far likelier in a real application; that floor is this pack's choice, and the hunts match from two digits. Akamai's wildcard version is looser, so it ships as alert. |
+| W-AGT-008 | Script named like an agent task artifact, `i<3 to 7 digits>.<asp, aspx, jsp, php ...>`, requested or uploaded, including with path info or a `;parameter` after the name | Path, upload filename | S-RM 2026-11-04 (`i4028.asp`); Wiz 2026-11-25 (the counter runs from `i49` to `i808807`) | Medium. Single-engagement indicator; check your own file naming first. The rule starts at three digits although Wiz saw two, because a two-digit name such as `i18.php` is far likelier in a real application; that floor is this pack's choice, and the hunts match from two digits. Akamai's wildcard version is looser, so it ships as alert: `?` is any character, so it holds only the first character after the `i` to a digit. Its values before 2026-11-28 (`i???` to `i???????`) matched ordinary names too: `index.php`, `info.php`, `install.php`, `include.php`. |
 | W-AGT-008 (second shape) | JSP shell named 1-2 letters, 4 digits, optional letter (`cl1217.jsp`, `f1219a.jsp`, `z1219.jsp`) | Path | GTIG 2026-10-30 (MySQL general-log poisoning) | Medium. Not expressible in Akamai's wildcard builder. |
 | W-AGT-009 | Inline DTD or entity declaration in an XML body | Body | CrowdStrike 2026-10-29 (unsigned SAML plus XXE to the metadata service) | Low, but partial: a base64 SAML response hides it from the edge, and on ModSecurity v2 the rule needs the v2-only block in the rule file. The real fix is DTD processing off and signature validation on in the service provider. |
-| W-AGT-010 | 44 source addresses, including the eight Storm-3358 ARTEX and C2 servers Microsoft published on 2026-11-06 | Client address | `iocs.csv` rows marked block (CrowdStrike, Zscaler, NorForge, Kaspersky, Microsoft and others) | Low today, decaying. The FBI FLASH of 2026-11-13 asks you to vet addresses before blocking because hosting addresses get reassigned. Review on every `iocs.csv` update; expire after 90 days. |
+| W-AGT-010 | 43 source addresses, including the eight Storm-3358 ARTEX and C2 servers Microsoft published on 2026-11-06 | Client address | `iocs.csv` rows marked block (CrowdStrike, Zscaler, NorForge, Kaspersky, Microsoft and others) | Low today, decaying. The FBI FLASH of 2026-11-13 asks you to vet addresses before blocking because hosting addresses get reassigned. Review on every `iocs.csv` update; expire after 90 days. |
 | W-AGT-011 | Shell command syntax in the User-Agent (`$(`, a backtick, `; curl`, a pipe to `sh`) | User-Agent header | Microsoft 2026-11-05 (exploitation by shell commands embedded in a user agent) | None for browsers. |
 | W-AGT-012 | Upload filename containing `../`, or named `sitecustomize.py` or `usercustomize.py` | Multipart body | Amazon 2026-11-20: Cairn agents found a path-traversal zero-day in an upload filename parameter in about 11 minutes and wrote a Python auto-import file for a root shell | Low. On Akamai this is left to the managed attack groups. |
 | W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, half-encoded, double-encoded and overlong dots), and `..;` in the path (not the query), which Tomcat and Spring resolve as `..` | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
@@ -177,11 +177,16 @@ the Google name). Other spellings of the same address, the decimal form among
 them (`http://2852039166/`), are generic SSRF and are left to the Core Rule
 Set and to the application.
 
-The user-agent and probe-string rules deny on values the IOC file marks
-alert, not block, and never on one it marks low confidence or hunt only: the
-judgement is that no legitimate visitor sends them, and it is this pack's,
-not a source's. Addresses are different. An address is
-denied only where the IOC file marks it block, and 21 of the 44 are also on
+The user-agent and probe-string rules deny on values the IOC file does not
+mark block. Most it marks alert; some it marks hunt: the W-AGT-004 canaries
+`zzz_nonexistent_abc.txt`, `zzzrandom12345`, `zz_no_such_user_9f3a`,
+`zzq.nonexistent9x7`, `precheck.not-a-user@example.invalid` and the
+`@example.invalid` pattern, and the user-agents `artex-agent` and
+`artex-judge-r121`, which the W-AGT-001 name rule refuses. None it marks low
+confidence is denied (`ReconProbe/` is logged instead). The judgement is that
+no legitimate visitor sends them, and it is this pack's, not a source's.
+Addresses are different. An address is
+denied only where the IOC file marks it block, and 21 of the 43 are also on
 the FBI's list, which asks for vetting first; nine of those the FBI labels
 proxy addresses. Treat W-AGT-010 as the rule most likely to age badly.
 

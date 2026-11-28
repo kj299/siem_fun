@@ -22,9 +22,6 @@ xcai.pro,domain,medium,LLM API reseller used as ARTEX model gateway,CrowdStrike 
 144.172.64.128,ipv4,high,Storm-0940 sign-ins / Graph; .99 = Oct 10-14 spray source,Microsoft 2026-10-21 Storm-0940
 144.172.64.99,ipv4,high,Storm-0940 sign-ins / Graph; .99 = Oct 10-14 spray source,Microsoft 2026-10-21 Storm-0940
 144.172.64.60,ipv4,high,Storm-0940 sign-ins / Graph; .99 = Oct 10-14 spray source,Microsoft 2026-10-21 Storm-0940
-187.15.88.186,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
-187.15.90.217,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
-187.15.89.186,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
 104.194.150.21,ipv4,high,Storm-0940 infrastructure (Wiz),Wiz 2026-10-22 Storm-0940
 167.88.172.97,ipv4,high,Storm-0940 infrastructure (Wiz),Wiz 2026-10-22 Storm-0940
 23.248.226.250,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
@@ -34,7 +31,7 @@ xcai.pro,domain,medium,LLM API reseller used as ARTEX model gateway,CrowdStrike 
 23.248.226.254,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
 161.8.161.140,ipv4,high,upstream SOCKS proxy :11005,Zscaler ThreatLabz 2026-10-21
 134.122.137.132,ipv4,medium,host with ARTEX open directory,AhnLab ASEC 2026-10-14
-204.194.51.54,ipv4,medium,host with ARTEX open directory,AhnLab ASEC 2026-10-14
+204.194.51.54,ipv4,medium,host with ARTEX open directory; also in Cisco Talos's ARTEX IP list (2026-11-13),AhnLab ASEC 2026-10-14
 085f53a1ce8c634ac7b0d63e42b56b15,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
 0c501aca4fc29efe47f122ddc9c1af85,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
 0eb259067e565221109a3ee988e1faa3,md5,medium,file from ARTEX operator directory (AhnLab),AhnLab ASEC 2026-10-14
@@ -140,11 +137,11 @@ d5070f52262effe216b840711343bff8f2787f39208d887d8dfd9c673f8d1573,sha256,high,SHA
 Mozilla/5.0 (security-testing; authorized),user_agent,medium,self-describing agent user agent seen in ARTEX-derived intrusions,Unit 42 timely threat intel 2026-10-30
 Mozilla/5.0 (Windows NT 10.0; Win64; x64) recon-audit,user_agent,medium,self-describing agent user agent seen in ARTEX-derived intrusions,Unit 42 timely threat intel 2026-10-30
 Fuzz Faster U Fool v2.1.0-dev,user_agent,low,"ffuf default user agent, mixed with curl/python-requests/Python-urllib from one ARTEX source (ffuf is a generic tool)",Unit 42 timely threat intel 2026-10-30
-103.122.245.194,ipv4,medium,"ARTEX C&C cluster of 10 hosts in 103.122.245.0/24 (AS152918 Liberally Network, Thailand) updated in lockstep (tag dev-db-resilience-20261031); CPR lists .198 .199 .204 .214-.219 as siblings",Check Point Research 2026-11-05
+103.122.245.194,ipv4,medium,"ARTEX C&C cluster of 10 hosts in 103.122.245.0/24 (AS152918 Liberally Network, Thailand) updated in lockstep (tag dev-db-resilience-20261031); CPR lists .198 .199 .204 .214-.219 as siblings; also in Cisco Talos's ARTEX IP list (2026-11-13), as are all nine CPR siblings and .210",Check Point Research 2026-11-05
 192.236.172.197,ipv4,medium,"ARTEX C&C cluster with rolling 0.3.15-pro.* version tag, AS36352 HostPapa (US)",Check Point Research 2026-11-05
 198.44.123.66,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
-204.44.66.81,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
-104.168.112.237,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa),Check Point Research 2026-11-05
+204.44.66.81,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa); also in Cisco Talos's ARTEX IP list (2026-11-13),Check Point Research 2026-11-05
+104.168.112.237,ipv4,medium,ARTEX C&C cluster 0.3.15-pro.* (HostPapa); also in Cisco Talos's ARTEX IP list (2026-11-13),Check Point Research 2026-11-05
 199.19.77.84,ipv4,high,primary sign-in source for service-principal sign-ins with leaked/stolen app credentials (from 2026-10-28); Key Vault exfiltration,Microsoft Threat Intelligence 2026-11-05 (exposed secrets)
 65.87.223.26,ipv4,medium,malicious control-plane operations; attempts to obtain App Service authentication tokens; shell commands embedded in a user agent,Microsoft Threat Intelligence 2026-11-05 (exposed secrets)
 157.22.126.128,ipv4,medium,"reconnaissance against AI workloads on Azure AI services; Wiz (2026-11-23) lists it as used with stolen cloud or identity credentials, late October to 2026-11-23",Microsoft Threat Intelligence 2026-11-05 (exposed secrets); Wiz 2026-11-23 agentic attacks in the wild
@@ -179,14 +176,14 @@ verify-911-probe/1.0,user_agent,medium,ARTEX probe user agent observed by WorkOS
 82.29.129.54,ipv4,high,staging server and attack egress of CL-STA-1238 (Hosteons); the address a victim would see inbound; operations ran August to September 2026,Unit 42 2026-11-12 CL-STA-1238
 68.68.250.114,ipv4,medium,"ARTEX operator host, late October to 2026-11-01",Wiz 2026-11-23 agentic attacks in the wild
 192.238.246.157,ipv4,medium,"ARTEX operator host, late October to 2026-11-01",Wiz 2026-11-23 agentic attacks in the wild
-104.207.150.173,ipv4,medium,"ARTEX operator host, late October to 2026-11-01",Wiz 2026-11-23 agentic attacks in the wild
+104.207.150.173,ipv4,medium,"ARTEX operator host, late October to 2026-11-01; also in Cisco Talos's ARTEX IP list (2026-11-13)",Wiz 2026-11-23 agentic attacks in the wild
 169.128.55.214,ipv4,medium,source of ARTEX activity against AWS environments (Caelus Technology),Datadog Security Labs 2026-11-09
 154.36.136.197,ipv4,medium,source of ARTEX activity against AWS environments (NetLab Global),Datadog Security Labs 2026-11-09
 154.36.136.23,ipv4,medium,source of ARTEX activity against AWS environments (NetLab Global),Datadog Security Labs 2026-11-09
-82.158.88.233,ipv4,medium,source of ARTEX activity against AWS environments (Zenixcloud),Datadog Security Labs 2026-11-09
+82.158.88.233,ipv4,medium,source of ARTEX activity against AWS environments (Zenixcloud); also in Cisco Talos's ARTEX IP list (2026-11-13),Datadog Security Labs 2026-11-09
 103.54.154.40,ipv4,medium,source of ARTEX activity against AWS environments (Zeofast Network); used a long-term access key on 2026-10-20,Datadog Security Labs 2026-11-09
 103.54.154.32,ipv4,medium,source of ARTEX activity against AWS environments (Zeofast Network),Datadog Security Labs 2026-11-09
-45.145.228.25,ipv4,medium,source of ARTEX activity against AWS environments (Lucidacloud),Datadog Security Labs 2026-11-09
+45.145.228.25,ipv4,medium,source of ARTEX activity against AWS environments (Lucidacloud); also in Cisco Talos's ARTEX IP list (2026-11-13),Datadog Security Labs 2026-11-09
 jet-night.com,domain,medium,"token routing service GTIG lists as a network indicator (""LLM Mixer"") and believes runs on stolen API keys; a victim sees the model calls, not this domain; a host of yours calling it means someone there is buying resold access (this pack's reading, not GTIG's)",Google GTIG 2026-11-02 LLMJacking
 pentest-probe-i5938/1.0,user_agent,medium,"scanner user agent in the Bitrise incident (12,813 requests, 25-27 October 2026), as compiled by Wiz; the string declares itself authorized or read-only, which an attacker can write as easily as a tester",Wiz Black October indicator list (Bitrise)
 Mozilla/5.0 (compatible; authorized-pentest/bitrise-readonly),user_agent,medium,"scanner user agent in the Bitrise incident (1,074 requests, 25-27 October 2026), as compiled by Wiz; the string declares itself authorized or read-only, which an attacker can write as easily as a tester",Wiz Black October indicator list (Bitrise)

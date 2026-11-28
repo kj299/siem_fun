@@ -727,6 +727,65 @@ stood, and eleven mutations, one per defect, are registered in the harness.
 No reference file changed, so the golden-run marker is untouched. Nothing
 here has run against live data either.
 
+The retrospective's second pass, the same day, did two things. It applied
+what the newer reporting teaches: eighteen hunts, H-AGT-046 to H-AGT-063, on
+both platforms (S3 probing, instance-role credentials from a second address,
+CI workload identities, instance profiles passed for the first time, Bedrock
+reconnaissance, the AKS audit log, Azure model calls, Kudu log-ons, NetScaler
+and Check Point management, self-hosted model servers, and the Talos ARTEX
+address list); Sentinel halves for R-D-AGT-017 to R-D-AGT-020, which had
+existed on Splunk only; seven tables added to the Sentinel catalogue with
+Microsoft's references; a containment line on every rule that can score 90 or
+more; and 212.11.64.250 taken off the deny lists, because nothing read for it
+was more than a news account of two reports nobody here had read (the WAF
+deny list is now 43 addresses, and the sweep lookups 196 rows).
+
+It also reviewed the first pass's own fixes, and found six defects in the
+checks themselves, all confirmed by a second reader:
+
+- P2V-1: fixtures 5, 12 and 20 had been loosened to accept the window as a
+  bare `24h`, `1d` or `30d` anywhere in the query block, so an answer
+  searching seven days with a daily `bin()` passed. They now require the value
+  inside `ago()`, or a `let` bound to it and passed to `ago()`.
+- P2V-2: the test that every table a hunt reads is time-bounded found the
+  tables with a regex that saw a table only at the start of a line and only
+  without a digit, so a union leg written on the previous operand's line was
+  never checked. It now takes the tables from the grader's `kql_tables` and
+  checks each place the name stands: 81 legs.
+- P2V-3: the same test file's table registry left out every catalogued table
+  with a digit in its name (W3CIISLog).
+- P2V-4: the validator read a fence as KQL only when its label was exactly
+  `kql`, while the grader lower-cases the label and reads `kusto` as KQL. The
+  validator now does the same; a new `fence_language` section of the shared
+  corpus holds both tools to it.
+- P2V-5: both readers took a dotted union option (`hint.concurrency=4`) for a
+  table named `hint` and missed the first operand. Fixed in both, with a
+  corpus case.
+- P2V-6: three of the grader's reader mutations had no PowerShell
+  counterpart. Added.
+
+The same pass added the tests the content changes needed: the GSocket names
+of H-AGT-030 against R-D-AGT-025 (fixed in the hunt only by the first pass,
+P2H-01), the port check of H-AGT-039 against its Splunk twin and against
+`nc -vz`, the form the hunt is for (the proposed fix's regex missed it,
+P2H-02), the thresholds of every rule written for both platforms, with the
+seven differences a platform forces listed by reason, a block action only on
+a row read at its source, and an inline range in every hunt whose description
+says its range is written into the search (eight now, from two). Running the
+harness also showed four of its own mutations had stopped testing anything:
+three no longer found a unique string once the new hunts and indicators
+repeated it, and one was no longer caught, because the reference had gained a
+backticked mention of `splunk-hunting.conf` and the test looked for the name
+rather than the link. Each new test has a mutation in the harness, and the
+four old ones were repaired.
+
+For the first time, the PowerShell side ran before CI did: PowerShell 7.4 was
+available in the session, with a local stand-in for powershell-yaml (which
+could not be downloaded) that parses with Python's YAML library. The
+validator, its unit suite and the whole mutation harness ran on it, the
+validator mutations under both line endings. The stand-in is not the module
+CI uses, so windows-latest is still the authority on the YAML half.
+
 ## What the seventh model run found
 
 Seventh run, 2026-11-21, same method as the earlier ones, after the agentic-AI
@@ -1075,7 +1134,11 @@ indent before it changes nothing. Fixtures 5, 12 and 20 no longer demand a
 window or a threshold typed as a literal (the run-13 defect, still in three
 specs), and seven tstats specs accept a leading blank. Bullets in fixtures 11
 to 21 that no spec checks are marked as the reviewer's job. Every recorded
-answer under `out/` keeps its verdict under the new grader and specs.
+answer under `out/` keeps its verdict under the new grader and specs. That
+loosening went one step too far and was found by the retrospective's own
+second pass (P2V-1, in the agentic section above): the window had become a
+bare token anywhere in the block, so it now has to sit inside `ago()`, typed
+or through a `let`, and every recorded answer still passes.
 
 Nine fixture defects and two skill-content gaps across seventeen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the

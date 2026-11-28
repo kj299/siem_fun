@@ -192,6 +192,7 @@ Expected output:
 - Uses `SigninLogs`
 - Maps `user` to `UserPrincipalName`
 - Maps `src_ip` to `IPAddress`
+- Bounds the query to the last 24 hours inside `ago()` (`ago(24h)`, `ago(1d)`, or a `let` bound to either and passed to `ago()`); a `1d` in a `bin()` or a comment is not the window
 - Calls out any assumption about `action=failure` mapping, such as `ResultType != "0"`
 
 Grader spec:
@@ -202,7 +203,7 @@ Grader spec:
   "tables": ["SigninLogs"],
   "tables_required": ["SigninLogs"],
   "query_lang": "kql",
-  "query_matches": ["UserPrincipalName", "IPAddress", "\\b(?:24h|1d)\\b", "count\\(\\)", "ResultType"],
+  "query_matches": ["UserPrincipalName", "IPAddress", "(?s)ago\\(\\s*(?:24h|1d)\\s*\\)|\\blet\\s+(\\w+)\\s*=\\s*(?:24h|1d)\\b.*\\bago\\(\\s*\\1\\s*\\)", "count\\(\\)", "ResultType"],
   "query_not_matches": ["\\bsrc_ip\\b", "\\buser\\b", "windows_auth"],
   "matches": ["ResultType"]
 }
@@ -445,7 +446,7 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Loads agentic-ai-attacks.md and builds the hunt it describes in prose (the reference names H-AGT-022 but does not carry its KQL)
-- Queries `AADServicePrincipalSignInLogs` and no other table, bounded to 30 days (`ago(30d)` or a `let` bound to `30d`: the spec reads the window, not how it is typed)
+- Queries `AADServicePrincipalSignInLogs` and no other table, bounded to 30 days (`ago(30d)` or a `let` bound to `30d` and passed to `ago()`: the spec reads the window, not how it is typed, and a `30d` elsewhere in the block is not the window)
 - Counts distinct service principals per `IPAddress` and keeps three or more, the threshold the reference gives
 - Uses both error codes the reference gives for an invalid and an expired client secret, 7000215 and 7000222
 - Not machine-checked, reviewer's job: the hunt is for the spray pattern, so the addresses Microsoft published are context, not the filter (a second stage that pulls the rows of the sources the pattern found, `| where IPAddress in (spray_sources)`, is fine, which is why no pattern checks this); `ResultType` holds the bare number, so a comparison against the `AADSTS`-prefixed form matches nothing; and a failure followed by a success from one source is the urgent case
@@ -465,7 +466,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "\\b30d\\b",
+    "(?s)ago\\(\\s*30d\\s*\\)|\\blet\\s+(\\w+)\\s*=\\s*30d\\b.*\\bago\\(\\s*\\1\\s*\\)",
     "dcount\\(",
     "IPAddress",
     "7000215",
@@ -860,7 +861,7 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Builds the fourth behavior the reference ranks: credentials added to OAuth applications or service principals
-- Queries `AuditLogs` only, bounded to 30 days (`ago(30d)` or a `let` bound to `30d`), filtering on `OperationName`
+- Queries `AuditLogs` only, bounded to 30 days (`ago(30d)` or a `let` bound to `30d` and passed to `ago()`), filtering on `OperationName`
 - Matches both operations that add a credential: "Add service principal credentials", and the application one whose name ends "Certificates and secrets management". These are the two the pack's own Sentinel rule matches
 - Matches the application operation by that ending, not by its full name typed with a plain hyphen: the real name carries a different dash character, so the plain-hyphen form matches nothing
 - Not machine-checked, reviewer's job: the answer says this is behavior, not an indicator match, so legitimate secret rotation is returned too (no pattern checks it, because one word for the idea is the kind of spec that failed a correct answer in run 15); the second operation also records removals, so the answer should say how to keep additions only, and an application adding a credential to itself is the row to read first
@@ -880,7 +881,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "\\b30d\\b",
+    "(?s)ago\\(\\s*30d\\s*\\)|\\blet\\s+(\\w+)\\s*=\\s*30d\\b.*\\bago\\(\\s*\\1\\s*\\)",
     "OperationName",
     "(?i)Add service principal credentials",
     "(?i)Certificates and secrets management"

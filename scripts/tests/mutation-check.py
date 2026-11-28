@@ -448,6 +448,26 @@ PS_MUTS = [
     ("validator: a let bound to a literal names no table",
      '    "true", "false", "null"\n',
      '    "zzz-none"\n'),
+    # P2V-6: the three reader mutations GRADER_MUTS carried with no PowerShell counterpart.
+    ("validator: string contents are not read for tables",
+     "            $null = $cur.Append('\"\"')",
+     "            $null = $cur.Append($Body.Substring($i, [Math]::Min($j + 1, $n) - $i))"),
+    ("validator: a let whose value starts on the next line binds a table",
+     "$script:kqlLetSourceRegex = [regex]'\\G[ \\t\\r\\n(]*",
+     "$script:kqlLetSourceRegex = [regex]'\\G[ \\t(]*"),
+    ("validator: a let bound to a parenthesized query binds a table",
+     "$script:kqlLetSourceRegex = [regex]'\\G[ \\t\\r\\n(]*",
+     "$script:kqlLetSourceRegex = [regex]'\\G[ \\t\\r\\n]*"),
+    # P2V-5 and P2V-4, each mirrored in GRADER_MUTS.
+    ("validator: a union option name may carry a dot",
+     "$script:kqlUnionHeadRegex = [regex]'\\bunion\\b(?:[ \\t\\r\\n]+[A-Za-z_][\\w.]*[ \\t]*=",
+     "$script:kqlUnionHeadRegex = [regex]'\\bunion\\b(?:[ \\t\\r\\n]+\\w+[ \\t]*="),
+    ("validator: a fence label is read lower-cased",
+     "        $lang = $m.Groups['lang'].Value.Trim().ToLowerInvariant()",
+     "        $lang = $m.Groups['lang'].Value.Trim()"),
+    ("validator: a block fenced kusto is read as kql",
+     "        if ($lang -ceq 'kusto') {",
+     "        if ($false) {"),
     ("conflict-marker regex CRLF anchor",
      r"""$script:conflictMarkerRegex = '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))'""",
      r"""$script:conflictMarkerRegex = '(?m)^(<{7}( |$)|={7}$|>{7}( |$))'"""),
@@ -559,6 +579,12 @@ GRADER_MUTS = [
     ("grader: a block fenced kusto is read as kql",
      '_LANG_ALIASES = {"kusto": "kql"}',
      "_LANG_ALIASES = {}"),
+    ("grader: a fence label is read lower-cased",
+     "        lang = m.group(1).lower()",
+     "        lang = m.group(1)"),
+    ("grader: a union option name may carry a dot",
+     '_KQL_UNION_HEAD_RE = re.compile(r"\\bunion\\b(?:[ \\t\\r\\n]+[A-Za-z_][\\w.]*[ \\t]*=',
+     '_KQL_UNION_HEAD_RE = re.compile(r"\\bunion\\b(?:[ \\t\\r\\n]+\\w+[ \\t]*='),
     ("grader: placeholders and wildcards are not identifier claims",
      '    return value.startswith(("YOUR_", "<")) or value == "..." or "*" in value',
      "    return False"),
@@ -737,6 +763,8 @@ SPLUNK_HUNTS = "examples/agentic-ai-attacks/splunk-hunting.conf"
 MORPHEUS = "examples/agentic-ai-attacks/splunk-morpheus-native.conf"
 AGENTIC_DOC = "splunk-sentinel-query-builder/references/agentic-ai-attacks.md"
 AGENTIC_LAYER = "examples/agentic-ai-attacks/attack-navigator-layer.json"
+IOCS_CSV = "examples/agentic-ai-attacks/iocs.csv"
+AKAMAI = "examples/agentic-ai-attacks/waf/akamai-custom-rules.json"
 H033 = " ATT&CK T1552, T1530.\nenableSched            = 0\n"
 H033_END = "| sort 0 -secret_searches -calls\n"
 
@@ -764,7 +792,7 @@ ASSET_MUTS = [
     ("hunts: a description citing an ID that ATT&CK v20 revoked",
      SPLUNK_HUNTS, "ATT&CK T1518.001, T1685.", "ATT&CK T1518.001, T1562.001."),
     ("hunts: a search line that lost its continuation backslash",
-     SPLUNK_HUNTS, "| bin _time span=1h \\\n| stats count AS calls", "| bin _time span=1h\n| stats count AS calls"),
+     SPLUNK_HUNTS, "| bin _time span=1h \\\n| stats count AS calls sum(at_limit)", "| bin _time span=1h\n| stats count AS calls sum(at_limit)"),
     ("hunts: a backslash after the last line of a search",
      SPLUNK_HUNTS, H033_END, H033_END.rstrip("\n") + " \\\n"),
     ("hunts: two dollar signs on one line of a hunt",
@@ -775,7 +803,8 @@ ASSET_MUTS = [
     ("hunts: a novelty hunt whose 30 days are set only by the stanza",
      SPLUNK_HUNTS, 'source="XmlWinEventLog:Security" earliest=-30d@d EventCode', 'source="XmlWinEventLog:Security" EventCode'),
     ("hunts: a process name dropped from the Splunk side of H-AGT-036",
-     SPLUNK_HUNTS, '"jspawnhelper","node",', '"node",'),
+     SPLUNK_HUNTS, 'datamodel=Endpoint.Processes where (Processes.parent_process_name IN ("w3wp.exe","httpd","httpd.exe","apache2","nginx","nginx.exe","lighttpd","java","java.exe","jspawnhelper","node",',
+     'datamodel=Endpoint.Processes where (Processes.parent_process_name IN ("w3wp.exe","httpd","httpd.exe","apache2","nginx","nginx.exe","lighttpd","java","java.exe","node",'),
     ("hunts: a threshold changed on the Splunk side of H-AGT-035",
      SPLUNK_HUNTS, "| where services >= 10 AND regions >= 4", "| where services >= 10 AND regions >= 3"),
     ("hunts: a stats BY actor that can be null",
@@ -798,6 +827,34 @@ ASSET_MUTS = [
      "Regions = dcount(TenantId), Sources = make_set(SourceIpAddress, 5), UserAgents"),
     ("hunts (KQL): a comparison cast to a number",
      HUNTS, 'iff(ProcessCommandLine contains "nmap", 1, 0)', 'toint(ProcessCommandLine contains "nmap")'),
+    # Second retrospective, pass 2 (P2V-2, P2V-3, P2H-01, P2H-02, P2W-04, R1-D1).
+    ("hunts (KQL): an unbounded union leg on the line of the previous operand",
+     HUNTS, 'Signal = "run value SystemUpdate", Detail = RegistryValueData)\n',
+     'Signal = "run value SystemUpdate", Detail = RegistryValueData), (AzureActivity | project TimeGenerated, DeviceName = Caller, Signal = "x", Detail = "x")\n'),
+    ("tests: the table registry drops a name with a digit",
+     "scripts/tests/test_agentic_ai_attacks.py", 'r"^\\| `([A-Za-z_][A-Za-z0-9_]*)` \\|"', 'r"^\\| `([A-Za-z_]+)` \\|"'),
+    ("hunts: a novelty hunt of 2026-11-28 whose 30 days are set only by the stanza",
+     SPLUNK_HUNTS, 'where earliest=-30d@d Processes.parent_process_name="sqlservr.exe"', 'where Processes.parent_process_name="sqlservr.exe"'),
+    ("rules: GSocket's saved names dropped from R-D-AGT-025 while H-AGT-030 keeps them",
+     SAVED_SEARCHES, '"gs-dbus","gs-db","defunct",', ""),
+    ("rules: the gsocket command-line term dropped from R-D-AGT-025",
+     SAVED_SEARCHES, ' OR Processes.process="*gsocket*"', ""),
+    ("hunts: an nc image dropped from the Splunk port check of H-AGT-039",
+     SPLUNK_HUNTS, 'in(pname, "nc", "ncat", "netcat", "nc.openbsd", "nc.traditional", "busybox")',
+     'in(pname, "nc", "ncat", "netcat", "nc.openbsd", "nc.traditional")'),
+    ("hunts (KQL): the H-AGT-039 port check needs two spaces before -z again",
+     HUNTS, '(nc|ncat|netcat)(\\.[a-z]+)?\\s"\n', '(nc|ncat|netcat)(\\.[a-z]+)?\\s.*\\s-[a-z]*z"\n'),
+    ("rules: R-D-AGT-014's artx- pattern differs between the platforms",
+     SAVED_SEARCHES, 'match(evidence, "(?i)(^|[^a-z0-9])artx-[a-z0-9]")', 'match(evidence, "(?i)artx-(guard|ngx)")'),
+    ("rules: a threshold changed on the Splunk side of R-D-AGT-017",
+     SAVED_SEARCHES, "(t_api - t_spec) <= 120 AND api_urls >= 5", "(t_api - t_spec) <= 120 AND api_urls >= 3"),
+    ("iocs: a block row read only at second hand",
+     IOCS_CSV, "nginxmysql.com,ARTEX,BLOODALCHEMY C2 (VAPOR PANDA),CrowdStrike 2026-10-29 VAPOR PANDA,https://www.crowdstrike.com/en-us/blog/vapor-panda-uses-artex-to-scale-global-campaign/,high,block + retro-hunt 90d,verified-in-source",
+     "nginxmysql.com,ARTEX,BLOODALCHEMY C2 (VAPOR PANDA),CrowdStrike 2026-10-29 VAPOR PANDA,https://www.crowdstrike.com/en-us/blog/vapor-panda-uses-artex-to-scale-global-campaign/,high,block + retro-hunt 90d,reported-secondary"),
+    ("waf (Akamai): W-AGT-008 matches index.php and info.php again",
+     AKAMAI, '"i0??",', '"i???",'),
+    ("waf (Akamai): the SSRF canary dropped from W-AGT-004b",
+     AKAMAI, '"*metadata.google.internal*",\n              "*_i??_probe_missing*",', '"*metadata.google.internal*",\n              "*_i??_probe_missig*",'),
     ("detections: two dollar signs on an indented subsearch line",
      SAVED_SEARCHES, "  [| tstats summariesonly=true count min(_time) AS first_time from datamodel=Network_Resolution.DNS ",
      '  [| tstats summariesonly=true count min(_time) AS first_time from datamodel=Network_Resolution.DNS where NOT match(ioc, "\\$$") '),
@@ -951,6 +1008,7 @@ def _empty_the_corpus() -> None:
     data = _json.load(open(path))
     data["kql_tables"] = data["kql_tables"][:1]
     data["spl_time_bound"] = data["spl_time_bound"][:1]
+    data["fence_language"] = data["fence_language"][:1]
     _json.dump(data, open(path, "w"), indent=2)
 
 
@@ -1142,6 +1200,15 @@ check_mutation("Sentinel table named with the wrong casing",
                # non-existent table to SigninLogs and returns nothing. The
                # catalogue shipped with the wrong casing in a prose mention.
                lambda: append(KDOC, f"\n{BT}kql\nSignInLogs\n| where ResultType == 0\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued Sentinel table in a block fenced kusto",
+               # P2V-4: the grader read a kusto fence as KQL and the validator
+               # tested the raw label with -ceq "kql", so this block was read by
+               # no KQL rule. Microsoft Learn fences KQL this way.
+               lambda: append(KDOC, f"\n{BT}kusto\nInventedTable\n| where TimeGenerated > ago(1d)\n{BT}\n"),
+               "never invent Sentinel identifiers")
+check_mutation("uncatalogued Sentinel table in a block fenced KQL",
+               lambda: append(KDOC, f"\n{BT}KQL\nInventedTable\n| where TimeGenerated > ago(1d)\n{BT}\n"),
                "never invent Sentinel identifiers")
 check_mutation("invented colon-free sourcetype in query position",
                # Exactly the shape the token check never saw: WinEventLog,

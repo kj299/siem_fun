@@ -987,6 +987,7 @@ try {
         # prevent in the tools it checks.
         Assert-True (@($corpus.kql_tables).Count -ge 15) "expected at least 15 kql cases"
         Assert-True (@($corpus.spl_time_bound).Count -ge 10) "expected at least 10 spl cases"
+        Assert-True (@($corpus.fence_language).Count -ge 4) "expected at least 4 fence-label cases"
     }
 
     foreach ($case in $corpus.kql_tables) {
@@ -1015,6 +1016,16 @@ try {
             Test-SplBlock "corpus.md" $c.query
             $reported = @($issues | Where-Object { $_ -match "no time bound" }).Count -gt 0
             Assert-Equal $c.reported $reported "time-bound outcome for: $($c.query)"
+        }
+    }
+
+    foreach ($case in $corpus.fence_language) {
+        $c = $case
+        Test-Case "fence language: $($c.name)" {
+            $fence = ([string][char]96) * 3
+            $blocks = Get-FencedBlocks ($fence + $c.label + "`nbody`n" + $fence + "`n")
+            Assert-Equal 1 @($blocks).Count "one block for label $($c.label)"
+            Assert-Equal $c.language $blocks[0].Language "language for label $($c.label)"
         }
     }
 }

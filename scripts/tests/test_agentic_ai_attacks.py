@@ -206,6 +206,15 @@ class IocCsvTests(unittest.TestCase):
             if r["type"] == "domain" and ("LEGIT" in r["context"] or "legitimate" in r["context"].lower()):
                 self.assertNotIn("block", r["action"].lower(), r)
 
+    def test_a_block_row_was_read_at_its_source(self):
+        # A block action is what reaches the WAF deny lists and the F5 data group. 212.11.64.250
+        # was marked block on a news search snippet alone (status reported-secondary) and sat on
+        # the deny list until the second retrospective (R1-D1); it is now alert + retro-hunt.
+        blocks = [r for r in self.rows if r["action"].startswith("block")]
+        self.assertGreater(len(blocks), 40)
+        for r in blocks:
+            self.assertEqual(r["status"], "verified-in-source", r["value"])
+
     def test_ascii_only(self):
         self.assertTrue(all(b < 127 for b in IOCS.read_bytes()))
 
@@ -279,9 +288,11 @@ class ReferenceDocTests(unittest.TestCase):
         text = DOC.read_text()
         for name in ("ARTEX", "CAIRN", "CyberStrikeAI", "PentAGI", "STRIX", "HexStrike"):
             self.assertIn(name, text)
+        # A link, not a mention: the reference gained a backticked `splunk-hunting.conf` in its
+        # 2026-11-28 section, and the substring test then passed with the link deleted.
         for asset in ("iocs.csv", "attack-navigator-layer.json", "splunk-savedsearches.conf", "sentinel-rules.yaml", "hunting.kql",
                       "splunk-hunting.conf", "waf/README.md"):
-            self.assertIn(asset, text)
+            self.assertIn(f"](../../examples/agentic-ai-attacks/{asset})", text, asset)
 
     def test_user_agent_list_in_the_doc_is_exactly_ioc_rows(self):
         # The skill loads only this doc at runtime, not iocs.csv, so the list is what a model can
@@ -420,7 +431,9 @@ class DetectionAssetTests(unittest.TestCase):
         cls.hunts = (ASSETS / "hunting.kql").read_text()
         cls.splunk_hunts = (ASSETS / "splunk-hunting.conf").read_text()
         cls.doc = DOC.read_text()
-        cls.tables = set(re.findall(r"^\| `([A-Za-z_]+)` \|", cls.CATALOG.read_text(), re.M))
+        # The validator's registry pattern (validate-skill-pack.ps1): a table name may carry a digit,
+        # W3CIISLog among them, and [A-Za-z_]+ left every such table out of the registry.
+        cls.tables = set(re.findall(r"^\| `([A-Za-z_][A-Za-z0-9_]*)` \|", cls.CATALOG.read_text(), re.M))
 
     def test_sentinel_rule_ids_and_names_are_unique(self):
         ids = re.findall(r"^id: (\S+)$", self.sentinel, re.M)
@@ -458,25 +471,39 @@ class DetectionAssetTests(unittest.TestCase):
                 self.assertIn(name, self.tables, f"{uid}: {name} is read by a query but is not in sentinel-table-catalog.md")
         self.assertGreater(len(seen), 10)
 
+    def test_the_table_registry_reads_a_name_with_a_digit(self):
+        # P2V-3: the registry was read with [A-Za-z_]+, so the catalogued W3CIISLog was left out of
+        # it, and a hunt reading that real table would fail as uncatalogued.
+        self.assertIn("W3CIISLog", self.tables)
+
     def test_every_kql_hunt_bounds_time_for_each_table_it_reads(self):
         # QUERY_SKILL_PLAN.md recorded this as checked once by hand on 2026-11-21, 23 hunts ago.
         # Per source, not per hunt: a union leg that lost its bound reads all retention while the
         # other legs keep the hunt looking bounded. A hunt led by a parser or a placeholder is
         # bounded through the parser's starttime argument.
-        position = re.compile(r"^\s*(?:let \w+ = |\()?\s*([A-Z][A-Za-z]+)\s*(?:\||$)", re.M)
+        #
+        # The tables are the ones grader.kql_tables reads, the reader the catalogue test uses, and
+        # each place a table name stands is a leg running to the next one. A position regex read
+        # here before saw a table only at the start of a line and only without a digit, so a union
+        # leg written on the previous operand's line was never checked (second retrospective, P2V-2).
+        # A name followed by ( = . or : is a function, an assignment, a column path or a typed
+        # parameter, not a read. A table name inside a string can only split a leg, never hide one.
         bound = re.compile(r"\bTimeGenerated\s*(?:>=?|between\b)|\bstarttime\s*=\s*ago\(")
         hunts = [(uid, body) for uid, body in kql_units() if uid.startswith("H-")]
         self.assertGreater(len(hunts), 30)
         legs = 0
         for uid, body in hunts:
-            sources = [m for m in position.finditer(body) if m.group(1) in self.tables]
+            sources = sorted(
+                (m.start(), name)
+                for name in grader.kql_tables(body) if name in self.tables
+                for m in re.finditer(r"(?<![\w.])" + re.escape(name) + r"\b(?![ \t]*[(=.:])", body))
             if not sources:
                 self.assertRegex(body, bound, uid)
-            for i, m in enumerate(sources):
+            for i, (start, name) in enumerate(sources):
                 legs += 1
-                end = sources[i + 1].start() if i + 1 < len(sources) else len(body)
-                self.assertRegex(body[m.start():end], bound, f"{uid}: {m.group(1)} is read with no time bound")
-        self.assertGreater(legs, 40)
+                end = sources[i + 1][0] if i + 1 < len(sources) else len(body)
+                self.assertRegex(body[start:end], bound, f"{uid}: {name} is read with no time bound")
+        self.assertGreater(legs, 70)
 
     def test_azure_operations_are_the_same_on_both_platforms(self):
         # R-D-AGT-023 is one rule written twice. The operation names come from Microsoft's
@@ -589,12 +616,19 @@ class DetectionAssetTests(unittest.TestCase):
         # dispatch.earliest_time is lost when the search is pasted into the search bar or run with
         # the time picker moved, and then everything seen in the last day is new. Where a hunt
         # writes earliest= in its search, it must agree with the stanza.
+        # The novelty hunts of 2026-11-28 (H-AGT-048, 049, 053, 054, 057, 062) say the same in
+        # their descriptions, and each such sentence is held to the search here.
+        novelty = 0
         for name, keys in conf_stanzas(self.splunk_hunts):
             inline = re.findall(r"(?<![.\w])earliest=(\S+)", keys.get("search", ""))
             for value in inline:
                 self.assertEqual(value, keys["dispatch.earliest_time"].strip(), name)
             if name.startswith(("H-AGT-043 ", "H-AGT-044 ")):
                 self.assertEqual(inline, ["-30d@d"], name)
+            if "written into the search" in keys.get("description", ""):
+                novelty += 1
+                self.assertTrue(inline, f"{name}: the description says the range is in the search, and it is not")
+        self.assertGreaterEqual(novelty, 8)
 
     def test_every_technique_a_query_file_cites_is_live_in_attack_20_1(self):
         # splunk-hunting.conf cited T1562.001 and T1562.008, which ATT&CK v20 revoked (by T1685 and
@@ -886,6 +920,82 @@ class TwinHuntTests(unittest.TestCase):
             self.assertEqual(spl, kql, uid)
         self.assertIn("time_window=1h", self.spl["H-AGT-041"])
 
+    def test_the_tunnel_lists_of_h_agt_030_and_r_d_agt_025_are_the_same(self):
+        # The two are one detection: H-AGT-030 is the Sentinel hunt, R-D-AGT-025 the Splunk-only
+        # rule. GSocket's names (gs-dbus, gs-db, defunct, a gsocket command line) were added to the
+        # hunt and not to the rule (second retrospective, P2H-01), and nothing compared them.
+        k = self.kql["H-AGT-030"]
+        s = next(keys["search"] for fname, name, keys in splunk_searches()
+                 if fname == "splunk-savedsearches.conf" and name.startswith("R-D-AGT-025 "))
+        names = self._in_list(k, "FileName")
+        self.assertGreater(len(names), 15)
+        self.assertEqual(self._in_list(s, "Processes.process_name"), names)
+        kql_cmd = {v.lower() for v in re.findall(r'ProcessCommandLine contains "([^"]+)"', k)}
+        self.assertGreater(len(kql_cmd), 4)
+        self.assertEqual({v.lower() for v in re.findall(r'Processes\.process="\*([^"*]+)\*"', s)}, kql_cmd)
+
+    def test_the_port_check_of_h_agt_039_is_the_same_and_reads_the_wiz_form(self):
+        # P2H-02: the arm keyed on nc, ncat and netcat, while a Linux sensor reports the resolved
+        # image (nc.openbsd, busybox). The proposed fix's single regex needed two separate spaces
+        # before -z and so missed `nc -vz`, the form the hunt is for; these strings pin that.
+        k, s = self.kql["H-AGT-039"], self.spl["H-AGT-039"]
+        kql_lists = {frozenset(v.lower() for v in re.findall(r'"([^"]+)"', m))
+                     for m in re.findall(r"FileName in~ \(([^)]*)\)", k)}
+        spl_lists = {frozenset(v.lower() for v in re.findall(r'"([^"]+)"', m))
+                     for m in re.findall(r"in\(pname, ([^)]*)\)", s)}
+        self.assertEqual(len(kql_lists), 2)
+        self.assertEqual(spl_lists, kql_lists)
+        port_names = next(l for l in kql_lists if "nc" in l)
+        self.assertLessEqual(port_names | {"nsenter", "capsh"}, self._in_list(s, "Processes.process_name"))
+        arm = re.search(r'FileName in~ \([^)]*"nc"[^)]*\)(.*?), "port check', k, re.S).group(1)
+        rxs = re.findall(r'matches regex @"([^"]+)"', arm)
+        self.assertEqual(len(rxs), 3)
+        for cmd in ("nc -vz -w1 192.0.2.10 2375", "/usr/bin/nc.openbsd -vz 192.0.2.10 10250", "busybox nc -vz host 2379"):
+            self.assertTrue(all(re.search(rx, cmd) for rx in rxs), cmd)
+        for cmd in ("rsync -az src 192.0.2.10 2375", "nc -v 192.0.2.10 2375", "nc -vz 192.0.2.10 22"):
+            self.assertFalse(all(re.search(rx, cmd) for rx in rxs), cmd)
+
+
+class RuleThresholdTests(unittest.TestCase):
+    """The Splunk saved searches and the Sentinel rules of the same number are one rule written
+    twice, and R-D-AGT-017 to R-D-AGT-020 gained their Sentinel half in the second retrospective.
+    The hunts had a threshold comparison; the rules had none. A difference meant by the platform is
+    named here with its reason and pinned exactly, so changing a listed number still fails."""
+
+    ONE_SIDE = {
+        "R-D-AGT-001": ("splunk", {("<", "300"), ("<", "500"), (">", "200"), (">=", "200"), (">=", "400")},
+                        "KQL binds 200 to floor_paths and tests status with between (400 .. 499) and (200 .. 299)"),
+        "R-C-AGT-001": ("kql", {(">", "0.7"), (">", "200")},
+                        "Splunk chains R-D-AGT-001's risk events; Sentinel has no risk index and recomputes its test"),
+        "R-C-AGT-002": ("kql", {("<=", "3"), (">=", "10")},
+                        "Splunk chains R-D-AGT-003's risk events; Sentinel recomputes the spray test"),
+        "R-D-AGT-014": ("splunk", {(">", "0")},
+                        "Splunk drops unmatched values with mvfilter, then keeps rows with mvcount(evidence) > 0"),
+        "R-D-AGT-018": ("kql", {(">", "0")}, "Sentinel sets High on an admin success; Splunk scores it 95"),
+        "R-D-AGT-021": ("splunk", {(">=", "3")}, "risk_score tier; a Sentinel rule carries no score"),
+        "R-D-AGT-028": ("splunk", {(">=", "2")}, "risk_score tier; a Sentinel rule carries no score"),
+    }
+
+    def test_every_threshold_of_a_rule_is_the_same_on_both_platforms(self):
+        kql = {uid: body for uid, body in kql_units() if uid.startswith("R-")}
+        compared = 0
+        for fname, name, keys in splunk_searches():
+            m = re.match(DETECTION_ID, name)
+            if fname != "splunk-savedsearches.conf" or not m or m.group(0) not in kql:
+                continue
+            uid = m.group(0)
+            compared += 1
+            spl, sen = TwinHuntTests._thresholds(keys["search"]), TwinHuntTests._thresholds(kql[uid])
+            side, extra, _why = self.ONE_SIDE.get(uid, ("", set(), ""))
+            if side == "splunk":
+                self.assertEqual(spl - sen, extra, f"{uid}: the platform difference listed here is gone or has changed")
+                spl -= extra
+            elif side == "kql":
+                self.assertEqual(sen - spl, extra, f"{uid}: the platform difference listed here is gone or has changed")
+                sen -= extra
+            self.assertEqual(spl, sen, uid)
+        self.assertGreater(compared, 24)
+
 
 class StatsByNullTests(unittest.TestCase):
     """In the draft of splunk-hunting.conf (6323e10), H-AGT-032, H-AGT-033 and H-AGT-043 grouped by
@@ -1044,8 +1154,8 @@ class TwinRegexTests(unittest.TestCase):
     # KQL counterpart, and why)}.
     SPLUNK_FORM = {
         "H-AGT-032": {
-            "(^|[^a-z0-9])((pentest|artex|artx|csai)-[a-z0-9][a-z0-9_-]*|i\\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\\d{2,7}|tasks/[^/\\s\"]+/i\\d{2,7}|exp\\d+-worker-i\\d{2,7})":
-                ("(^|[^a-z0-9])((pentest|artex|artx|csai)-[a-z0-9][a-z0-9_-]*|i\\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\\d{2,7}|tasks/[^/\\s]+/i\\d{2,7}|exp\\d+-worker-i\\d{2,7})",
+            "(^|[^a-z0-9])((pentest|artex|artx|art18|csai)-[a-z0-9][a-z0-9_-]*|i\\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\\d{2,7}|tasks/[^/\\s\"]+/i\\d{2,7}|exp\\d+-worker-i\\d{2,7})":
+                ("(^|[^a-z0-9])((pentest|artex|artx|art18|csai)-[a-z0-9][a-z0-9_-]*|i\\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\\d{2,7}|tasks/[^/\\s]+/i\\d{2,7}|exp\\d+-worker-i\\d{2,7})",
                  "_raw is JSON in Splunk, so a double quote also ends the tasks/ segment"),
             "^[^a-za-z0-9]+": ("[^a-za-z0-9]+", "replace() needs the anchor that KQL's trim_start() implies"),
             'identity/claims/upn"\\s*:\\s*"([^"]+)"': (None, "Splunk reads the claim from raw JSON; KQL has it as a column"),

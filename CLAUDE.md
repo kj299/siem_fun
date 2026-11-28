@@ -137,7 +137,9 @@ Routine in issue #44 already drives with subagents, not a replacement for it.
     too. The shape check keeps its wider set on purpose, because
     `WinEventLog:Security` in a second catalogue column must still be accepted
     from prose.
-  - **Sentinel tables** named in table position in a `kql` block must be
+  - **Sentinel tables** named in table position in a `kql` block (or one
+    fenced `kusto`, as Microsoft Learn writes KQL, or `KQL`: the label is
+    lower-cased and the alias mapped, as the grader reads it) must be
     catalogued in [sentinel-table-catalog.md](splunk-sentinel-query-builder/references/sentinel-table-catalog.md),
     which cites Microsoft's own documentation per table. **KQL table names are
     case-sensitive**: `SignInLogs` is a different, non-existent table to
@@ -217,9 +219,13 @@ which keeps `iocs.csv`, the ATT&CK Navigator layer and the reference doc's
 technique table consistent, and pins what can be pinned in the rule and hunt
 files without running them: unique identifiers, catalogued Sentinel tables
 (read with the grader's own `kql_tables`), a time bound on every table a hunt
-reads, unbroken line continuations, a Splunk hunt for each Sentinel hunt from
-H-AGT-032 with the same lists and thresholds, hunts unscheduled and writing
-nothing, and every cited technique ID live in ATT&CK 20.1, which is vendored as
+reads (at every place its name stands, not only at the start of a line),
+unbroken line continuations, a Splunk hunt for each Sentinel hunt from
+H-AGT-032 with the same lists and thresholds, the same thresholds in a rule
+written for both platforms (a difference the platform forces is listed with
+its reason), hunts unscheduled and writing nothing, a block action only on an
+indicator whose row says it was read at its source, and every cited technique
+ID live in ATT&CK 20.1, which is vendored as
 [scripts/tests/attack-enterprise-20.1.tsv](scripts/tests/attack-enterprise-20.1.tsv)
 (IDs, names, tactics and what replaced each revoked ID). The same test pins
 the WAF rule pack under `waf/` there (F5, Akamai, ModSecurity) to `iocs.csv`: only block-action

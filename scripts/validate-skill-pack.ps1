@@ -540,8 +540,11 @@ $script:kqlLetSourceRegex = [regex]'\G[ \t\r\n(]*([A-Za-z_][A-Za-z0-9_]*)\b(?![ 
 # The head of a union statement: the keyword and its options. An option value
 # never contains a space, a comma, a parenthesis or a pipe, so
 # 'union withsource=Table_ *' ends at the star and names no operand -- the
-# trap that once captured 'withsource', then 'withsourc', as the table.
-$script:kqlUnionHeadRegex = [regex]'\bunion\b(?:[ \t\r\n]+\w+[ \t]*=[ \t]*[^\s,()|;]+)*'
+# trap that once captured 'withsource', then 'withsourc', as the table. An
+# option NAME may carry a dot ('hint.concurrency', 'hint.spread'); read as \w+
+# it stopped at the dot, reported 'hint' as a table and never read the first
+# real operand.
+$script:kqlUnionHeadRegex = [regex]'\bunion\b(?:[ \t\r\n]+[A-Za-z_][\w.]*[ \t]*=[ \t]*[^\s,()|;]+)*'
 # One union operand, bare or parenthesized, wherever the line breaks fall, read
 # from the position it is matched at (\G). A name followed by '(' is a function
 # call and one followed by '=' is an option, so neither is an operand.
@@ -817,8 +820,16 @@ function Get-FencedBlocks {
 
     $blocks = New-Object System.Collections.Generic.List[object]
     foreach ($m in [regex]::Matches($Text, $script:fencedWithLangRegex)) {
+        # The label is read as the grader's fenced_blocks() reads it: lower-cased,
+        # and an alias as the language it names. Microsoft Learn fences KQL as
+        # 'kusto', and a '-ceq "kql"' test on the raw label skipped every
+        # kusto and KQL block, so an invented table in one was checked by nothing.
+        $lang = $m.Groups['lang'].Value.Trim().ToLowerInvariant()
+        if ($lang -ceq 'kusto') {
+            $lang = 'kql'
+        }
         $blocks.Add([pscustomobject]@{
-            Language = $m.Groups['lang'].Value.Trim()
+            Language = $lang
             Body     = $m.Groups['body'].Value
         })
     }

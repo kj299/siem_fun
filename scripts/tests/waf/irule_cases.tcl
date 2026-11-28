@@ -11,6 +11,8 @@ t "baseline" {} pass {}
 t "001 artex-enrich" {headers {User-Agent artex-enrich/1.0}} 403 W-AGT-001
 t "001 ArtEx mixed case" {headers {User-Agent "Mozilla/5.0 (compatible; ArtEx/1.0)"}} 403 W-AGT-001
 t "001 security-testing" {headers {User-Agent "Mozilla/5.0 (security-testing; authorized)"}} 403 W-AGT-001
+t "001 artex-agent (Dragos) by the name rule" {headers {User-Agent artex-agent}} 403 W-AGT-001
+t "001 artex-judge-r121 (Dragos) by the name rule" {headers {User-Agent artex-judge-r121}} 403 W-AGT-001
 t "002 webshell manager" {headers {User-Agent "Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)"}} 403 {W-AGT-001 W-AGT-002}
 t "003 ffuf logged only" {headers {User-Agent "Fuzz Faster U Fool v2.1.0-dev"}} pass W-AGT-003
 t "003 norma/0.4 logged only" {headers {User-Agent norma/0.4}} pass W-AGT-003
@@ -62,6 +64,8 @@ t "007 six-digit intent counter in body" {method POST uri /login body "email=i80
 t "007 pentest-probe sign-up with no counter left to the hunts" {method POST uri /login body "email=pentestprobeq7m4z2%40x.com"} pass {}
 t "008 task artifact" {uri /up/i4028.asp} 403 W-AGT-008
 t "008 index.php allowed" {uri /index.php} pass {}
+t "008 install.php allowed" {uri /install.php} pass {}
+t "008 leading zero in the counter" {uri /up/i0123.php} 403 W-AGT-008
 t "008 six-digit task artifact" {uri /up/i808807.jsp} 403 W-AGT-008
 t "008 seven-digit task artifact" {uri /up/i1234567.php} 403 W-AGT-008
 t "008 two-digit name allowed" {uri /i18.php} pass {}

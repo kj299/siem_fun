@@ -312,7 +312,8 @@ What the validator enforces on every run:
   Sentinel table named in table position in a KQL block must be catalogued in
   the Sentinel table catalogue, where each entry cites Microsoft's own
   documentation. The Sentinel comparison is case-sensitive, because the tables
-  are.
+  are. A block fenced `kusto`, as Microsoft Learn writes KQL, or `KQL` is read
+  as KQL, the same way the golden-prompt grader reads it.
 - **SPL correctness.** Unquoted booleans in `| where`, bare `index=` chains
   that should be `index IN (...)`, raw-event searches with no time bound, and
   `| lookup ... OUTPUT` fields that the same document does not list.
@@ -359,9 +360,11 @@ ASCII and credential checks, and
 [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
 keeps the IOC list, the ATT&CK layer and the reference doc consistent, and
 reads the queries for what can be told without running them (catalogued
-tables, a time bound on every table a hunt reads, unbroken line continuations,
-hunts that write nothing, the same lists and thresholds on both platforms,
-technique IDs live in ATT&CK 20.1); no check runs one. They ship marked
+tables, a time bound on every table a hunt reads wherever its name stands,
+unbroken line continuations, hunts that write nothing, the same lists,
+expressions and thresholds on both platforms for hunts and for rules,
+technique IDs live in ATT&CK 20.1, and a block action only on an indicator
+read at its source); no check runs one. They ship marked
 `needs_validation`.
 
 ## Security
@@ -550,7 +553,7 @@ To get the best results with either model:
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning
 - [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches and unscheduled hunts, Sentinel rules, hunting KQL, lookups, and [WAF rules](examples/agentic-ai-attacks/waf/README.md) for F5, Akamai and ModSecurity)
-- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other, and the WAF rule pack consistent with the IOC CSV; and pins what can be pinned in the rule and hunt files without running them (unique identifiers, catalogued Sentinel tables, a Splunk hunt for each Sentinel hunt from H-AGT-032 with the same lists and thresholds, hunts unscheduled and bounded, every cited technique live in the vendored ATT&CK 20.1 list `scripts/tests/attack-enterprise-20.1.tsv`)
+- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other, and the WAF rule pack consistent with the IOC CSV; and pins what can be pinned in the rule and hunt files without running them (unique identifiers, catalogued Sentinel tables, a time bound on every table a hunt reads, a Splunk hunt for each Sentinel hunt from H-AGT-032 with the same lists and thresholds, the same thresholds in a rule written for both platforms, hunts unscheduled and bounded, every cited technique live in the vendored ATT&CK 20.1 list `scripts/tests/attack-enterprise-20.1.tsv`, and a block action only on an indicator read at its source)
 - [splunk-enrichment-query-builder/SKILL.md](splunk-enrichment-query-builder/SKILL.md): multi-index enrichment skill instructions
 - [splunk-enrichment-query-builder/references/splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM mappings
 - [splunk-enrichment-query-builder/references/multi-index-patterns.md](splunk-enrichment-query-builder/references/multi-index-patterns.md): SPL patterns for multi-index search and iteration

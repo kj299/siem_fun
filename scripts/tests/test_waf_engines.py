@@ -87,6 +87,8 @@ TIER_CASES = [
     ("001 HexStrike", dict(ua="HexStrike-HTTP-Framework/1.0 (Advanced Security Testing)"), 403),
     ("001 a product whose name starts with the same letters is served", dict(ua="ArtExpo/3.2 CFNetwork/1410.0.3 Darwin/22.6.0"), 200),
     ("001 a product whose name contains the letters is served", dict(ua="SmartExchange/2.1"), 200),
+    ("001 artex-agent (Dragos) is refused by the name rule", dict(ua="artex-agent"), 403),
+    ("001 artex-judge-r121 (Dragos) is refused by the name rule", dict(ua="artex-judge-r121"), 403),
     ("002 web-shell manager", dict(ua="Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)"), 403),
     ("a scripted client is not blocked for being scripted", dict(ua="python-urllib/3.12"), 200),
     ("001 ReconProbe is logged, not denied (low confidence, hunt only)", dict(ua="ReconProbe/1.0"), 200),
@@ -99,6 +101,8 @@ TIER_CASES = [
     ("004 the canary word with another separator is served", dict(path="/zzz.nonexistent"), 404),
     ("004 SSRF canary path with an intent counter", dict(path="/_i6084_probe_missing"), 403),
     ("004 SSRF canary path in a parameter", dict(path="/cb?u=http://h/_i49_probe_missing"), 403),
+    ("004 SSRF canary path in a form body", form("/login", "u=http%3A%2F%2Fh%2F_i6084_probe_missing"), 403),
+    ("004 a probe_missing URL in a form body with no counter is served", form("/login", "u=http%3A%2F%2Fh%2Fliveness_probe_missing"), 200),
     ("004 a probe_missing path with no intent counter is served", dict(path="/status/liveness_probe_missing"), 404),
     ("004 a one-digit counter is not the canary", dict(path="/_i6_probe_missing"), 404),
     ("004 a developer placeholder id is served (hunt, not deny)", dict(path="/api/objects/deadbeefdeadbeefdeadbeef12"), 404),
@@ -129,6 +133,8 @@ TIER_CASES = [
     ("008 task artifact with a path parameter", dict(path="/up/i4028.php;.jpg"), 403),
     ("008 task artifact with path info", dict(path="/up/i4028.php/x"), 403),
     ("008 index.php is served", dict(path="/index.php"), 404),
+    ("008 install.php is served", dict(path="/install.php"), 404),
+    ("008 task artifact with a leading zero in the counter", dict(path="/up/i0123.php"), 403),
     ("008 task artifact, six-digit intent counter", dict(path="/up/i808807.jsp"), 403),
     ("008 task artifact, seven-digit intent counter", dict(path="/up/i1234567.php"), 403),
     ("008 a two-digit name is served", dict(path="/i18.php"), 404),
@@ -825,6 +831,102 @@ class NginxWithCoreRuleSet(_CoreRuleSetCases, _EngineCase, unittest.TestCase):
     @classmethod
     def copies(cls):
         return {"main": dict(), "counting": dict(count_crs_blocks=True)}
+
+
+# Akamai has no engine to load, so W-AGT-004 and W-AGT-008 are read by a stand-in of the match
+# conditions they use: '*' is any run of characters and '?' exactly one, valueCase false folds
+# case, and an argument condition named '*' reads every argument. One assumption the rule's own
+# shape makes is written down rather than hidden: filenameMatch reads the last path segment without
+# its extension, which extensionMatch reads (otherwise the two conditions of W-AGT-008 could
+# never both hold). Each case is (rule, request, should it match).
+AKAMAI_CASES = [
+    ("W-AGT-004a", dict(path="/_i6084_probe_missing"), True),
+    ("W-AGT-004a", dict(path="/status/liveness_probe_missing"), False),
+    ("W-AGT-004b", dict(path="/cb", query="u=http%3A%2F%2Fh%2F_i49_probe_missing"), True),
+    ("W-AGT-004b", dict(path="/cb", query="u=http%3A%2F%2Fh%2F_i6084_probe_missing&x=1"), True),
+    ("W-AGT-004b", dict(path="/cb", query="u=http%3A%2F%2Fh%2Fliveness_probe_missing"), False),
+    ("W-AGT-004b", dict(path="/cb", query="u=http%3A%2F%2Fh%2F_i6_probe_missing"), False),
+    ("W-AGT-004c", dict(path="/cb", form="u=http%3A%2F%2Fh%2F_i808807_probe_missing"), True),
+    ("W-AGT-004c", dict(path="/cb", form="u=http%3A%2F%2Fh%2Fliveness_probe_missing"), False),
+    ("W-AGT-008", dict(path="/up/i4028.asp"), True),
+    ("W-AGT-008", dict(path="/up/i0123.php"), True),
+    ("W-AGT-008", dict(path="/up/i808807.jsp"), True),
+    ("W-AGT-008", dict(path="/up/i1234567.PHP"), True),
+    ("W-AGT-008", dict(path="/i18.php"), False),
+    ("W-AGT-008", dict(path="/i12345678.php"), False),
+    ("W-AGT-008", dict(path="/i4028.html"), False),
+] + [("W-AGT-008", dict(path="/%s.php" % name), False)
+     for name in ("index", "info", "image", "items", "inbox", "install", "include", "invoice", "imports",
+                  "inquiry", "includes", "identity", "insights")]
+
+
+def akamai_wildcard(pattern, value, case=False):
+    rx = "".join(".*" if c == "*" else "." if c == "?" else re.escape(c) for c in pattern)
+    return re.fullmatch(rx, value, re.S | (0 if case else re.I)) is not None
+
+
+def akamai_condition(cond, req):
+    from urllib.parse import parse_qsl, unquote
+    path = unquote(req["path"])
+    segment = path.rsplit("/", 1)[-1]
+    stem, dot, ext = segment.rpartition(".")
+    if not dot:
+        stem, ext = segment, ""
+    kind = cond["type"]
+    if kind in ("uriQueryMatch", "argsPostMatch"):
+        if cond["name"] != "*":
+            raise AssertionError("the stand-in reads only conditions named '*'")
+        args = parse_qsl(req.get("query" if kind == "uriQueryMatch" else "form", ""), keep_blank_values=True)
+        values = [v for _, v in args]
+    elif kind == "pathMatch":
+        values = [path]
+    elif kind == "filenameMatch":
+        values = [stem]
+    elif kind == "extensionMatch":
+        values = [ext]
+    else:
+        raise AssertionError("the stand-in does not model %s" % kind)
+    wildcard = cond.get("valueWildcard", False)
+    hit = any((akamai_wildcard(p, v, cond.get("valueCase", False)) if wildcard
+               else (p == v if cond.get("valueCase", False) else p.lower() == v.lower()))
+              for p in cond["value"] for v in values)
+    return hit == cond.get("positiveMatch", True)
+
+
+class AkamaiStandInTests(unittest.TestCase):
+    """No engine: the Akamai rules are JSON for Akamai's builder. These cases run W-AGT-004 and
+    W-AGT-008 as the file ships them through the stand-in above."""
+
+    @classmethod
+    def setUpClass(cls):
+        import json
+        doc = json.loads((WAF / "akamai-custom-rules.json").read_text())
+        cls.rules = {e["rule"]["name"].split(" ")[0]: e["rule"] for e in doc["customRules"]}
+
+    def matches(self, key, req):
+        rule = self.rules[key]
+        self.assertEqual(rule["operation"], "AND", key)
+        return all(akamai_condition(c, req) for c in rule["conditions"])
+
+    def test_each_case(self):
+        for key, req, want in AKAMAI_CASES:
+            with self.subTest(rule=key, req=req):
+                self.assertEqual(self.matches(key, req), want)
+
+    def test_the_ssrf_canary_is_read_wherever_the_other_platforms_read_it(self):
+        # ModSecurity reads it in REQUEST_URI, ARGS and the body, F5 in the URI and the body; the
+        # Akamai copy was in the path rule only, where a URL inside a parameter never appears.
+        for key in ("W-AGT-004a", "W-AGT-004b", "W-AGT-004c"):
+            values = self.rules[key]["conditions"][0]["value"]
+            self.assertEqual([v for v in values if "probe_missing" in v],
+                             ["*_i" + "?" * n + "_probe_missing*" for n in range(2, 8)], key)
+
+    def test_the_task_artifact_name_starts_with_a_digit(self):
+        # '?' is any character, so the values i??? to i??????? matched index.php and install.php.
+        values = self.rules["W-AGT-008"]["conditions"][0]["value"]
+        self.assertEqual(len(values), 50)
+        for v in values:
+            self.assertRegex(v, r"^i[0-9]\?{2,6}$")
 
 
 class IRuleLogicTests(unittest.TestCase):

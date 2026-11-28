@@ -254,8 +254,11 @@ PLACEHOLDER_TABLES = frozenset({"TableName", "YOUR_TABLE"})
 # which the lookahead then accepts because the next character is `e`.
 # The head of a union statement: the keyword and its options. An option value
 # never contains a space, a comma, a parenthesis or a pipe, so
-# `union withsource=Table_ *` ends at the star and names no operand.
-_KQL_UNION_HEAD_RE = re.compile(r"\bunion\b(?:[ \t\r\n]+\w+[ \t]*=[ \t]*[^\s,()|;]+)*")
+# `union withsource=Table_ *` ends at the star and names no operand. An option
+# NAME may carry a dot: `hint.concurrency` and `hint.spread` are documented
+# union options, and a name read as \w+ stopped at the dot and reported `hint`
+# as a table while the first real operand was never read.
+_KQL_UNION_HEAD_RE = re.compile(r"\bunion\b(?:[ \t\r\n]+[A-Za-z_][\w.]*[ \t]*=[ \t]*[^\s,()|;]+)*")
 # One union operand, bare or parenthesized, wherever the line breaks fall. The
 # pack's own hunts write `union` alone on a line with the operands below it,
 # and a pattern that wanted the first operand on the keyword's line read no

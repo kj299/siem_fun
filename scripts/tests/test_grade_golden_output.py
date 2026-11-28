@@ -633,6 +633,7 @@ class SharedRuleCorpusTests(unittest.TestCase):
         # prevent in the tools it checks.
         self.assertGreaterEqual(len(self.corpus["kql_tables"]), 15)
         self.assertGreaterEqual(len(self.corpus["spl_time_bound"]), 10)
+        self.assertGreaterEqual(len(self.corpus["fence_language"]), 4)
 
     def test_kql_table_references(self):
         for case in self.corpus["kql_tables"]:
@@ -648,6 +649,13 @@ class SharedRuleCorpusTests(unittest.TestCase):
             with self.subTest(case=case["name"]):
                 reported = g.spl_is_raw_event_search(case["query"]) and not g.spl_time_bound(case["query"])
                 self.assertEqual(reported, case["reported"])
+
+    def test_fence_language(self):
+        fence = "`" * 3
+        for case in self.corpus["fence_language"]:
+            with self.subTest(case=case["name"]):
+                blocks = g.fenced_blocks(fence + case["label"] + "\nbody\n" + fence + "\n")
+                self.assertEqual([lang for lang, _ in blocks], [case["language"]])
 
 
 if __name__ == "__main__":
