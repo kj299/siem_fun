@@ -464,7 +464,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^AADServicePrincipalSignInLogs",
+    "(?m)^AADServicePrincipalSignInLogs",
     "ago\\(30d\\)",
     "dcount\\(",
     "IPAddress",

@@ -179,6 +179,7 @@ siem_fun/
 |   |   |-- hunting.kql
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
+|   |   |-- splunk-hunting.conf
 |   |   |-- splunk-morpheus-native.conf
 |   |   |-- splunk-savedsearches.conf
 |   |   `-- waf/
@@ -590,7 +591,7 @@ own functions against them: every KQL table is catalogued and every hunt
 bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
 the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
 score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
-`lookups/sentinel_watchlist.csv` carry the same 186 indicators, each present
+`lookups/sentinel_watchlist.csv` carry the same 206 indicators, each present
 in `iocs.csv` with the same type, confidence and source, but no test pins
 that.
 
@@ -953,7 +954,29 @@ are not what a fixture can check: they were reviewed by reading, against
 Microsoft's documentation, and that review found two hunts whose term matching
 caught almost nothing they named.
 
-Eight fixture defects and two skill-content gaps across fifteen runs. Both gaps
+Sixteenth run, 2026-11-27, because the reference gained the section on
+reporting since 2026-11-24 and the third set of detections (hunts H-AGT-032 to
+H-AGT-045, with Splunk versions in `splunk-hunting.conf`): fixtures 1 to 7 and
+11 to 21 re-run, 21 of 21, nothing corrected. As before, the hunts themselves
+are outside what a fixture checks. Two reviews by reading found a certificate
+hunt that would have returned nothing where the agent fills the columns and
+leaves `EventData` empty, a self-grant test that could not be true, a
+secret-file count that scored the densest command lowest, and a Splunk term
+filter that dropped the labels its own pattern was written for.
+
+Seventeenth run, 2026-11-27, because the ATT&CK table was re-derived for the
+reports read that day (73 evidence rows, 17 new techniques): fixtures 1 to 7
+and 11 to 21 re-run, 20 of 21 before correction. Fixture 12 failed a correct
+answer, the ninth fixture defect. The answer bound the four published
+addresses with `let` before the table, so the query block did not open with
+the table name, which is what the spec's anchored pattern demanded. The
+pattern now accepts the table at the start of any line; the separate table
+allowlist still keeps every other table out. No prompt or skill moved after
+the run, so the answers were re-graded: 21 of 21, and the marker records it.
+The same anchored form is still in other fixtures' specs and will fail the
+same way on an answer that opens with a binding.
+
+Nine fixture defects and two skill-content gaps across seventeen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still
