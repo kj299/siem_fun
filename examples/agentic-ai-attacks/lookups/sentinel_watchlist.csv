@@ -172,3 +172,21 @@ verify-911-probe/1.0,user_agent,medium,ARTEX probe user agent observed by WorkOS
 125.103.213.41,ipv4,medium,"source of ARTEX agent requests to Amazon MadPot LLM-API decoys, campaign 2 (KYC deepfake bypass at crypto exchanges), seen 2026-10-18 to 2026-10-19; Amazon published it for environment review",Amazon Threat Intelligence 2026-11 ARTEX MadPot
 142.4.98.145,ipv4,medium,"address in the records of an exposed Cairn instance run by a Chinese-nexus actor against East Asian universities, 2026-09-08 to 2026-09-10 (MONAI Label path-traversal zero-day)",Amazon Threat Intelligence 2026-11-20 Cairn zero-day
 142.4.107.34,ipv4,medium,"address in the records of an exposed Cairn instance run by a Chinese-nexus actor against East Asian universities, 2026-09-08 to 2026-09-10 (MONAI Label path-traversal zero-day)",Amazon Threat Intelligence 2026-11-20 Cairn zero-day
+204.194.54.240,ipv4,high,"C2 and payload staging in agent-run intrusions, seen in PowerShell download cradles and curl probes; also hosted a CyberStrikeAI instance",Unit 42 2026-11-24 agentic AI attack trends
+150.242.254.199,ipv4,medium,reverse shell target in agent-run intrusions that began with web shells; Unit 42 could not tie the activity to a framework,Unit 42 2026-11-24 agentic AI attack trends
+206.123.152.217,ipv4,medium,reverse shell C2 in agent-run intrusions; Unit 42 could not tie the activity to a framework,Unit 42 2026-11-24 agentic AI attack trends
+38.253.224.12,ipv4,medium,GSocket and SSH tunnel relay in agent-run intrusions; Unit 42 could not tie the activity to a framework,Unit 42 2026-11-24 agentic AI attack trends
+82.29.129.54,ipv4,high,staging server and attack egress of CL-STA-1238 (Hosteons); the address a victim would see inbound,Unit 42 2026-11-12 CL-STA-1238
+154.44.31.4,ipv4,medium,"Cairn hosting server of CL-STA-1238 (NetLab Global, Hong Kong); operator side, a victim is unlikely to see it",Unit 42 2026-11-12 CL-STA-1238
+68.68.250.114,ipv4,medium,"ARTEX operator host, late October to 2026-11-01",Wiz 2026-11-23 agentic attacks in the wild
+192.238.246.157,ipv4,medium,"ARTEX operator host, late October to 2026-11-01",Wiz 2026-11-23 agentic attacks in the wild
+104.207.150.173,ipv4,medium,"ARTEX operator host, late October to 2026-11-01",Wiz 2026-11-23 agentic attacks in the wild
+169.128.55.214,ipv4,medium,source of ARTEX activity against AWS environments (Caelus Technology),Datadog Security Labs 2026-11-09
+154.36.136.197,ipv4,medium,source of ARTEX activity against AWS environments (NetLab Global),Datadog Security Labs 2026-11-09
+154.36.136.23,ipv4,medium,source of ARTEX activity against AWS environments (NetLab Global),Datadog Security Labs 2026-11-09
+82.158.88.233,ipv4,medium,source of ARTEX activity against AWS environments (Zenixcloud),Datadog Security Labs 2026-11-09
+103.54.154.40,ipv4,medium,source of ARTEX activity against AWS environments (Zeofast Network); used a long-term access key on 2026-10-20,Datadog Security Labs 2026-11-09
+103.54.154.32,ipv4,medium,source of ARTEX activity against AWS environments (Zeofast Network),Datadog Security Labs 2026-11-09
+45.145.228.25,ipv4,medium,source of ARTEX activity against AWS environments (Lucidacloud),Datadog Security Labs 2026-11-09
+jet-night.com,domain,medium,resale gateway for stolen model access (GTIG calls it an LLM Mixer); a server of yours calling it is the signal,Google GTIG 2026-11-02 LLMJacking
+newapi.pro,domain,medium,resale gateway for stolen model access (GTIG calls it an LLM Mixer); a server of yours calling it is the signal,Google GTIG 2026-11-02 LLMJacking

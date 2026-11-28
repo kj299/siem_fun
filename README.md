@@ -86,6 +86,7 @@ siem_fun/
 |   |   |-- hunting.kql
 |   |   |-- iocs.csv
 |   |   |-- sentinel-rules.yaml
+|   |   |-- splunk-hunting.conf
 |   |   |-- splunk-morpheus-native.conf
 |   |   |-- splunk-savedsearches.conf
 |   |   `-- waf/
@@ -543,7 +544,7 @@ To get the best results with either model:
 - [references/data-dictionary-integration.md](splunk-sentinel-query-builder/references/data-dictionary-integration.md): internal URL usage
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning
-- [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches, Sentinel rules, hunting KQL, lookups, and [WAF rules](examples/agentic-ai-attacks/waf/README.md) for F5, Akamai and ModSecurity)
+- [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches and unscheduled hunts, Sentinel rules, hunting KQL, lookups, and [WAF rules](examples/agentic-ai-attacks/waf/README.md) for F5, Akamai and ModSecurity)
 - [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other, and the WAF rule pack consistent with the IOC CSV
 - [splunk-enrichment-query-builder/SKILL.md](splunk-enrichment-query-builder/SKILL.md): multi-index enrichment skill instructions
 - [splunk-enrichment-query-builder/references/splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM mappings

@@ -117,7 +117,7 @@ class ReferenceDocTests(unittest.TestCase):
         for name in ("ARTEX", "CAIRN", "CyberStrikeAI", "PentAGI", "STRIX", "HexStrike"):
             self.assertIn(name, text)
         for asset in ("iocs.csv", "attack-navigator-layer.json", "splunk-savedsearches.conf", "sentinel-rules.yaml", "hunting.kql",
-                      "waf/README.md"):
+                      "splunk-hunting.conf", "waf/README.md"):
             self.assertIn(asset, text)
 
     def test_user_agent_list_in_the_doc_is_exactly_ioc_rows(self):
@@ -257,6 +257,7 @@ class DetectionAssetTests(unittest.TestCase):
         cls.splunk = (ASSETS / "splunk-savedsearches.conf").read_text()
         cls.sentinel = (ASSETS / "sentinel-rules.yaml").read_text()
         cls.hunts = (ASSETS / "hunting.kql").read_text()
+        cls.splunk_hunts = (ASSETS / "splunk-hunting.conf").read_text()
         cls.doc = DOC.read_text()
         cls.tables = set(re.findall(r"^\| `([A-Za-z_]+)` \|", cls.CATALOG.read_text(), re.M))
 
@@ -322,13 +323,41 @@ class DetectionAssetTests(unittest.TestCase):
             if (rule.startswith("H-") and number >= 23) or (rule.startswith("R-") and number >= 21):
                 self.assertIn(rule, self.doc, rule)
 
+    def test_splunk_hunts_are_the_sentinel_hunts_of_the_same_number(self):
+        # splunk-hunting.conf is the Splunk side of hunting.kql from H-AGT-032 on. H-AGT-045
+        # reads a published list with externaldata, which has no Splunk equivalent, and is the
+        # one hunt allowed to exist on one platform only.
+        sentinel = {h for h in re.findall(r"^// --- (H-AGT-\d{3}) ", self.hunts, re.M) if int(h[-3:]) >= 32}
+        splunk = re.findall(r"^\[(H-AGT-\d{3}) - ", self.splunk_hunts, re.M)
+        self.assertEqual(len(splunk), len(set(splunk)))
+        self.assertGreater(len(splunk), 10)
+        self.assertEqual(set(splunk), sentinel - {"H-AGT-045"})
+
+    def test_splunk_hunts_are_unscheduled_bounded_and_write_nothing(self):
+        # A hunt returns rows for a person to read. One that is scheduled, or that collects into
+        # the risk index, is a rule nobody tuned; one with no time range searches all time.
+        stanzas = re.split(r"^(?=\[H-AGT-\d{3} )", self.splunk_hunts, flags=re.M)[1:]
+        self.assertGreater(len(stanzas), 10)
+        for stanza in stanzas:
+            name = stanza.splitlines()[0]
+            self.assertRegex(stanza, r"(?m)^enableSched\s*= 0$", name)
+            self.assertRegex(stanza, r"(?m)^dispatch\.earliest_time\s*= -\d+d@d$", name)
+            self.assertRegex(stanza, r"(?m)^description = .*ATT&CK T\d{4}", name)
+            self.assertNotRegex(stanza, r"\|\s*(?:collect|outputlookup|sendalert)\b", name)
+            self.assertNotIn("<RISK_INDEX>", stanza, name)
+            # Every continued line ends in a backslash, or the search is cut short there.
+            search = stanza[stanza.index("search = "):].rstrip("\n").splitlines()
+            for line in search[:-1]:
+                self.assertTrue(line.endswith(" \\"), line[:80])
+            self.assertFalse(search[-1].endswith("\\"), name)
+
     def test_no_saved_search_line_carries_two_dollar_signs(self):
         # REGRESSION: savedsearches.conf treats text between two dollar signs as a token to
         # substitute and a doubled one as an escape, so a regex ending in an escaped dollar and an
         # anchor, or two "ends with a dollar" tests on one line, may not reach the search as
         # written. One per line is the shape the older rules already use; where a literal dollar
         # is needed, build it (printf("%c", 36)) instead of typing it.
-        for line in self.splunk.splitlines():
+        for line in (self.splunk + "\n" + self.splunk_hunts).splitlines():
             if line.startswith(("search =", "|")):
                 self.assertLess(line.count("$"), 2, line[:80])
 
