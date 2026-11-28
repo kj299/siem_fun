@@ -448,7 +448,7 @@ Expected output:
 - Queries `AADServicePrincipalSignInLogs` and no other table, bounded to 30 days (`ago(30d)` or a `let` bound to `30d`: the spec reads the window, not how it is typed)
 - Counts distinct service principals per `IPAddress` and keeps three or more, the threshold the reference gives
 - Uses both error codes the reference gives for an invalid and an expired client secret, 7000215 and 7000222
-- Not machine-checked, reviewer's job: the hunt is for the shape, so the addresses Microsoft published are context, not the filter (a second stage that pulls the rows of the sources the shape found, `| where IPAddress in (spray_sources)`, is fine, which is why no pattern checks this); `ResultType` holds the bare number, so a comparison against the `AADSTS`-prefixed form matches nothing; and a failure followed by a success from one source is the urgent case
+- Not machine-checked, reviewer's job: the hunt is for the spray pattern, so the addresses Microsoft published are context, not the filter (a second stage that pulls the rows of the sources the pattern found, `| where IPAddress in (spray_sources)`, is fine, which is why no pattern checks this); `ResultType` holds the bare number, so a comparison against the `AADSTS`-prefixed form matches nothing; and a failure followed by a success from one source is the urgent case
 
 Grader spec:
 
