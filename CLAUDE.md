@@ -216,6 +216,12 @@ which keeps `iocs.csv`, the ATT&CK Navigator layer and the reference doc's
 technique table consistent. The same test pins the WAF rule pack under
 `waf/` there (F5, Akamai, ModSecurity) to `iocs.csv`: only block-action
 addresses may be denied, and no legitimate service may appear in a rule file.
+It also holds the indicator sweep's two lookup files to `iocs.csv` (only rows the
+rule has a leg for and may alert on), requires the sweep to match an address as
+a source as well as a destination, and requires every saved search to read one
+schedule period unless it is listed there as sliding: **ask of a rule which way
+the traffic runs, who reads each row, and how often one event is counted**,
+because every review of syntax and names had passed all three.
 None of that runs a rule. [scripts/tests/test_waf_engines.py](scripts/tests/test_waf_engines.py)
 does: it loads the SecLang file in Apache with ModSecurity v2 and in nginx
 with ModSecurity v3, alone and after the OWASP Core Rule Set, sends each rule

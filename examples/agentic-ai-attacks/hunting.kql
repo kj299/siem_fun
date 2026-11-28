@@ -99,10 +99,12 @@ union isfuzzy=true
 // The compromised ConnectWise apps normally call Graph as kiota-dotnet; the operator's token loop
 // used Python-urllib/3.12, one request per tenant a few minutes apart. Baseline each watched app's
 // user-agent over the prior 14 days and alert when a new one appears in the last 24 hours. Needs
-// the Microsoft Graph activity logs connector. App IDs are the compromised ConnectWise ones.
+// the Microsoft Graph activity logs connector. The watched list is every entra_app_id row of iocs.csv: the
+// three ConnectWise applications Microsoft named and the five further ConnectWise/SkyKick ones Expel
+// listed (exposure, not compromise). A test keeps this list equal to those rows.
 // Tenants counts AadTenantId: TenantId in this table is the Log Analytics workspace ID, so it is
 // always 1. In a single-tenant workspace AadTenantId is 1 as well; read Requests and IPs there.
-let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827"]);
+let watched = dynamic(["506e08f9-6e9a-4da4-942b-a099a03644ae", "24205314-2b89-4e07-a2a4-579e898a5640", "0de14c77-b9b0-4137-9360-34878a929827", "c921256f-04a7-44e8-9b2a-69c33929ba19", "b78f6a77-d4e5-46fb-87e5-d1648bd02519", "b2b55f5b-7758-4719-8d8f-88ae172e6bdb", "2399d300-6fca-4e6a-a686-399fefe75b83", "412dcf96-176d-4b3a-a1b0-4981ad66971e"]);
 let baseline = MicrosoftGraphActivityLogs
     | where TimeGenerated between (ago(14d) .. ago(1d)) and AppId in (watched)
     | summarize KnownAgents = make_set(UserAgent) by AppId;

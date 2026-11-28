@@ -591,9 +591,9 @@ own functions against them: every KQL table is catalogued and every hunt
 bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
 the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
 score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
-`lookups/sentinel_watchlist.csv` carry the same 206 indicators, each present
-in `iocs.csv` with the same type, confidence and source, but no test pins
-that.
+`lookups/sentinel_watchlist.csv` carried the same 206 indicators, each present
+in `iocs.csv` with the same type, confidence and source, and no test pinned
+that until the retrospective of 2026-11-28, below.
 
 A later change added [examples/agentic-ai-attacks/waf/](examples/agentic-ai-attacks/waf/README.md):
 the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
@@ -662,6 +662,59 @@ admin login, which is the case that matters.
 No golden-prompt fixture exercises the new reference yet. Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
 marker went stale; the seventh model run, below, recorded it again.
+
+A second retrospective, on 2026-11-28, went back to the first rules rather
+than the newest ones, on the reasoning that every later review had started
+from whatever had just been added. It found three things in content that had
+been read, reviewed and merged several times.
+
+The indicator sweep, R-D-AGT-012, looked the wrong way for half of what it
+carried. Its only address leg matched an indicator as the DESTINATION of a
+connection, which is right for a command-and-control server and wrong for the
+addresses a campaign signs in, sprays and scans FROM: about half of the 82
+addresses then in its lookup, 40 by their own context column. A sign-in from a high-confidence spray source matched nothing
+on Splunk, and on Sentinel only if a Defender-enrolled device happened to log
+the connection. Every report written from this section told a reader to load
+the indicators and hunt, and that instruction was weaker than it read. The
+rule now also matches an address as the source of an allowed connection, a web
+request and an authentication on Splunk, and of a web session and the three
+Entra sign-in tables on Sentinel (columns checked against Microsoft's table
+references). Low-confidence rows are not matched inbound, where a shared VPN
+or CDN egress address fires on ordinary visitors, and are left out of the
+Sentinel rule altogether, since it raised every match as High.
+
+The lookups carried rows nothing read. Eight application IDs sat in a lookup
+whose rule has no leg for them, under a description that counted them; the
+hunt that does watch application IDs hard-coded three of the eight. Five
+shared-egress addresses marked retro-hunt only were in the lookup beside four
+with the identical action that had been left out. The lookup is now exactly
+the rows the rule may alert on, 173 of them, and the hunt watches all eight.
+Merged with the twenty indicators added the day before, the same rule left
+out two of them, both marked retro-hunt only as likely shared egress, so the
+lookups carry 191.
+
+Nine per-event rules still read a window longer than their schedule. The fix
+of 2026-11-25 gave each NEW rule a window as long as its schedule and left the
+first set as it was, so an event in the overlap was written to the risk index
+twice. Two of them carried an `earliest=` inside the search string, which
+overrides the stanza, so correcting the stanza alone would have changed
+nothing. R-D-AGT-020 read a day of raw sign-in events every fifteen minutes.
+The twelve rules that count or pair events across a window still overlap, on
+purpose, and are now named with the reason in the test and in the file header.
+
+None of the three was a matter of syntax or of a wrong name, which is what
+the earlier passes were built to find. Each was a question nobody had put to
+the rule: which way does the traffic run, who reads this row, how often is
+this event counted. What checks them now is in
+[scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py):
+the two lookups equal each other and are held to `iocs.csv`; the lookup is
+exactly the alertable rows of the types the rule has a leg for; the rule has
+a source-side leg on each platform; a rule reads one schedule period unless it
+is listed as sliding, and a listed rule must still overlap; an inline time
+bound agrees with its stanza. Six of the ten tests fail on the files as they
+stood, and eleven mutations, one per defect, are registered in the harness.
+No reference file changed, so the golden-run marker is untouched. Nothing
+here has run against live data either.
 
 ## What the seventh model run found
 
