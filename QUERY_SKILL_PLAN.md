@@ -1140,7 +1140,20 @@ second pass (P2V-1, in the agentic section above): the window had become a
 bare token anywhere in the block, so it now has to sit inside `ago()`, typed
 or through a `let`, and every recorded answer still passes.
 
-Nine fixture defects and two skill-content gaps across seventeen runs. Both gaps
+Eighteenth run, 2026-11-28, by subagents, because the second retrospective's
+second pass changed agentic-ai-attacks.md (eighteen new hunts named, the
+2026-11-28 developments, table corrections), sentinel-table-catalog.md (seven
+tables) and the specs of fixtures 5, 12 and 20: fixtures 1 to 7 and 11 to 21
+re-run from rebuilt inputs, 21 of 21 on the first grading, the first run since
+the ninth to find neither a fixture defect nor a content gap. Fixtures 8 to 10
+load skills whose files did not change and were not re-run. The marker
+records this run. The retrospective's third pass then corrected two sentences
+in agentic-ai-attacks.md (the WAF deny sentence, and a claim that GreyNoise
+published no addresses, which went beyond the only text read); neither is
+something a fixture asks about, so they were not sent back to a model, and the
+validator's NOTICE names the file until the next scheduled run clears it.
+
+Nine fixture defects and two skill-content gaps across eighteen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the
 skill does not load, and both were found by the first fixture to ask for that
 hunt. Nothing on the list of uncovered items remains; what a fixture still
