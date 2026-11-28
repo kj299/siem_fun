@@ -648,6 +648,42 @@ DETECTION_MUTS = [
 for label, old, new in DETECTION_MUTS:
     unit_mutation(label, SAVED_SEARCHES, old, new, grader_suite)
 
+# The indicator sweep (R-D-AGT-012), its two lookup files, and the schedule every saved search
+# keeps. Each mutation puts back a defect that shipped: the sweep matched an indicator address
+# only as a destination, low-confidence shared egress would have been matched inbound, the
+# lookups were held to iocs.csv by nothing, and nine rules read a window longer than they ran.
+SENTINEL_RULES = "examples/agentic-ai-attacks/sentinel-rules.yaml"
+SWEEP_LOOKUP = "examples/agentic-ai-attacks/lookups/agt_iocs.csv"
+SWEEP_WATCHLIST = "examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv"
+HUNTS = "examples/agentic-ai-attacks/hunting.kql"
+
+SWEEP_MUTS = [
+    ("sweep: no leg matches an indicator address as the source of an authentication",
+     SAVED_SEARCHES, "rename ioc AS Authentication.src | fields Authentication.src", "rename ioc AS Authentication.dest | fields Authentication.dest"),
+    ("sweep: a low-confidence shared-egress address is matched as a web source",
+     SAVED_SEARCHES, 'where ioc_type="ipv4" AND confidence!="low" | rename ioc AS Web.src', 'where ioc_type="ipv4" | rename ioc AS Web.src'),
+    ("sweep (Sentinel): low-confidence rows raise a High alert again",
+     SENTINEL_RULES, '      | where Confidence != "low";\n', "      ;\n"),
+    ("sweep (Sentinel): service principal sign-ins are not read",
+     SENTINEL_RULES, "      (AADServicePrincipalSignInLogs\n", "      (SigninLogs\n"),
+    ("sweep lookup: a row's confidence drifts from iocs.csv",
+     SWEEP_LOOKUP, "nginxmysql.com,domain,high,", "nginxmysql.com,domain,medium,"),
+    ("sweep lookup: the Splunk file and the Sentinel watchlist differ",
+     SWEEP_WATCHLIST, "nginxmysql.com,domain,high,BLOODALCHEMY C2 (VAPOR PANDA)", "nginxmysql.com,domain,high,BLOODALCHEMY C2"),
+    ("sweep lookup: a row the rule has no leg for (an application ID) is carried",
+     SWEEP_LOOKUP, "nginxmysql.com,domain,high,", "506e08f9-6e9a-4da4-942b-a099a03644ae,entra_app_id,high,x,Microsoft 2026-10-21 Storm-0940\nnginxmysql.com,domain,high,"),
+    ("hunt H-AGT-016: a published application ID is not watched",
+     HUNTS, ', "412dcf96-176d-4b3a-a1b0-4981ad66971e"]);', "]);"),
+    ("schedule: a per-event rule reads further back than it runs",
+     SAVED_SEARCHES, "dispatch.earliest_time = -20m@m\ndispatch.latest_time   = -5m@m\nsearch = index=<ZAMMAD_INDEX>", "dispatch.earliest_time = -30m@m\ndispatch.latest_time   = -5m@m\nsearch = index=<ZAMMAD_INDEX>"),
+    ("schedule: a time bound typed in the search disagrees with the stanza",
+     SAVED_SEARCHES, 'sourcetype=<ZAMMAD_SOURCETYPE> earliest=-20m@m "ERROR', 'sourcetype=<ZAMMAD_SOURCETYPE> earliest=-30m@m "ERROR'),
+    ("schedule: a rule listed as sliding no longer overlaps",
+     SAVED_SEARCHES, "dispatch.earliest_time = -70m@m\ndispatch.latest_time   = -10m@m\nsearch = index=<AAD_INDEX> sourcetype=<AAD_SP_SIGNIN_SOURCETYPE>", "dispatch.earliest_time = -25m@m\ndispatch.latest_time   = -10m@m\nsearch = index=<AAD_INDEX> sourcetype=<AAD_SP_SIGNIN_SOURCETYPE>"),
+]
+for label, path, old, new in SWEEP_MUTS:
+    unit_mutation(label, path, old, new, grader_suite)
+
 # The shared rule corpus, and the two readers that consume it. Kept separate
 # from the lists above because these mutations target the TEST files and the
 # corpus itself rather than one tool's source, so each carries its own path and
@@ -1337,7 +1373,7 @@ if fails:
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
       f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + "
-      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + {len(DETECTION_MUTS)} detection + 2 shared corpus, "
+      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + {len(DETECTION_MUTS)} detection + {len(SWEEP_MUTS)} indicator sweep and schedule + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
       f"{run_counts['environment']} environment)")
 sys.exit(0)

@@ -635,9 +635,7 @@ kind: Scheduled
 ---
 id: 63ba72bf-e1db-5182-a61a-b45daff39a72
 name: R-D-AGT-012 Agentic intrusion - verified IOC sweep (watchlist)
-description: 'Network, file-hash and user-agent matches against the ArtexCairnIocs watchlist (186 network, hash, user-agent and app-ID indicators verified against CrowdStrike, Microsoft, Wiz, Zscaler, Kaspersky,
-  AhnLab, NorForge, Gambit, PLURA/FSS, Unit 42, S-RM, Check Point Research and Nextron Valhalla, Okta, Expel, Microsoft 2026-11-05 (fetch-read), WorkOS (researcher instance)). The watchlist is shipped at
-  examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source); upload it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
+description: 'Published indicators from the ArtexCairnIocs watchlist anywhere in your telemetry, in both directions. Egress: a Defender-enrolled device connecting to an indicator address or host, or carrying an indicator file hash. Inbound: a web request with an indicator user-agent, and - because about half of the published addresses are attacker SOURCES (spray, sign-in, proxy and reconnaissance origins), which a device egress table rarely shows - a web request or an Entra sign-in (interactive, non-interactive or service principal) whose source is an indicator address. Low-confidence rows (shared VPN, CDN and researcher egress) are left out of this rule, which raises a High alert; use them from iocs.csv when hunting. A success from an indicator address is the urgent case: SeenIn says signin_success or sp_signin_success. Entra sign-in logs can arrive later than this rule looks back; see Microsoft Learn, Handle ingestion delay in scheduled analytics rules, before relying on the sign-in legs. The watchlist is shipped at examples/agentic-ai-attacks/lookups/sentinel_watchlist.csv (columns Ioc,IocType,Confidence,Context,Source) and holds only the indicator types this rule has a leg for; application IDs are watched by hunt H-AGT-016. Upload it as a Sentinel watchlist with alias ArtexCairnIocs and search key Ioc. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -647,6 +645,11 @@ requiredDataConnectors:
   - DeviceFileEvents
 - connectorId: ASimWebSession
   dataTypes: []
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+  - AADNonInteractiveUserSignInLogs
+  - AADServicePrincipalSignInLogs
 queryFrequency: 15m
 queryPeriod: 15m
 triggerOperator: gt
@@ -654,27 +657,42 @@ triggerThreshold: 0
 tactics:
 - CommandAndControl
 - InitialAccess
+- CredentialAccess
 relevantTechniques:
 - T1071
 - T1190
+- T1078
+- T1110
 query: |
-  let ioc = _GetWatchlist("ArtexCairnIocs") | project Ioc = tostring(SearchKey), IocType = tostring(IocType), Confidence = tostring(Confidence), Context = tostring(Context), Source = tostring(Source);
+  let ioc = _GetWatchlist("ArtexCairnIocs") | project Ioc = tostring(SearchKey), IocType = tostring(IocType), Confidence = tostring(Confidence), Context = tostring(Context), Source = tostring(Source)
+      | where Confidence != "low";
   let net = DeviceNetworkEvents
       | where TimeGenerated > ago(15m)
       | extend Host = replace_regex(tolower(tostring(split(replace_regex(tolower(RemoteUrl), @"^[a-z]+://", ""), "/")[0])), @"^www\.", "")
       | mv-expand Ioc = pack_array(Host, RemoteIP) to typeof(string)
-      | project TimeGenerated, DeviceName, RemoteIP, RemoteUrl, Ioc, SeenIn = "network";
+      | project TimeGenerated, DeviceName, Account = "", RemoteIP, RemoteUrl, Ioc, SeenIn = "network";
   let files = DeviceFileEvents
       | where TimeGenerated > ago(15m)
       | mv-expand Ioc = pack_array(tolower(SHA256), tolower(MD5)) to typeof(string)
-      | project TimeGenerated, DeviceName, RemoteIP = "", RemoteUrl = FolderPath, Ioc, SeenIn = "file_hash";
+      | project TimeGenerated, DeviceName, Account = "", RemoteIP = "", RemoteUrl = FolderPath, Ioc, SeenIn = "file_hash";
   let web = _Im_WebSession(starttime=ago(15m))
-      | project TimeGenerated, DeviceName = coalesce(DstHostname, DstIpAddr), RemoteIP = SrcIpAddr, RemoteUrl = Url, Ioc = HttpUserAgent, SeenIn = "user_agent";
-  union net, files, web
+      | mv-expand Ioc = pack_array(HttpUserAgent, SrcIpAddr) to typeof(string)
+      | project TimeGenerated, DeviceName = coalesce(DstHostname, DstIpAddr), Account = "", RemoteIP = SrcIpAddr, RemoteUrl = Url, Ioc, SeenIn = iff(Ioc == SrcIpAddr, "web_source", "user_agent");
+  let signin = union isfuzzy=true
+      (SigninLogs
+         | where TimeGenerated > ago(15m)
+         | project TimeGenerated, DeviceName = "", Account = UserPrincipalName, RemoteIP = IPAddress, RemoteUrl = AppDisplayName, Ioc = IPAddress, SeenIn = iff(ResultType == "0", "signin_success", "signin_failure")),
+      (AADNonInteractiveUserSignInLogs
+         | where TimeGenerated > ago(15m)
+         | project TimeGenerated, DeviceName = "", Account = UserPrincipalName, RemoteIP = IPAddress, RemoteUrl = AppDisplayName, Ioc = IPAddress, SeenIn = iff(ResultType in ("0", "Success"), "signin_success", "signin_failure")),
+      (AADServicePrincipalSignInLogs
+         | where TimeGenerated > ago(15m)
+         | project TimeGenerated, DeviceName = "", Account = ServicePrincipalName, RemoteIP = IPAddress, RemoteUrl = ResourceDisplayName, Ioc = IPAddress, SeenIn = iff(ResultType in ("0", "Success"), "sp_signin_success", "sp_signin_failure"));
+  union net, files, web, signin
   | where isnotempty(Ioc)
   | join kind=inner ioc on Ioc
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Hits = count(), SeenIn = make_set(SeenIn)
-            by DeviceName, RemoteIP, Ioc, IocType, Confidence, Context, Source
+            by DeviceName, Account, RemoteIP, Ioc, IocType, Confidence, Context, Source
 entityMappings:
 - entityType: Host
   fieldMappings:
@@ -684,6 +702,10 @@ entityMappings:
   fieldMappings:
   - identifier: Address
     columnName: RemoteIP
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Account
 suppressionEnabled: false
 suppressionDuration: PT1H
 incidentConfiguration:

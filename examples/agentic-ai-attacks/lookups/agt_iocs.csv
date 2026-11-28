@@ -25,9 +25,6 @@ xcai.pro,domain,medium,LLM API reseller used as ARTEX model gateway,CrowdStrike 
 187.15.88.186,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
 187.15.90.217,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
 187.15.89.186,ipv4,low,transient VPN egress (Microsoft),Microsoft 2026-10-21 Storm-0940
-506e08f9-6e9a-4da4-942b-a099a03644ae,entra_app_id,high,"compromised multi-tenant app: ConnectWise Cloud Backup (LEGIT app, abused)",Microsoft 2026-10-21 Storm-0940
-24205314-2b89-4e07-a2a4-579e898a5640,entra_app_id,high,"compromised multi-tenant app: ConnectWise - MS Teams (LEGIT app, abused)",Microsoft 2026-10-21 Storm-0940
-0de14c77-b9b0-4137-9360-34878a929827,entra_app_id,high,"compromised multi-tenant app: ConnectWise - MS Graph (LEGIT app, abused)",Microsoft 2026-10-21 Storm-0940
 104.194.150.21,ipv4,high,Storm-0940 infrastructure (Wiz),Wiz 2026-10-22 Storm-0940
 167.88.172.97,ipv4,high,Storm-0940 infrastructure (Wiz),Wiz 2026-10-22 Storm-0940
 23.248.226.250,ipv4,high,ARTEX work server,Zscaler ThreatLabz 2026-10-21
@@ -63,11 +60,6 @@ fec5d7eb6cf4ed6cfbcd2c588bb761af,md5,medium,file from ARTEX operator directory (
 74.82.60.23,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
 34.175.107.233,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
 18.183.215.124,ipv4,low,attacker IP in Korean FSS circular via PLURA,PLURA 2nd report 2026-10-07 (transcribing FSS circular)
-104.28.162.188,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
-104.28.164.188,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
-104.28.164.196,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
-104.28.166.183,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
-104.28.155.179,ipv4,low,FSS circular via PLURA; range looks like shared CDN/VPN egress (unverified),PLURA 2nd report 2026-10-07 (transcribing FSS circular)
 199.247.25.25,ipv4,high,Cairn cluster AIA0002 staging server,NorForge 2026-10-19 Inside Cairn
 199.247.27.2,ipv4,high,Cairn cluster AIA0002 staging server,NorForge 2026-10-19 Inside Cairn
 155.254.22.215,ipv4,high,agentic retail-intrusion infrastructure (staging/C2/exfil/skimmer),Gambit Security 2026-09-22
@@ -163,11 +155,6 @@ Fuzz Faster U Fool v2.1.0-dev,user_agent,low,"ffuf default user agent, mixed wit
 Mozilla/5.0 (compatible; ArtEx/1.0),user_agent,medium,ARTEX default user agent observed by WorkOS alongside artex-enrich/1.0 and norma/0.4,WorkOS incident update 2026-11-06
 Mozilla/5.0 (compatible; infra-hunt/1.0),user_agent,medium,ARTEX skill user agent observed by WorkOS,WorkOS incident update 2026-11-06
 verify-911-probe/1.0,user_agent,medium,ARTEX probe user agent observed by WorkOS,WorkOS incident update 2026-11-06
-c921256f-04a7-44e8-9b2a-69c33929ba19,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; presence shows exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
-b78f6a77-d4e5-46fb-87e5-d1648bd02519,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
-b2b55f5b-7758-4719-8d8f-88ae172e6bdb,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
-2399d300-6fca-4e6a-a686-399fefe75b83,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
-412dcf96-176d-4b3a-a1b0-4981ad66971e,entra_app_id,medium,"ConnectWise/SkyKick application identity (Expel list) - LEGIT app; exposure, not compromise",Expel 2026-10-21 (Storm-0940 / Okta sign-ups)
 199.19.95.66,ipv4,high,"WISP RAT C2 node, Storm-3358 financial-sector campaign; first seen 2026-11-02, active as of 2026-11-06; repeated in FBI FLASH-20261113-001 2026-11-13 (FBI: vet before blocking)",Microsoft Threat Intelligence 2026-11-06 Storm-3358
 199.19.95.67,ipv4,high,"WISP RAT C2 node, Storm-3358 financial-sector campaign; first seen 2026-11-02, active as of 2026-11-06; repeated in FBI FLASH-20261113-001 2026-11-13 (FBI: vet before blocking)",Microsoft Threat Intelligence 2026-11-06 Storm-3358
 199.19.95.68,ipv4,high,"WISP RAT C2 node, Storm-3358 financial-sector campaign; first seen 2026-11-02, active as of 2026-11-06; repeated in FBI FLASH-20261113-001 2026-11-13 (FBI: vet before blocking)",Microsoft Threat Intelligence 2026-11-06 Storm-3358
