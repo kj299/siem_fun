@@ -200,8 +200,8 @@ Read only through The Hacker News, so carried as secondary:
   AI-enabled offensive apparatus" used a script for CVE-2026-16232 "to
   launch over 100 management tasks on multiple Check Point Management
   Servers", from addresses that were "either egresses through ExpressVPN or
-  compromised victim Check Point devices". No addresses were published.
-  Hunt H-AGT-061.
+  compromised victim Check Point devices". The Hacker News lists none of the
+  99 addresses; GreyNoise's own post was not read. Hunt H-AGT-061.
 - **Self-hosted LLMJacking (Rapid7, via
   [The Hacker News](https://thehackernews.com/2026/11/threatsday-250-rogue-extensions-10m.html),
   2026-11-26).** "More than half of the exposed Ollama servers in this scan
@@ -800,10 +800,12 @@ the ATT&CK 20.1 catalogue.
   turns the edge-visible indicators into WAF rules for F5 BIG-IP, Akamai and
   ModSecurity in three tiers (fingerprints, exposure reduction, tempo
   controls), also `needs_validation`. It denies an address only where the IOC
-  file marks it block. Its user-agent and probe-string rules deny on the
-  fingerprints above, which the IOC file marks alert, on the reasoning that no
-  legitimate visitor sends them; its README says which rules ship as alert and
-  what a WAF cannot see. The ModSecurity file was run in two engines and the
+  file marks it block. Its user-agent and probe-string rules deny on
+  fingerprints above that the IOC file does not mark block (most it marks
+  alert, some hunt) and never on a low-confidence one, on this pack's
+  judgement that no legitimate visitor sends them; its README names the
+  hunt-marked values, says which rules ship as alert and what a WAF cannot
+  see. The ModSecurity file was run in two engines and the
   F5 rule's logic in a stand-in; the Akamai file was only read against its schema.
 - **Response** -- detection without a response decided in advance loses to an
   agent. Microsoft (2026-11-25) puts "contain a compromise automatically" among

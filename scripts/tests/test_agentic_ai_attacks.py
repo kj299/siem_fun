@@ -955,6 +955,37 @@ class TwinHuntTests(unittest.TestCase):
         for cmd in ("rsync -az src 192.0.2.10 2375", "nc -v 192.0.2.10 2375", "nc -vz 192.0.2.10 22"):
             self.assertFalse(all(re.search(rx, cmd) for rx in rxs), cmd)
 
+    def test_the_compiler_arm_of_h_agt_056_is_the_same_and_reads_resolved_names(self):
+        # Third retrospective, P3B-03: the arm matched gcc, cc, g++ and ld by exact name, while on
+        # Debian and Ubuntu those are links (readlink -f on Ubuntu 24.04: x86_64-linux-gnu-gcc-13,
+        # x86_64-linux-gnu-g++-13, x86_64-linux-gnu-ld.bfd) and a sensor names the resolved image,
+        # the premise of H-AGT-039 above. Splunk's tstats cannot take a regex, so its base search
+        # lists wildcards, and every name the regex accepts must pass those wildcards too.
+        # P3B-08: the sudo test missed an option with its own argument (sudo -u root vi).
+        import fnmatch
+        k, s = self.kql["H-AGT-056"], self.spl["H-AGT-056"]
+        kql_rx = re.search(r'FileName =~ "make" or FileName matches regex @"([^"]+)", "compiler or linker"', k).group(1)
+        spl_rx = re.search(r'pname="make" OR match\(pname, "([^"]+)"\), "compiler or linker"', s).group(1)
+        self.assertEqual(spl_rx, kql_rx)
+        base = self._in_list(s, "Processes.process_name")
+        resolved = ("gcc", "cc", "g++", "c++", "clang", "ld", "ld.bfd", "gcc-13", "clang-18",
+                    "x86_64-linux-gnu-gcc-13", "x86_64-linux-gnu-g++-13", "x86_64-linux-gnu-ld.bfd",
+                    "aarch64-linux-gnu-gcc", "x86_64-pc-linux-gnu-gcc")
+        for name in resolved:
+            self.assertRegex(name, kql_rx)
+            self.assertTrue(any(fnmatch.fnmatchcase(name, w) for w in base), f"{name}: no Splunk base-search value admits it")
+        for name in ("gcc-ar-13", "x86_64-linux-gnu-objdump", "ldconfig", "ldd", "ccache", "clangd", "make"):
+            self.assertNotRegex(name, kql_rx)
+        self.assertIn("make", base)
+        py = lambda rx: rx.replace("\\z", "\\Z")
+        k_sudo = py(re.search(r'FileName =~ "sudo" and ProcessCommandLine matches regex @"([^"]+)"', k).group(1))
+        s_sudo = py(re.search(r'pname="sudo" AND match\(process, "([^"]+)"\)', s).group(1))
+        self.assertEqual(s_sudo, k_sudo)
+        for cmd in ("sudo vi", "/usr/bin/sudo -n vim x", "sudo -u root vi /etc/shadow", "sudo -E -u root /usr/bin/vim f"):
+            self.assertRegex(cmd, k_sudo)
+        for cmd in ("sudo visudo", "sudo vimdiff a b", "sudo ls vi", "sudo -l"):
+            self.assertNotRegex(cmd, k_sudo)
+
 
 class RuleThresholdTests(unittest.TestCase):
     """The Splunk saved searches and the Sentinel rules of the same number are one rule written
@@ -1241,6 +1272,23 @@ class KqlShapeTests(unittest.TestCase):
     def test_a_comparison_is_not_cast_to_a_number(self):
         for uid, body in kql_units():
             self.assertNotRegex(body, r"\bto(?:int|long)\(\s*[^()]*\b(?:contains|has|startswith|endswith)\b", uid)
+
+    def test_a_url_is_parsed_only_where_it_carries_a_scheme(self):
+        # Third retrospective, P3B-01: H-AGT-058 took its paths with parse_url(Url).Path. Microsoft
+        # Learn says parse_url() takes "An absolute URL, including its scheme", and the ASIM web
+        # session schema says a WebServerSession Url "would typically not include the schema and
+        # server", so on the web-server records the hunt is for every row had the same empty Path
+        # and the 100-distinct-path test could not pass. H-AGT-010, H-AGT-029 and two Sentinel rules
+        # had the same shape; the egress domain reads were already guarded. Every parse_url() must
+        # be the true arm of an iff() that tests its own argument for "://".
+        seen = 0
+        for uid, body in kql_units():
+            for m in re.finditer(r"\bparse_url\(\s*([^()]*?)\s*\)", body):
+                seen += 1
+                guard = r'iff\(\s*' + re.escape(m.group(1)) + r'\s+has\s+"://"\s*,\s*tostring\(\s*$'
+                self.assertRegex(body[:m.start()], guard,
+                                 f'{uid}: parse_url({m.group(1)}) is not guarded by iff({m.group(1)} has "://", ...)')
+        self.assertGreater(seen, 5)
 
 
 class ContinuationTests(unittest.TestCase):

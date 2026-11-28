@@ -885,6 +885,22 @@ ASSET_MUTS = [
     # layer-only change breaks the first, so a one-file mutation proves the pair, not the second.
     ("layer: an ID that ATT&CK v20 no longer has",
      AGENTIC_LAYER, '"techniqueID": "T1574.001"', '"techniqueID": "T1574.002"'),
+    # Third retrospective (P3B-01, P3B-03, P3B-08, P3C-04).
+    ("hunts (KQL): H-AGT-058 parses a scheme-less web-server Url with parse_url again",
+     HUNTS, '| extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]))\n| summarize Requests = count(), DistinctPaths',
+     '| extend Path = tostring(parse_url(Url).Path)\n| summarize Requests = count(), DistinctPaths'),
+    ("rules (KQL): a Sentinel rule parses a scheme-less web-server Url with parse_url again",
+     SENTINEL_RULES, '      | extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0])), Status = toint(EventResultDetails)\n      | extend UaFamily',
+     '      | extend Path = tostring(parse_url(Url).Path), Status = toint(EventResultDetails)\n      | extend UaFamily'),
+    ("hunts (KQL): the H-AGT-056 compiler arm reads exact names only, not the image a link resolves to",
+     HUNTS, 'FileName =~ "make" or FileName matches regex @"(?i)^(?:[a-z0-9_-]+-linux-gnu-)?(?:(?:gcc|g\\+\\+|cc|c\\+\\+|clang)(?:-\\d+)?|ld(?:\\.bfd|\\.gold)?)$", "compiler or linker"',
+     'FileName =~ "make" or FileName matches regex @"(?i)^(?:(?:gcc|g\\+\\+|cc|c\\+\\+|clang)(?:-\\d+)?|ld(?:\\.bfd|\\.gold)?)$", "compiler or linker"'),
+    ("hunts: the Splunk base search of H-AGT-056 no longer admits a resolved compiler name",
+     SPLUNK_HUNTS, '"ld.gold","*-linux-gnu-*","make",', '"ld.gold","make",'),
+    ("hunts (KQL): the H-AGT-056 sudo test misses sudo -u root vi again",
+     HUNTS, 'sudo(?:\\s+-[A-Za-z]*[CDghpRrTtUu]\\s+\\S+|\\s+-\\S+)*\\s+', 'sudo(?:\\s+-\\S+)*\\s+'),
+    ("waf (Akamai): W-AGT-008 no longer matches i18n.php, which the README names as accepted",
+     AKAMAI, '"i1??",', '"i10?",'),
 ]
 for label, path, old, new in ASSET_MUTS:
     unit_mutation(label, path, old, new, grader_suite)

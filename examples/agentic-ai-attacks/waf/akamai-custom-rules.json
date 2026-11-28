@@ -308,7 +308,7 @@
       "action": "alert",
       "rule": {
         "name": "W-AGT-008 agent task-artifact script name",
-        "description": "S-RM: i<number>.<script ext>, three to seven characters after the i, the first of them a digit (Wiz 2026-11-25 saw the counter from i49 to i808807; two-digit names are left out of this rule as likelier to be real files). ? matches any character, so only the first character after the i is held to a digit: i4abc.php would still match, which is looser than the regex elsewhere, so alert first. Before 2026-11-28 the values were i??? to i???????, which also matched index.php, info.php, install.php and include.php. The second shape (GTIG: cl1217.jsp, f1219a.jsp) needs a regex and is not expressible here.",
+        "description": "S-RM: i<number>.<script ext>, three to seven characters after the i, the first of them a digit (Wiz 2026-11-25 saw the counter from i49 to i808807; two-digit names are left out of this rule as likelier to be real files). ? matches any character, so only the first character after the i is held to a digit: i4abc.php would still match, which is looser than the regex elsewhere, so alert first. Known false positive, accepted for an alert-only rule: i18n.php and I18n.php (the stem i18n fits i1??), a common internationalisation file name; the ModSecurity and F5 versions need digits only and do not match it. Before 2026-11-28 the values were i??? to i???????, which also matched index.php, info.php, install.php and include.php. The second shape (GTIG: cl1217.jsp, f1219a.jsp) needs a regex and is not expressible here.",
         "operation": "AND",
         "structured": true,
         "version": 1,

@@ -855,6 +855,11 @@ AKAMAI_CASES = [
     ("W-AGT-008", dict(path="/i18.php"), False),
     ("W-AGT-008", dict(path="/i12345678.php"), False),
     ("W-AGT-008", dict(path="/i4028.html"), False),
+    # Known, accepted false positive of the alert-only Akamai rule (third retrospective, P3C-04):
+    # the stem i18n fits i1??. The ModSecurity and F5 versions need digits and do not match it;
+    # the rule description and waf/README.md name it. If the values are tightened, flip these.
+    ("W-AGT-008", dict(path="/i18n.php"), True),
+    ("W-AGT-008", dict(path="/classes/I18n.php"), True),
 ] + [("W-AGT-008", dict(path="/%s.php" % name), False)
      for name in ("index", "info", "image", "items", "inbox", "install", "include", "invoice", "imports",
                   "inquiry", "includes", "identity", "insights")]

@@ -13,7 +13,7 @@
 // --- H-AGT-010  Slow enumeration trajectory (port of Morpheus R-P-L7-010) ----------------------
 // Daily distinct paths per client climbing on a straight line while its busiest 10-minute window stays
 // under R-D-AGT-001's 200-path floor (same guard as the Splunk rule's peak lookup).
-let web = _Im_WebSession(starttime=ago(14d)) | extend Path = tostring(parse_url(Url).Path);
+let web = _Im_WebSession(starttime=ago(14d)) | extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]));
 let peak10 = web | summarize Paths = dcount(Path) by SrcIpAddr, bin(TimeGenerated, 10m) | summarize Peak10m = max(Paths) by SrcIpAddr;
 web
 | make-series Paths = dcount(Path) default = 0 on TimeGenerated step 1d by SrcIpAddr
@@ -361,7 +361,7 @@ _Im_WebSession(starttime=ago(1h))
 // into a range no more than twice as wide. The identifier is the last numeric path segment.
 _Im_WebSession(starttime=ago(1d))
 | where EventResultDetails == "200"
-| extend Path = tostring(parse_url(Url).Path)
+| extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]))
 | extend Parts = extract_all(@"^(.*/)(\d{1,12})((?:/[^/\d][^/]*)*/?)$", Path)
 | extend Template = strcat(tostring(Parts[0][0]), "{id}", tostring(Parts[0][2])), ObjectId = tolong(Parts[0][1])
 | where isnotnull(ObjectId)
@@ -852,9 +852,12 @@ union sweeps, probes
 // which), shows two addresses. Pod-identity (IRSA) and Terraform-runner sessions carry no
 // ec2RoleDelivery and are not covered. GuardDuty's own finding for this, InstanceCredentialExfiltration,
 // is listed beside the CloudTrail rows. H-AGT-035 looks for the service sweep that such credentials
-// are put to.
+// are put to. Microsoft Learn describes the EC2RoleDelivery column with the same text as
+// SessionIssuerUserName, so check in ten rows that it holds 1.0 or 2.0 before trusting the filter;
+// the filter keeps those two values only, so a column filled with a role name returns nothing
+// rather than every role session.
 let used = AWSCloudTrail
-    | where TimeGenerated > ago(14d) and isnotempty(EC2RoleDelivery)
+    | where TimeGenerated > ago(14d) and EC2RoleDelivery in ("1.0", "2.0")
     | where SourceIpAddress !endswith ".amazonaws.com" and SourceIpAddress !startswith "AWS Internal"
     | summarize Calls = count(), Refused = countif(isnotempty(ErrorCode)), Services = dcount(EventSource),
                 Sensitive = make_set_if(EventName, EventName in ("GetSecretValue", "StartSession", "SendCommand", "GetParameter", "GetParameters", "GetParametersByPath", "GetObject"), 10),
@@ -885,7 +888,9 @@ union
 // thirty days, refused calls included: a trust policy that rejects the branch is the good outcome
 // and still worth reading. AgentLabel marks a branch that opens like the published names: i and a
 // counter followed by two or more letters or digits and a hyphen (i18n-, i386- and i686- are not
-// matched), or an artex-, artx-, pentest- or csai- prefix. Every new feature branch that deploys is
+// matched, but a branch named after the i18next library, such as i18next-upgrade, is), or an
+// artex-, artx-, pentest- or csai- prefix. The label only sorts the rows and filters nothing, so
+// an i18next- branch is still listed, near the top. Every new feature branch that deploys is
 // a first appearance too: the role it reached is what to read. The branch and the workflow file
 // themselves are in the source-control audit log, for which no table is catalogued here.
 let federated = AWSCloudTrail
@@ -915,8 +920,12 @@ federated
 // is read from the request paths R-D-AGT-021 already uses, or else as the first instance-profile ARN
 // in the request, the error message or the response; a profile named in one call and given by ARN
 // in another shows as two pairs. A refused call whose error message mentions the instance profile
-// is kept when no profile can be read. R-D-AGT-021 alerts on successful calls only, and only with a
-// second foothold action; this reads what it leaves out. Auto Scaling, launch templates and
+// is kept when no profile can be read. So is a successful ReplaceIamInstanceProfileAssociation, as
+// Profile "(not read)": AWS's EC2 guide shows the replace done by name, no request path for that call
+// has been checked against a logged record, and a by-name replace has no ARN to fall back on, so it
+// would otherwise be dropped. Every such replace by one actor shares that one pair, so only the
+// actor's first is new. R-D-AGT-021 alerts on successful calls only, and only with a second
+// foothold action; this reads what it leaves out. Auto Scaling, launch templates and
 // deployment tools pass roles all day: read the actor first.
 let handed = AWSCloudTrail
     | where TimeGenerated > ago(30d) and EventName in ("RunInstances", "AssociateIamInstanceProfile", "ReplaceIamInstanceProfileAssociation")
@@ -925,8 +934,9 @@ let handed = AWSCloudTrail
                                 tostring(Request.AssociateIamInstanceProfileRequest.IamInstanceProfile.Arn),
                                 tostring(Request.AssociateIamInstanceProfileRequest.IamInstanceProfile.Name),
                                 extract(@"(arn:aws:iam::\d{12}:instance-profile/[A-Za-z0-9+=,.@_/-]+)", 1, strcat(RequestParameters, " ", ErrorMessage, " ", ResponseElements)))
-    | where isnotempty(Profile) or ErrorMessage contains "instance profile" or ErrorMessage contains "iamInstanceProfile"
-    | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn, UserIdentityPrincipalid, "(unknown)"), Profile = coalesce(Profile, "(named in the error only)");
+    | extend ReplaceUnread = isempty(Profile) and EventName == "ReplaceIamInstanceProfileAssociation" and isempty(ErrorCode)
+    | where isnotempty(Profile) or ReplaceUnread or ErrorMessage contains "instance profile" or ErrorMessage contains "iamInstanceProfile"
+    | extend Actor = coalesce(SessionIssuerArn, UserIdentityArn, UserIdentityPrincipalid, "(unknown)"), Profile = coalesce(Profile, iff(ReplaceUnread, "(not read)", "(named in the error only)"));
 handed
 | where TimeGenerated > ago(1d)
 | join kind=leftanti (handed | where TimeGenerated < ago(1d) | summarize by Actor, Profile) on Actor, Profile
@@ -948,8 +958,8 @@ handed
 // attackers use to scale LLMjacking after they obtain AWS credentials". Datadog raises it when the
 // requested value is the AWS maximum, which the log does not carry: read the desired value against
 // the quota's maximum in Service Quotas. The serviceCode, quotaCode and desiredValue names are taken
-// from Datadog's OCSF mapping of the request, not from AWS documentation. H-AGT-042 counts the
-// later stages (enablement, invocation, logging changes).
+// from Datadog's OCSF mapping of the request, not from AWS documentation; a name that is wrong
+// shows as ? in Detail. H-AGT-042 counts the later stages (enablement, invocation, logging changes).
 let calls = AWSCloudTrail
     | where TimeGenerated > ago(30d)
     | where (EventSource == "sts.amazonaws.com" and EventName == "GetCallerIdentity" and UserIdentityAccessKeyId startswith "AKIA")
@@ -967,7 +977,7 @@ union
                Detail = strcat(Denied, " denied; regions ", tostring(Regions), "; sources ", tostring(Sources), "; ", tostring(UserAgents))),
   (calls | where EventSource == "servicequotas.amazonaws.com" and tostring(Request.serviceCode) == "bedrock"
      | project FirstSeen = TimeGenerated, Actor, Signal = "Bedrock quota increase requested",
-               Detail = strcat("quota ", tostring(Request.quotaCode), " to ", tostring(Request.desiredValue), "; ", ErrorCode, "; ", SourceIpAddress, "; ", UserAgent))
+               Detail = strcat("quota ", coalesce(tostring(Request.quotaCode), "?"), " to ", coalesce(tostring(Request.desiredValue), "?"), "; ", ErrorCode, "; ", SourceIpAddress, "; ", UserAgent))
 | order by FirstSeen desc
 
 
@@ -1030,6 +1040,9 @@ AWSCloudTrail
 // Wiz's Black October list (Chainstack) adds the names artx-sa, artx-observer, artx-vant,
 // artx-relay and others, and two pods named rt-agent and rt-node-probe. Names are matched by the
 // pentest-, artex-, artx- and csai- prefixes of H-AGT-032 at the start of the object name, and those two names exactly.
+// H-AGT-032's art18- prefix is left out on purpose: CrowdStrike (2026-10-29) gives it as a prefix
+// of administration-command comments, not of the names of objects an agent creates, and no
+// source read names a Kubernetes object that carries it.
 // AKS writes its API server audit log to AzureDiagnostics (categories kube-audit and
 // kube-audit-admin, the event as JSON in log_s) in Azure diagnostics mode, and to AKSAudit and
 // AKSAuditAdmin in resource-specific mode; all four are read, and an event in two of them is
@@ -1167,7 +1180,10 @@ union
 // form, parsed as Microsoft's rule parses it. A web server without the Defender for Endpoint
 // sensor is not seen, an IPv4-mapped local address (the ::ffff: prefix) is reduced to IPv4, and a
 // server behind source NAT appears under the NAT address, which matches none. A server whose egress
-// was just tightened fires too: compare the first denied hour with the policy change.
+// was just tightened fires too: compare the first denied hour with the policy change. Denials are
+// counted and the learning hours taken per source address and destination before any device is
+// attached, as in Microsoft's rule, so an address two devices used in the week is counted once
+// per hour; DeviceNames lists the devices that used it.
 let web = DeviceNetworkEvents
     | where TimeGenerated > ago(7d) and LocalPort in (80, 443, 8080, 8443)
     | where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "jspawnhelper", "node", "node.exe")
@@ -1182,8 +1198,8 @@ let denied = union isfuzzy=true
        | where Action == "Deny"
        | project TimeGenerated, SourceIp, Destination)
     | where isnotempty(SourceIp) and isnotempty(Destination)
-    | join kind=inner web on SourceIp
-    | summarize Denied = count() by SourceIp, DeviceName, Destination, Hour = bin(TimeGenerated, 1h);
+    | join kind=leftsemi web on SourceIp
+    | summarize Denied = count() by SourceIp, Destination, Hour = bin(TimeGenerated, 1h);
 let learned = denied
     | where Hour < bin(ago(1d), 1h)
     | summarize LearnAvg = avg(Denied), LearnStd = stdev(Denied), LearnBuckets = count() by SourceIp, Destination
@@ -1193,7 +1209,9 @@ denied
 | join kind=leftouter learned on SourceIp, Destination
 | extend Threshold = iff(isnull(LearnAvg), 5.0, max_of(LearnAvg + 3 * LearnStd, 5.0))
 | where Denied > Threshold
-| summarize Hours = count(), Denials = sum(Denied), WorstHour = max(Denied), Threshold = max(Threshold), FirstHour = min(Hour) by DeviceName, SourceIp, Destination
+| summarize Hours = count(), Denials = sum(Denied), WorstHour = max(Denied), Threshold = max(Threshold), FirstHour = min(Hour) by SourceIp, Destination
+| join kind=inner (web | summarize DeviceNames = make_set(DeviceName, 5) by SourceIp) on SourceIp
+| project-away SourceIp1
 | order by Denials desc
 
 // ===== Added 2026-11-28: endpoint, web and appliance hunts ======================================
@@ -1215,7 +1233,11 @@ denied
 // tools. Six signals, each from a web server's account or from a process whose parent or
 // grandparent is a web server: a compiler or linker, pkexec (what a PwnKit binary runs),
 // sudo into vi or vim, paramiko installed or run, perl opening a connection, and root's
-// authorized_keys written. Methods counts the distinct signals on one host in an hour; two or
+// authorized_keys written. Compilers and linkers are matched by name and by the name a link
+// resolves to, because a sensor names the resolved image (as in H-AGT-039): on Debian and Ubuntu
+// gcc, cc and g++ are links to x86_64-linux-gnu-gcc-13 and the like, and ld to
+// x86_64-linux-gnu-ld.bfd. The sudo test allows an option with its own argument (sudo -u root
+// vi) as well as bare flags. Methods counts the distinct signals on one host in an hour; two or
 // more is the switch the sources describe. The block that set off the switch is not read:
 // prevention records live in each product's own log. Parent lists are H-AGT-036's; the account
 // list is a starting set, so add the accounts your application servers run as. False
@@ -1233,9 +1255,9 @@ union
           or InitiatingProcessFileName startswith "php" or InitiatingProcessParentFileName startswith "php"
           or InitiatingProcessFileName startswith "tomcat" or InitiatingProcessParentFileName startswith "tomcat"
      | extend Signal = case(
-         FileName in~ ("gcc", "cc", "g++", "clang", "make", "ld"), "compiler or linker",
+         FileName =~ "make" or FileName matches regex @"(?i)^(?:[a-z0-9_-]+-linux-gnu-)?(?:(?:gcc|g\+\+|cc|c\+\+|clang)(?:-\d+)?|ld(?:\.bfd|\.gold)?)$", "compiler or linker",
          FileName =~ "pkexec", "pkexec (PwnKit)",
-         FileName =~ "sudo" and ProcessCommandLine matches regex @"(?i)(?:^|[\s/])sudo(?:\s+-\S+)*\s+(?:\S*/)?(?:vi|vim)(?:\s|\z)", "sudo into vi",
+         FileName =~ "sudo" and ProcessCommandLine matches regex @"(?i)(?:^|[\s/])sudo(?:\s+-[A-Za-z]*[CDghpRrTtUu]\s+\S+|\s+-\S+)*\s+(?:\S*/)?(?:vi|vim)(?:\s|\z)", "sudo into vi",
          ProcessCommandLine contains "paramiko", "paramiko installed or run",
          "")
      | where Signal != ""
@@ -1295,7 +1317,7 @@ runs
 // don't alert on them alone"; they are listed here, not filtered on. A crawler, a link checker
 // on a site full of dead links, or a vulnerability scanner you run matches.
 _Im_WebSession(starttime=ago(1d))
-| extend Path = tostring(parse_url(Url).Path)
+| extend Path = iff(Url has "://", tostring(parse_url(Url).Path), tostring(split(Url, "?")[0]))
 | summarize Requests = count(), DistinctPaths = dcount(Path), ClientErrors = countif(EventResultDetails startswith "4"),
             UserAgents = make_set(HttpUserAgent, 10), Targets = make_set(coalesce(DstHostname, DstIpAddr), 10)
             by SrcIpAddr, bin(TimeGenerated, 1m)
@@ -1402,13 +1424,19 @@ audit
 // the port test: its API paths (/api/generate, /api/chat, /api/pull and others) are generic
 // enough elsewhere that they are not matched here. False positives: your own users reaching a
 // server you meant to publish; exclude their addresses. Any public client on 11434 means the
-// server is reachable from the internet, which is the finding even before it is used.
+// server is reachable from the internet, which is the finding even before it is used. Public on
+// the firewall arm is outside the private ranges ipv4_is_private tests and outside loopback
+// (127.0.0.0/8, which ipv4_is_private does not count as private), link-local (169.254.0.0/16)
+// and shared address space (100.64.0.0/10), so local clients of a default install are not
+// reported; the ipv4_ functions return null for an IPv6 address, so that arm reads IPv4 clients
+// only. The endpoint arm reads Defender's own RemoteIPType, which names loopback separately.
+let local = dynamic(["127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10"]);
 let contacts = union
   (DeviceNetworkEvents | where TimeGenerated > ago(30d)
      | where LocalPort == 11434 and RemoteIPType == "Public"
      | project TimeGenerated, Server = DeviceName, Client = RemoteIP, Seen = strcat("endpoint ", InitiatingProcessFileName, " ", ActionType)),
   (CommonSecurityLog | where TimeGenerated > ago(30d)
-     | where DestinationPort == 11434 and isnotempty(SourceIP) and not(ipv4_is_private(SourceIP))
+     | where DestinationPort == 11434 and isnotempty(SourceIP) and not(ipv4_is_private(SourceIP)) and not(ipv4_is_in_any_range(SourceIP, local))
      | project TimeGenerated, Server = DestinationIP, Client = SourceIP, Seen = strcat("firewall ", DeviceVendor, " ", DeviceAction));
 let cloud_models = DeviceProcessEvents
     | where TimeGenerated > ago(30d)
