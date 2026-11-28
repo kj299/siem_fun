@@ -105,6 +105,7 @@ siem_fun/
 |-- QUERY_SKILL_PLAN.md
 |-- scripts/
 |   |-- tests/
+|   |   |-- attack-enterprise-20.1.tsv
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
 |   |   |-- test_agentic_ai_attacks.py
@@ -356,8 +357,12 @@ The checks above read the markdown documents. The detection assets in
 searches, Sentinel rules, hunting KQL) are outside them: they get the
 ASCII and credential checks, and
 [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
-keeps the IOC list, the ATT&CK layer and the reference doc consistent, but no
-check reads the queries themselves. They ship marked `needs_validation`.
+keeps the IOC list, the ATT&CK layer and the reference doc consistent, and
+reads the queries for what can be told without running them (catalogued
+tables, a time bound on every table a hunt reads, unbroken line continuations,
+hunts that write nothing, the same lists and thresholds on both platforms,
+technique IDs live in ATT&CK 20.1); no check runs one. They ship marked
+`needs_validation`.
 
 ## Security
 
@@ -545,7 +550,7 @@ To get the best results with either model:
 - [references/examples-and-troubleshooting.md](splunk-sentinel-query-builder/references/examples-and-troubleshooting.md): prompt patterns and failure handling
 - [references/model-guidance.md](splunk-sentinel-query-builder/references/model-guidance.md): model-specific prompt tuning
 - [references/agentic-ai-attacks.md](splunk-sentinel-query-builder/references/agentic-ai-attacks.md): agentic AI attack frameworks (ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX, HexStrike-AI): what they are, the MITRE ATT&CK techniques their operators were observed using, verified IOCs, and detection starters; the assets live in [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/) (IOC CSV, ATT&CK Navigator layer, Splunk saved searches and unscheduled hunts, Sentinel rules, hunting KQL, lookups, and [WAF rules](examples/agentic-ai-attacks/waf/README.md) for F5, Akamai and ModSecurity)
-- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other, and the WAF rule pack consistent with the IOC CSV
+- [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py): keeps the IOC CSV, the Navigator layer and the reference doc's technique table consistent with each other, and the WAF rule pack consistent with the IOC CSV; and pins what can be pinned in the rule and hunt files without running them (unique identifiers, catalogued Sentinel tables, a Splunk hunt for each Sentinel hunt from H-AGT-032 with the same lists and thresholds, hunts unscheduled and bounded, every cited technique live in the vendored ATT&CK 20.1 list `scripts/tests/attack-enterprise-20.1.tsv`)
 - [splunk-enrichment-query-builder/SKILL.md](splunk-enrichment-query-builder/SKILL.md): multi-index enrichment skill instructions
 - [splunk-enrichment-query-builder/references/splunkbase-app-catalog.md](splunk-enrichment-query-builder/references/splunkbase-app-catalog.md): Splunkbase add-on sourcetypes, key fields, and CIM mappings
 - [splunk-enrichment-query-builder/references/multi-index-patterns.md](splunk-enrichment-query-builder/references/multi-index-patterns.md): SPL patterns for multi-index search and iteration

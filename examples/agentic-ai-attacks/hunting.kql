@@ -44,12 +44,30 @@ AADServicePrincipalSignInLogs
 | where SignIns > 50
 | order by SignIns desc
 
-// --- H-AGT-013  Script files written into web roots by the web server (polyglot upload) ---------
+// --- H-AGT-013  Script files written into web folders by a web or database server process ------
+// Microsoft (2026-11-25): "New or modified script files ... this includes files written by a
+// database server process after its logging settings were changed to point a log file at a web
+// directory", and "several short-lived web shells with incrementing names". The process and
+// extension lists are Microsoft's, extended with the .exe forms of its Linux names and the php5
+// and phar extensions; the threshold (any database write, or three files in ten minutes) is
+// Microsoft's. A single polyglot upload by the web server is below that threshold: delete the
+// last where to list every write. Deleted is a column only, not a trigger: it counts the same
+// names removed in the window by the server process itself, so a shell removed by its own rm
+// (a different process) is not counted, and a content management update writes and removes
+// script files in one window. Updates and deployments also write script files: read the names.
+let web = dynamic(["w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "node", "node.exe"]);
+let db = dynamic(["mysqld", "mysqld.exe", "mariadbd", "mariadbd.exe", "postgres", "postgres.exe", "sqlservr", "sqlservr.exe"]);
 DeviceFileEvents
 | where TimeGenerated > ago(14d)
-| where InitiatingProcessFileName in~ ("w3wp.exe","php-cgi.exe","httpd.exe","java.exe","node.exe","php-fpm","apache2","httpd","nginx","java","node")
+| where ActionType in ("FileCreated", "FileModified", "FileRenamed", "FileDeleted")
 | where FileName matches regex @"(?i)\.(php|phtml|php5|phar|jsp|jspx|asp|aspx|ashx|asmx)$"
-| project TimeGenerated, DeviceName, FolderPath, FileName, InitiatingProcessFileName, SHA256
+| where InitiatingProcessFileName in~ (web) or InitiatingProcessFileName in~ (db) or InitiatingProcessFileName startswith "php"
+| summarize Files = dcountif(FileName, ActionType != "FileDeleted"), Deleted = dcountif(FileName, ActionType == "FileDeleted"),
+            DatabaseWrites = countif(InitiatingProcessFileName in~ (db) and ActionType != "FileDeleted"),
+            Names = make_set(FileName, 25), Folders = make_set(FolderPath, 10), Hashes = make_set(SHA256, 10)
+            by DeviceName, InitiatingProcessFileName, bin(TimeGenerated, 10m)
+| where DatabaseWrites > 0 or Files >= 3
+| order by DatabaseWrites desc, Files desc, Deleted desc
 
 // --- H-AGT-014  CyberStrikeAI implant artifacts (Kaspersky Securelist 2026-11-02) -------------
 // Beacon and tool names, the SystemUpdate persistence pair, comsvcs MiniDump of LSASS and certutil
@@ -158,11 +176,12 @@ signins
 // --- H-AGT-019  ARTEX task artifacts on a compromised host (S-RM 2026-11-04) -------------------
 // S-RM found /opt/artex/data/task/<task>/i4028/i4028.asp on a victim, disposable GitHub branches
 // named artex-wtest-<n>, and placeholder emails at example.invalid. The i<number> is the agent's
-// intent counter, so hunt the shape, not one name. ScopeWeaver (an ARTEX derivative) renames the
-// binary and its variables; both are included.
+// intent counter, so hunt the shape, not one name: Wiz (2026-11-25) catalogued counters from i49
+// to i808807, so two to seven digits are matched, ignoring case. ScopeWeaver (an ARTEX derivative)
+// renames the binary and its variables; both are included.
 union
   (DeviceFileEvents | where TimeGenerated > ago(30d)
-     | where FolderPath contains "/opt/artex" or FolderPath contains @"\artex\data\task" or FileName matches regex @"^i[0-9]{3,5}\.(asp|aspx|php|jsp|jspx)$"
+     | where FolderPath contains "/opt/artex" or FolderPath contains @"\artex\data\task" or FileName matches regex @"(?i)^i[0-9]{2,7}\.(asp|aspx|ashx|php|jsp|jspx)$"
      | project TimeGenerated, DeviceName, Signal = "task artifact", Detail = strcat(FolderPath, " ", FileName)),
   (DeviceProcessEvents | where TimeGenerated > ago(30d)
      | where ProcessCommandLine has_any ("artex-wtest-", "example.invalid", "SCOPEWEAVER_LLM_", "/opt/artex/") or FileName in~ ("scopeweaver", "scopeweaver.exe")
@@ -185,6 +204,11 @@ SigninLogs
 // domain (admin@, billing@, security@ ...), or API-friendly disposable mail (maxxspace.com via mail.tm),
 // then sign in with nonexistent users and abuse password recovery. Entra shown (self-service sign-up
 // writes an "Add user" audit event); apply the same regexes to your Okta or Auth0 event export.
+// The account shape is wider than Okta's: the counter runs two to seven digits (Wiz 2026-11-25),
+// joined to probe or canary (i3694canary), and Wiz's Black October list (from Bitrise) adds
+// pentest-probe and pentestprob sign-up names and two short probe<digits> usernames, which it
+// rates "low confidence; correlate only, not alone"; monitoring accounts named like probe001
+// match that last arm too.
 let shared = dynamic(["accounting", "admin", "billing", "careers", "compliance", "digital", "info", "investors", "ir", "legal", "marketing", "marketoperations", "membership", "noreply", "sales", "security", "support"]);
 let disposable = dynamic(["maxxspace.com"]);
 union
@@ -196,7 +220,7 @@ union
      | extend upn = tolower(UserPrincipalName)
      | project TimeGenerated, Signal = "failed sign-in", upn, Actor = IPAddress)
 | extend local = tostring(split(upn, "@")[0]), domain = tostring(split(upn, "@")[1])
-| where upn matches regex @"^i[0-9]{2}probe[0-9]{10}@" or domain in (disposable) or local in (shared)
+| where upn matches regex @"^(i[0-9]{2,7}[-_]?(probe|canary)|pentest[-_]?prob|[a-z]{0,2}probe[-_]?[0-9]{3,})" or domain in (disposable) or local in (shared)
 | summarize Events = count(), Signals = make_set(Signal, 3), Accounts = make_set(upn, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Actor
 | order by Events desc
 
@@ -350,13 +374,16 @@ _Im_WebSession(starttime=ago(1d))
 // self-hosted LLM gateway or reseller software (CLIProxyAPI, New API). Matched by the projects'
 // own binary names, which an operator can change. VShell is also a commercial SSH server. WISP,
 // which the FBI also names, has no known process name and is not matched. Unit 42 (2026-11-24)
-// adds GSocket, whose client is gs-netcat.
+// adds GSocket, whose client is gs-netcat. GSocket's installer saves that client as defunct
+// (older versions: gs-dbus, gs-db) and runs it under a kernel-thread name, so those file names
+// and any command line naming gsocket are matched as well.
 DeviceProcessEvents
 | where TimeGenerated > ago(30d)
 | where FileName in~ ("chisel", "chisel.exe", "vpnserver", "vpnserver.exe", "vpnserver_x64.exe", "vpnbridge", "vpnbridge.exe", "vpnbridge_x64.exe",
-                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "gs-netcat", "gs-netcat.exe", "new-api", "new-api.exe", "one-api", "one-api.exe")
+                      "vpncmd", "vpncmd.exe", "vshell", "vshell.exe", "gs-netcat", "gs-netcat.exe", "gs-dbus", "gs-db", "defunct", "new-api", "new-api.exe", "one-api", "one-api.exe")
      or ProcessCommandLine contains "softether" or ProcessCommandLine contains "adaptix"
      or ProcessCommandLine contains "CLIProxyAPI" or ProcessCommandLine contains "cli-proxy-api"
+     or ProcessCommandLine contains "gsocket" or ProcessCommandLine contains "gs-netcat"
 | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), Commands = make_set(ProcessCommandLine, 5), Accounts = make_set(AccountName, 5)
             by DeviceName, FileName
 | order by LastSeen desc
@@ -383,7 +410,9 @@ union
 
 
 // ===== Added 2026-11-27: hunts from reporting published 2026-11-23 to 2026-11-25, and from ======
-// ===== Datadog (2026-11-09) and Google (2026-11-02, 2026-11-16), which the pack had not read ===
+// ===== Datadog (2026-11-09) and Google (2026-11-02), which the pack had not read ===============
+// One (H-AGT-044) rests on the FBI FLASH and Google's 2026-10-30 report, which it had. Google's
+// 2026-11-16 report was read with these; the reference cites it, and no hunt here rests on it.
 // Each hunt names the source of its hypothesis. Thresholds are the source's where it gives one.
 // Unit 42 (2026-11-24) found no compiled implant in more than ten agent-run campaigns: hashes and
 // malware signatures come back empty, and what is left to hunt is behaviour and the names an
@@ -393,13 +422,16 @@ union
 // The model names what it creates after the task identifier in front of it. Wiz found the labels
 // in role session names, SSM command comments, bucket, role, policy and security-group names,
 // tags, Azure run-command and VM names and Entra app registrations, and notes that "for denied
-// calls, the names survive in error messages", so failed calls are read too. Shapes: pentest-i and
-// artex-i followed by the counter, the artx- and csai- prefixes (csai- is CyberStrikeAI), and the
-// counter joined to probe or canary. Wiz: "pair i<N> with an anchor before alerting"; a bare
-// i<digits> is never matched here. Counter values seen run from two digits to six; seven are
-// allowed for. The pattern runs over whole records with no index to help: shorten the range if
-// it times out.
-let label = @"(?i)(pentest-i\d{2,7}|artex-i\d{2,7}|artex-verify-i\d{2,7}|\bartx-[a-z0-9][a-z0-9_-]*|\bcsai-[a-z0-9][a-z0-9_-]*|\bi\d{2,7}[-_]?(probe|canary)|(probe|canary)[-_]?i\d{2,7}|tasks/[^/\s]+/i\d{2,7})";
+// calls, the names survive in error messages", so failed calls are read too. Shapes: the
+// pentest-, artex-, artx- and csai- prefixes, with or without a counter after them (Wiz names
+// "pentest-* workspaces and pods" and artex-verify-*; csai- is CyberStrikeAI), the counter joined
+// to probe or canary, a tasks/<task>/i<N> path and the exp<N>-worker-i<N> session name. Each shape
+// must start the text or follow a character that is not a letter or digit; an underscore counts,
+// so _artx-dnsproof, a DNS proof-record label, is matched. Wiz: "pair i<N> with an anchor before
+// alerting"; a bare i<digits> is never matched here. Counter values seen run from two digits to
+// six; seven are allowed for. The pattern runs over whole records with no index to help: shorten
+// the range if it times out.
+let label = @"(?i)(?:^|[^a-z0-9])((?:pentest|artex|artx|csai)-[a-z0-9][a-z0-9_-]*|i\d{2,7}[-_]?(?:probe|canary)|(?:probe|canary)[-_]?i\d{2,7}|tasks/[^/\s]+/i\d{2,7}|exp\d+-worker-i\d{2,7})";
 union
   (AWSCloudTrail | where TimeGenerated > ago(30d)
      | extend Text = strcat(RequestParameters, " ", ErrorMessage, " ", UserIdentityArn)
@@ -414,7 +446,8 @@ union
      | where Text matches regex label
      | project TimeGenerated, Plane = "entra", Actor = coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName)),
                Source = tostring(InitiatedBy.user.ipAddress), Operation = OperationName, Label = extract(label, 1, Text))
-| extend Counter = tolong(extract(@"i(\d{2,7})", 1, Label))
+| extend Label = trim_start(@"[^A-Za-z0-9]+", Label)
+| extend Counter = tolong(extract(@"(?i)(?:^|[^a-z0-9]|probe|canary)i(\d{2,7})", 1, Label))
 | summarize Events = count(), Labels = make_set(Label, 20), LowestCounter = min(Counter), HighestCounter = max(Counter), Sources = make_set(Source, 20),
             Operations = make_set(Operation, 20), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Plane, Actor
 | order by FirstSeen asc
@@ -423,7 +456,8 @@ union
 // "ARTEX's most frequent action was FilterLogEvents", and "every FilterLogEvents call was set
 // with a limit of 1000 ... That constant shows up across sessions." The filter patterns Datadog
 // published look for credentials and data locations. One principal, an hour. A person searching
-// their own logs for "password" matches the first condition once; the agent matches it for hours.
+// their own logs for "password" matches the first condition once; an agent working through log
+// groups matches it call after call.
 // If this returns nothing at all, count FilterLogEvents by ManagementEvent first to see whether
 // your trail records the call.
 AWSCloudTrail
@@ -449,24 +483,25 @@ union
                  PrivilegeAttribute = countif(RequestParameters contains "isAdmin" or ErrorMessage contains "isAdmin"),
                  FirstSeen = min(TimeGenerated) by Key = SourceIpAddress, bin(TimeGenerated, 1h)
      | where DistinctErrors >= 3 or PrivilegeAttribute > 0
-     | project FirstSeen, Signal = "sign-up errors that vary per attempt", Key, Detail = strcat(Attempts, " attempts; ", tostring(Errors))),
+     | project FirstSeen, Signal = iff(DistinctErrors >= 3, "sign-up errors that vary per attempt", "sign-up naming a privilege attribute"), Key, Detail = strcat(Attempts, " attempts; ", tostring(Errors))),
   (AWSCloudTrail | where TimeGenerated > ago(14d) and UserIdentityArn contains "CognitoIdentityCredentials"
      | summarize Denied = countif(ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"), DeniedActions = dcountif(EventName, ErrorCode contains "AccessDenied" or ErrorCode contains "Unauthorized"),
                  Actions = make_set(EventName, 20), FirstSeen = min(TimeGenerated) by Key = SourceIpAddress, UserIdentityArn, bin(TimeGenerated, 1h)
      | where Denied >= 20 and DeniedActions >= 5
-     | project FirstSeen, Signal = "identity-pool session refused across many calls", Key, Detail = strcat(Denied, " denials; ", tostring(Actions)))
+     | project FirstSeen, Signal = "identity-pool session refused across many calls", Key, Detail = strcat(UserIdentityArn, ": ", Denied, " denials; ", tostring(Actions)))
 | order by FirstSeen desc
 
 // --- H-AGT-035  One AWS session sweeping services and regions (Unit 42 2026-11-24) --------------
 // After taking instance-role credentials from the metadata service, "the AI agent enumerated 20
 // AWS services across eight regions". One session, ten or more services and four or more regions
-// in half an hour. Calls AWS services make on your behalf are left out. A deployment tool or a
-// posture scanner does this too: read the source address and the user-agent.
+// in half an hour. Calls AWS services make on your behalf are left out: a source that is a
+// service DNS name or AWS Internal, or a call with an invoking service recorded. A deployment
+// tool or a posture scanner does this too: read the source address and the user-agent.
 // Datadog and Wiz both add the stronger test, an instance role used from an address that is not
 // AWS, which needs your own list of expected egress and is left to you.
 AWSCloudTrail
 | where TimeGenerated > ago(14d)
-| where UserIdentityType == "AssumedRole" and SourceIpAddress !endswith ".amazonaws.com"
+| where UserIdentityType == "AssumedRole" and SourceIpAddress !endswith ".amazonaws.com" and SourceIpAddress !startswith "AWS Internal" and isempty(UserIdentityInvokedBy)
 | summarize Services = dcount(EventSource), Regions = dcount(AWSRegion), Calls = count(), Denied = countif(isnotempty(ErrorCode)),
             ServiceList = make_set(EventSource, 25), Sources = make_set(SourceIpAddress, 5), UserAgents = make_set(UserAgent, 5)
             by UserIdentityArn, bin(TimeGenerated, 30m)
@@ -479,10 +514,12 @@ AWSCloudTrail
 // (2026-11-24): "the median inter-command gap dropped to 1.4 seconds" against 23.9 for a person,
 // "in every campaign ... AI operators used section headers in shell commands and scripts, such as
 // ===[Title]===", and 40 to 100 different Base64 payloads in a session. Parent and child lists
-// are Microsoft's. Build servers that run shells under Java or Node.js will match: exclude them.
+// are Microsoft's, with the .exe forms, tomcat and python added, and jspawnhelper, the helper
+// through which a JVM starts a shell in one of Wiz's 2026-10-29 cases (java, jspawnhelper, sh).
+// Build servers that run shells under Java or Node.js will match: exclude them.
 DeviceProcessEvents
 | where TimeGenerated > ago(14d)
-| where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "node", "node.exe") or InitiatingProcessFileName startswith "php" or InitiatingProcessFileName startswith "tomcat"
+| where InitiatingProcessFileName in~ ("w3wp.exe", "httpd", "httpd.exe", "apache2", "nginx", "nginx.exe", "lighttpd", "java", "java.exe", "jspawnhelper", "node", "node.exe") or InitiatingProcessFileName startswith "php" or InitiatingProcessFileName startswith "tomcat"
 | where FileName in~ ("sh", "bash", "dash", "zsh", "cmd.exe", "powershell.exe", "pwsh", "pwsh.exe", "curl", "curl.exe", "wget", "wget.exe", "nc", "nc.exe", "ncat", "ncat.exe", "certutil.exe", "python", "python3", "python.exe", "perl")
 | extend Header = ProcessCommandLine contains "===",
          Encoded = ProcessCommandLine contains "base64" or ProcessCommandLine contains "FromBase64String" or ProcessCommandLine contains " -enc"
@@ -495,9 +532,14 @@ DeviceProcessEvents
 
 // --- H-AGT-037  Three or more kinds of secret file in ten minutes (Microsoft 2026-11-25) --------
 // "Rapid reads of /etc/shadow, .env and configuration files, private keys, and cloud credential
-// files." The file list and the threshold are Microsoft's. Read from command lines, so a tool
-// that opens files without naming them on a command line is not seen. One command naming three
-// kinds counts as three.
+// files". The file list is Microsoft's; the grouping into nine kinds is this pack's. Microsoft
+// counts each of its fourteen patterns separately and fires on three, so three SSH key types, or
+// wp-config.php with web.config and appsettings.json, reach its threshold and are one kind here.
+// Count the patterns separately to reproduce Microsoft's query. Microsoft also matches .env
+// anywhere in the line; this hunt needs a slash, a backslash or a space before it, so a name
+// such as =.env or ".env" in quotes is missed. Read from command lines, so a tool that opens files without naming them on a command
+// line is not seen. One command naming three kinds counts as three. Every process event in the
+// range is scanned with substring tests: shorten the range if it times out.
 DeviceProcessEvents
 | where TimeGenerated > ago(14d)
 | extend c = ProcessCommandLine
@@ -507,7 +549,7 @@ DeviceProcessEvents
     iff(c contains "id_rsa" or c contains "id_ecdsa" or c contains "id_ed25519", "ssh private key", ""),
     iff(c contains ".git-credentials", "git credentials", ""), iff(c contains ".pgpass" or c contains ".my.cnf", "database client password", ""),
     iff(c contains "wp-config.php" or c contains "web.config" or c contains "appsettings.json", "application config", ""),
-    iff(c contains "/.env" or c contains " .env", "env file", ""))
+    iff(c contains "/.env" or c contains @"\.env" or c contains " .env", "env file", ""))
 | where array_length(set_difference(Kinds, dynamic([""]))) > 0
 | mv-expand Kind = Kinds to typeof(string)
 | where Kind != ""
@@ -521,13 +563,15 @@ DeviceProcessEvents
 // find "excluding three different security vendors", and checked "for the presence of 16 different
 // security scanners (nmap, nessus, openvas, nikto, masscan, nuclei, lynis and others)". The first
 // is rare enough to read every hit. The other two are counted: a find with three or more
-// exclusions, and one command line naming four or more of the scanners.
+// exclusions (a -not or ! before -path, -name, -wholename or -regex, or their case-insensitive
+// -i forms, or a -prune), and one command line naming four or more of the scanners. Every process
+// event in the range is scanned with substring tests: shorten the range if it times out.
 DeviceProcessEvents
 | where TimeGenerated > ago(30d)
 | extend Scanners = iff(ProcessCommandLine contains "nmap", 1, 0) + iff(ProcessCommandLine contains "nessus", 1, 0) + iff(ProcessCommandLine contains "openvas", 1, 0)
                   + iff(ProcessCommandLine contains "nikto", 1, 0) + iff(ProcessCommandLine contains "masscan", 1, 0) + iff(ProcessCommandLine contains "nuclei", 1, 0)
                   + iff(ProcessCommandLine contains "lynis", 1, 0),
-         Exclusions = countof(ProcessCommandLine, @"(-not|!)\s+-(path|name)", "regex") + countof(ProcessCommandLine, "-prune")
+         Exclusions = countof(ProcessCommandLine, @"(-not|!)\s+-i?(path|name|wholename|regex)", "regex") + countof(ProcessCommandLine, "-prune")
 | extend Signal = case(
     (ProcessCommandLine contains "wdavdaemon" or InitiatingProcessCommandLine contains "wdavdaemon") and (FileName =~ "strace" or FileName =~ "ltrace" or FileName =~ "gdb"), "tracing the endpoint agent",
     FileName =~ "find" and Exclusions >= 3, "find that skips several directories",
@@ -542,15 +586,33 @@ DeviceProcessEvents
 // "privileged container creation, nsenter, IMDS kube-env queries and drifted scripts reaching for
 // cloud credentials", and a userland rootkit loaded through ld.so.preload "disguised as a
 // fontconfig service". Unit 42 (2026-11-24): "When IMDSv1 was blocked, the agent immediately
-// adapted and switched to IMDSv2 token acquisition." Host-level telemetry only; the cluster's own
-// audit log is where the privileged pod and the cluster-admin binding show.
+// adapted and switched to IMDSv2 token acquisition." The same credential request on Azure (the
+// managed identity token) and on Google Cloud (the service account token) is matched as well.
+// Wiz (2026-10-29) adds the rest of the ladder (the ECS credential address and the IPv6 metadata
+// address), a wrapper that truncates each command's output to 49152 bytes and posts it back, the
+// service account token read or tested from a shell, a capability check, and port checks against
+// container and cluster control ports. Its self-deleting /tmp script is printed only as a
+// placeholder (.cXXXX.sh), so that arm's shape is inferred from it. One source each: leads, not
+// alerts. Init scripts that read the service account token and ECS entrypoints that call
+// 169.254.170.2 match too. nsenter is matched as -t 1, a bundled form such as -at 1, --target 1
+// or a /proc/1/ns/ path. Host-level telemetry only; the cluster's own audit log is where the
+// privileged pod and the cluster-admin binding show. Every process event in the range is scanned
+// with substring tests: shorten the range if it times out.
 union
   (DeviceProcessEvents | where TimeGenerated > ago(30d)
      | extend Signal = case(
-         FileName =~ "nsenter" and ProcessCommandLine matches regex @"(-t\s*|--target[=\s]+)1(\s|$)", "nsenter into the host",
+         FileName =~ "nsenter" and ProcessCommandLine matches regex @"(\s-[a-zA-Z]*t\s*|--target[=\s]+)1(\s|$)|/proc/1/ns/", "nsenter into the host",
          ProcessCommandLine contains "kube-env", "node bootstrap secrets requested from the metadata service",
          ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "api/token", "metadata service token requested",
          ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "security-credentials", "role credentials requested from the metadata service",
+         ProcessCommandLine contains "169.254.169.254" and ProcessCommandLine contains "identity/oauth2/token", "managed identity token requested from the metadata service",
+         ProcessCommandLine contains "computeMetadata/v1" and ProcessCommandLine contains "service-accounts" and ProcessCommandLine contains "token", "service account token requested from the metadata service",
+         ProcessCommandLine contains "169.254.170.2" or ProcessCommandLine contains "fd00:ec2::254", "container or IPv6 credential endpoint requested",
+         ProcessCommandLine contains "head -c 49152" or (ProcessCommandLine contains "--post-data" and ProcessCommandLine contains "/result/"), "command output posted back by a beacon wrapper",
+         ProcessCommandLine contains "selfsubjectrulesreviews" or (ProcessCommandLine contains "serviceaccount/token" and FileName in~ ("cat", "curl", "wget", "sh", "bash", "dash")), "service account token read or tested from a shell",
+         FileName =~ "capsh" and ProcessCommandLine contains "--print", "container capability check",
+         ProcessCommandLine matches regex @"/tmp/\.c[0-9A-Za-z]{4,5}\.sh", "self-deleting script in /tmp",
+         FileName in~ ("nc", "ncat", "netcat") and ProcessCommandLine matches regex @"\s-[a-z]*z" and ProcessCommandLine matches regex @"\s(2375|2376|10250|10255|2379|61678|8200)(\s|$)", "port check against a container or cluster control port",
          "")
      | where Signal != ""
      | project TimeGenerated, DeviceName, Signal, Detail = strcat(InitiatingProcessFileName, " > ", ProcessCommandLine)),
@@ -566,9 +628,11 @@ union
 // shells over SMB. Over the next 26 minutes it pushed webshells to more than 40 locations ...
 // uploading custom web.config files to enable script execution." A file that arrives over SMB is
 // created by the System process, not by the web server, which is why H-AGT-013 does not see it.
-// Microsoft (2026-11-25) describes the same from the other side: "several short-lived web shells
-// with incrementing names". Ten or more folders in half an hour. A deployment that copies a
-// site over a share looks the same; the remote address tells them apart.
+// Microsoft (2026-11-25) reports a different habit on the web server itself, "several
+// short-lived web shells with incrementing names"; its hunt for that reads files written by
+// web or database server processes, which is H-AGT-013's ground, not this hunt's. Ten or more
+// folders in half an hour, or a web.config written with two or more script files. A deployment
+// that copies a site over a share looks the same; the remote address tells them apart.
 DeviceFileEvents
 | where TimeGenerated > ago(30d)
 | where ActionType in ("FileCreated", "FileModified", "FileRenamed")
@@ -584,8 +648,9 @@ DeviceFileEvents
 // "Find users or applications that both add or change application credentials and assign
 // directory roles or application permissions within an hour." In one case "an application
 // assigned itself the Global Administrator role". R-B-AGT-008 matches these operations one at a
-// time; the pairing by actor is the new part. SelfGrants counts the grants whose targets
-// include the actor's own object id. Privileged Identity Management writes its activations under
+// time; the pairing by actor is the new part. SelfGrants counts the distinct grants, within the
+// hour of a credential change, whose targets include the actor's own object id; Operations
+// lists each credential change and grant as a pair. Privileged Identity Management writes its activations under
 // its own name, so they do not pair with a person's credential change.
 let acts = AuditLogs
     | where TimeGenerated > ago(30d)
@@ -601,10 +666,10 @@ let acts = AuditLogs
 acts
 | where Stage == "credential"
 | project Actor, ActorId, CredentialTime = TimeGenerated, CredentialOperation = OperationName, CredentialTarget = Target
-| join kind=inner (acts | where Stage == "grant" | project Actor, GrantTime = TimeGenerated, GrantOperation = OperationName, GrantTarget = Target, TargetText) on Actor
+| join kind=inner (acts | where Stage == "grant" | project Actor, GrantId = Id, GrantTime = TimeGenerated, GrantOperation = OperationName, GrantTarget = Target, TargetText) on Actor
 | where abs(datetime_diff("minute", GrantTime, CredentialTime)) <= 60
 | extend SelfGrant = isnotempty(ActorId) and TargetText contains ActorId
-| summarize SelfGrants = countif(SelfGrant), Operations = make_set(pack_array(CredentialOperation, GrantOperation), 10), CredentialTargets = make_set(CredentialTarget, 10),
+| summarize SelfGrants = dcountif(GrantId, SelfGrant), Operations = make_set(strcat(CredentialOperation, " + ", GrantOperation), 10), CredentialTargets = make_set(CredentialTarget, 10),
             GrantTargets = make_set(GrantTarget, 10), FirstSeen = min(CredentialTime), LastSeen = max(GrantTime) by Actor, ActorId
 | order by SelfGrants desc, FirstSeen desc
 
@@ -614,14 +679,17 @@ acts
 // PutUseCaseForModelAccess, CreateFoundationModelAgreement. Hiding: changes to the model
 // invocation logging configuration. Use: Converse, InvokeModel, InvokeModelWithResponseStream,
 // with "high-volume spikes in ThrottlingException, ValidationException, or
-// ResourceNotFoundException". "In multiple incidents ... LLM services were not enabled at the
-// time of compromise ... treat any unauthorized enablement as a critical security event."
+// ResourceNotFoundException". GTIG: "treat any unauthorized enablement as a critical security
+// event. In multiple incidents that Mandiant investigated, LLM services were not enabled at the
+// time of compromise." PutFoundationModelEntitlement (enabling) and
+// ListFoundationModelAgreementOffers (scoping) are added from other LLMjacking reports (Permiso,
+// Lacework), not from Mandiant.
 AWSCloudTrail
 | where TimeGenerated > ago(30d) and EventSource == "bedrock.amazonaws.com"
 | extend Stage = case(
-    EventName in ("PutUseCaseForModelAccess", "CreateFoundationModelAgreement"), "enable",
+    EventName in ("PutUseCaseForModelAccess", "CreateFoundationModelAgreement", "PutFoundationModelEntitlement"), "enable",
     EventName in ("PutModelInvocationLoggingConfiguration", "DeleteModelInvocationLoggingConfiguration"), "logging changed",
-    EventName in ("ListFoundationModels", "ListInferenceProfiles", "GetFoundationModelAvailability", "GetModelInvocationLoggingConfiguration"), "scope",
+    EventName in ("ListFoundationModels", "ListInferenceProfiles", "GetFoundationModelAvailability", "GetModelInvocationLoggingConfiguration", "ListFoundationModelAgreementOffers"), "scope",
     EventName in ("Converse", "ConverseStream", "InvokeModel", "InvokeModelWithResponseStream"), "invoke",
     "")
 | where Stage != ""
@@ -654,20 +722,23 @@ AzureActivity
 // The FBI asks defenders to "monitor unusual certificate enrollment involving privileged users or
 // unexpected requesting systems"; GTIG (2026-10-30) saw the agents audit certificate templates.
 // Certification authority events 4886 (request received) and 4887 (certificate issued); the
-// requester and the request attributes are read from their columns, or from EventData where the
-// agent left them there. The template is in the attributes only when the client sent it as one;
-// autoenrolment puts it in the request itself, and Template is then empty. Needs certificate
-// services auditing on the CA. Lists requester and template pairs first seen today.
+// requester and the request attributes are read from their columns, or from EventData when the
+// log collector did not parse them into columns. The template is in the attributes only when the
+// client sent it as one; autoenrolment puts it in the request itself, and Template is then empty.
+// The CA ignores case, spaces and hyphens in attribute names, so the name is matched in any case
+// with one space or hyphen allowed between its two words; a name respelled further still gives
+// an empty Template. Requests counts event 4886 only. Needs certificate services auditing on the
+// CA. Lists requester and template pairs first seen today.
 let requests = SecurityEvent
     | where TimeGenerated > ago(30d) and EventID in (4886, 4887)
     | extend Attrs = coalesce(Attributes, extract(@'Name="Attributes">([^<]*)<', 1, EventData))
     | extend Requester = tolower(coalesce(Requester, extract(@'Name="Requester">([^<]*)<', 1, EventData))),
-             Template = extract(@"CertificateTemplate:([^\s<&]+)", 1, Attrs)
+             Template = extract(@"(?i)certificate[ -]?template\s*:\s*([^\s<&]+)", 1, Attrs)
     | where isnotempty(Requester);
 requests
 | where TimeGenerated > ago(1d)
 | join kind=leftanti (requests | where TimeGenerated < ago(1d) | summarize by Requester, Template) on Requester, Template
-| summarize Requests = count(), Issued = countif(EventID == 4887), FirstSeen = min(TimeGenerated) by Requester, Template, Computer
+| summarize Requests = countif(EventID == 4886), Issued = countif(EventID == 4887), FirstSeen = min(TimeGenerated) by Requester, Template, Computer
 | order by Issued desc, FirstSeen asc
 
 // --- H-AGT-045  Published agent addresses in your sign-in and cloud logs (Wiz 2026-11-23) -------
@@ -676,7 +747,9 @@ requests
 // attempt". Wiz gives no instruction to block and many sit in shared hosting, so this is a
 // look back, not a list to deny. It reads Wiz's own file, so it follows their corrections; a
 // workspace that cannot reach GitHub needs the list loaded as a watchlist instead. The values
-// are published with [.] in them and are restored here.
+// are published with [.] in them and are restored here. A failed AWS console sign-in carries no
+// error code (the failure is in the response and the error message), so it is read as Failed,
+// and its record has no ARN, so the user name is shown instead.
 let published = externaldata(Type: string, Value: string, Description: string)
     [@"https://raw.githubusercontent.com/wiz-sec-public/wiz-research-iocs/main/reports/agentic_attacks_in_the_wild_iocs.csv"]
     with (format="csv", ignoreFirstRecord=true)
@@ -687,7 +760,10 @@ union
   (AADNonInteractiveUserSignInLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses) | project TimeGenerated, Address = IPAddress, Log = "non-interactive sign-in", Who = UserPrincipalName, Result = ResultType),
   (SigninLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses) | project TimeGenerated, Address = IPAddress, Log = "user sign-in", Who = UserPrincipalName, Result = ResultType),
   (AADServicePrincipalSignInLogs | where TimeGenerated > ago(90d) and IPAddress in (addresses) | project TimeGenerated, Address = IPAddress, Log = "service principal sign-in", Who = ServicePrincipalName, Result = ResultType),
-  (AWSCloudTrail | where TimeGenerated > ago(90d) and SourceIpAddress in (addresses) | project TimeGenerated, Address = SourceIpAddress, Log = "aws", Who = UserIdentityArn, Result = ErrorCode),
+  (AWSCloudTrail | where TimeGenerated > ago(90d) and SourceIpAddress in (addresses)
+     | project TimeGenerated, Address = SourceIpAddress, Log = "aws", Who = coalesce(UserIdentityArn, UserIdentityUserName),
+               Result = case(isnotempty(ErrorCode), ErrorCode,
+                             isnotempty(ErrorMessage) or (EventSource == "signin.amazonaws.com" and ResponseElements has "Failure"), "Failed", "")),
   (AzureActivity | where TimeGenerated > ago(90d) and CallerIpAddress in (addresses) | project TimeGenerated, Address = CallerIpAddress, Log = "azure", Who = Caller, Result = ActivityStatusValue)
 | lookup kind=inner published on Address
 | summarize Events = count(), Succeeded = countif(Result in ("0", "", "Success", "Succeeded")), Identities = make_set(Who, 20),

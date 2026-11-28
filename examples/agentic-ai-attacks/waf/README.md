@@ -4,7 +4,8 @@ Edge rules for F5 BIG-IP, Akamai App and API Protector, and anything that reads
 ModSecurity SecLang, built from the indicators in [../iocs.csv](../iocs.csv)
 and the reporting summarised in
 [agentic-ai-attacks.md](../../../splunk-sentinel-query-builder/references/agentic-ai-attacks.md)
-(intelligence as of 2026-11-24). They target ARTEX and CAIRN first, and the
+(intelligence as of 2026-11-24, with additions from reports read on
+2026-11-27). They target ARTEX and CAIRN first, and the
 other four frameworks that document covers where they leave an edge-visible
 fingerprint.
 
@@ -41,6 +42,14 @@ The three platform files do not carry the same weight of evidence. On
   path, query and POST-argument rules are the least certain thing in this
   folder, and whether a path condition sees the path as sent or normalized is
   not stated on the public pages.
+
+On 2026-11-28 the rules changed since then (the wider intent counter in
+W-AGT-007 and W-AGT-008, two more W-AGT-004 canaries, the W-AGT-003 additions
+and its anchored Norma match, and the iRule's read of a repeated
+Transfer-Encoding header) were run again the same way, each with a request
+that should match and one that should not, and each new matching case was
+confirmed to fail against the previous files. The Akamai file changed in
+step and, as before, was only read.
 
 The request cases are in
 [scripts/tests/test_waf_engines.py](../../../scripts/tests/test_waf_engines.py)
@@ -147,14 +156,14 @@ engine tests above are what run them.
 
 | Rule | Matches | Where | Evidence | False-positive risk |
 | --- | --- | --- | --- | --- |
-| W-AGT-001 | Framework user-agents: `artex-enrich/`, `compatible; ArtEx/`, `infra-hunt/`, `verify-911-probe/`, `spa-api-recon`, `security-testing; authorized`, `recon-audit`, `ReconProbe/`, `HexStrike-`, `CyberStrikeAI`, `PentAGI/`, `tcp_beacon`. Also the name `artex`, in any case, as a word (not after a letter; followed by the end, a non-letter, or `probe` or `bot`): the agent makes up a user-agent per task and 44 of the 46 that F5 Labs lists carry the name | User-Agent header | Framework source code; WorkOS 2026-11-06; Unit 42 2026-10-30; Wiz 2026-10-22; F5 Labs 2026-11-23 (appendix) | Low. An authorized tester running a default build will be blocked too; that is a finding, not a false positive. The name rule is the exception: medium. It does not match SmartExchange or ArtExpo, but any product whose name is exactly that word would be refused, and six refusals box the address. Akamai's wildcard version cannot say what may follow the name, so it ships as a separate alert rule (W-AGT-001b). F5's caveat: the agent changes the header when blocked. |
+| W-AGT-001 | Framework user-agents: `artex-enrich/`, `compatible; ArtEx/`, `infra-hunt/`, `verify-911-probe/`, `spa-api-recon`, `security-testing; authorized`, `recon-audit`, `HexStrike-`, `CyberStrikeAI`, `PentAGI/`, `tcp_beacon`. Also the name `artex`, in any case, as a word (not after a letter; followed by the end, a non-letter, or `probe` or `bot`): the agent makes up a user-agent per task and 44 of the 46 that F5 Labs lists carry the name | User-Agent header | Framework source code; WorkOS 2026-11-06; Unit 42 2026-10-30; Wiz 2026-10-22; F5 Labs 2026-11-23 (appendix) | Low. An authorized tester running a default build will be blocked too; that is a finding, not a false positive. The name rule is the exception: medium. It does not match SmartExchange or ArtExpo, but any product whose name is exactly that word would be refused, and six refusals box the address. Akamai's wildcard version cannot say what may follow the name, so it ships as a separate alert rule (W-AGT-001b). F5's caveat: the agent changes the header when blocked. |
 | W-AGT-002 | `CyberStrikeAI-WebShell` user-agent | User-Agent header | CyberStrikeAI source (web-shell manager) | None, and blocking is not enough: this is someone driving a shell they believe is on your server. Investigate the requested path. |
-| W-AGT-003 | `norma/0.`, `Fuzz Faster U Fool`, `PentAGI-Installer` | User-Agent header | Nextron (Norma is not ARTEX-exclusive); Unit 42 | High if denied. Log only. |
-| W-AGT-004 | Canary probes `/zzz-nonexistent-xyz123`, `/zzzrandom12345`; `artex-probe-<number>` files and `ArtexProbe` account names (GTIG); canary identities `zz_no_such_user_9f3a`, `zzq.nonexistent9x7`, `precheck.not-a-user@example.invalid`; any address at `example.invalid`; OAuth `state=notvalidb64`; cloud metadata address in a parameter | Path, query, body | Wiz 2026-10-22; Unit 42 2026-10-30; S-RM 2026-11-04; CrowdStrike 2026-10-29 | Low. `.invalid` is a reserved top-level domain that can never receive mail. Matched as prefixes, so a changed suffix still hits. |
+| W-AGT-003 | `norma/0.`, and any user-agent that begins `norma/` (a separate anchored match: Microsoft lists it as `norma/*`); `Fuzz Faster U Fool`, `PentAGI-Installer`; `ReconProbe/` (low confidence and hunt only in the IOC file, so logged, not denied); and user-agents that declare themselves authorized, read-only or pentest: `pentest-probe`, `authorized-pentest`, `authorized-security-research`, `research-readonly`, `research; read-only`, `read-only-audit` | User-Agent header | Nextron (Norma is not ARTEX-exclusive); Microsoft 2026-11-25; Unit 42; Wiz 2026-10-22 (ReconProbe); Bitrise and Barracuda incidents as compiled in Wiz's Black October indicator list | High if denied. Log only. A real authorized tester sends the self-declared strings too, which is why they are logged; an attacker can write them as easily. Wiz (2026-11-23) also names a family of `pentest-recon` user-agents but prints no full string, so nothing here matches it. |
+| W-AGT-004 | Canary probes `/zzz-nonexistent-xyz123`, and the same word with an underscore (`zzz_nonexistent_abc.txt`, Datadog), `/zzzrandom12345`; `artex-probe-<number>` files and `ArtexProbe` account names (GTIG); the SSRF canary path `_i<2 to 7 digits>_probe_missing` (`/_i6084_probe_missing`, Bitrise); canary identities `zz_no_such_user_9f3a`, `zzq.nonexistent9x7`, `precheck.not-a-user@example.invalid`; any address at `example.invalid`; OAuth `state=notvalidb64`; cloud metadata address in a parameter | Path, query, body | Wiz 2026-10-22; Unit 42 2026-10-30; S-RM 2026-11-04; CrowdStrike 2026-10-29; Datadog 2026-11-09; Bitrise incident as compiled in Wiz's Black October indicator list | Low. `.invalid` is a reserved top-level domain that can never receive mail. Matched as prefixes, so a changed suffix still hits. Left out on purpose, because they are too ordinary to deny on: `Notexist-xyz` and `/nope-1774` (Datadog, Bitrise), `evil.com` and `test@example.com` (every tester and tutorial sends them), and Unit 42's placeholder `deadbeefdeadbeefdeadbeef12`, which is a hunt in the IOC file. |
 | W-AGT-005 | JWT whose header is `alg` `none` (base64 prefix `eyJhbGciOiJub25l` and casings) | Authorization, cookies, URL | Wiz 2026-10-22 | None. No working deployment issues unsigned tokens. |
 | W-AGT-006 | SQL injection strings tagged `ARTEX'` | Query, body | S-RM 2026-11-04 | Low. |
-| W-AGT-007 | Probe-account identity `i<intent>probe<unix-time>@` | Sign-up, login and recovery bodies | Okta 2026-11-06 | Low. |
-| W-AGT-008 | Script named like an agent task artifact, `i<3 to 5 digits>.<asp, aspx, jsp, php ...>`, requested or uploaded, including with path info or a `;parameter` after the name | Path, upload filename | S-RM 2026-11-04 (`i4028.asp`) | Medium. Single-engagement indicator; check your own file naming first. Akamai's wildcard version is looser, so it ships as alert. |
+| W-AGT-007 | Probe-account identity `i<intent>probe<unix-time>@`, the intent counter two to seven digits | Sign-up, login and recovery bodies | Okta 2026-11-06; Wiz 2026-11-25 (the counter runs from `i49` to `i808807`) | Low. The looser shapes in the reporting (`pentest-probe-...`, `i3694canary`) carry no timestamp and are left to the hunts. |
+| W-AGT-008 | Script named like an agent task artifact, `i<3 to 7 digits>.<asp, aspx, jsp, php ...>`, requested or uploaded, including with path info or a `;parameter` after the name | Path, upload filename | S-RM 2026-11-04 (`i4028.asp`); Wiz 2026-11-25 (the counter runs from `i49` to `i808807`) | Medium. Single-engagement indicator; check your own file naming first. The rule starts at three digits although Wiz saw two, because a two-digit name such as `i18.php` is far likelier in a real application; that floor is this pack's choice, and the hunts match from two digits. Akamai's wildcard version is looser, so it ships as alert. |
 | W-AGT-008 (second shape) | JSP shell named 1-2 letters, 4 digits, optional letter (`cl1217.jsp`, `f1219a.jsp`, `z1219.jsp`) | Path | GTIG 2026-10-30 (MySQL general-log poisoning) | Medium. Not expressible in Akamai's wildcard builder. |
 | W-AGT-009 | Inline DTD or entity declaration in an XML body | Body | CrowdStrike 2026-10-29 (unsigned SAML plus XXE to the metadata service) | Low, but partial: a base64 SAML response hides it from the edge, and on ModSecurity v2 the rule needs the v2-only block in the rule file. The real fix is DTD processing off and signature validation on in the service provider. |
 | W-AGT-010 | 44 source addresses, including the eight Storm-3358 ARTEX and C2 servers Microsoft published on 2026-11-06 | Client address | `iocs.csv` rows marked block (CrowdStrike, Zscaler, NorForge, Kaspersky, Microsoft and others) | Low today, decaying. The FBI FLASH of 2026-11-13 asks you to vet addresses before blocking because hosting addresses get reassigned. Review on every `iocs.csv` update; expire after 90 days. |
@@ -163,9 +172,15 @@ engine tests above are what run them.
 | W-AGT-014 | Path traversal in the path or a parameter: `../`, a backslash form, and the encoded forms (`%2e%2e`, `..%2f`, `..%5c`, half-encoded, double-encoded and overlong dots), and `..;` in the path (not the query), which Tomcat and Spring resolve as `..` | Path, query, form body | Amazon 2026-11-20: Cairn agents found traversal in an upload endpoint's filename parameter and reached arbitrary file write in about 11 minutes | Low in a path, where a browser resolves dot-segments before sending. Medium in parameters: an application that passes relative paths or redirect targets in a parameter will trip it, so read the log-only week before enforcing. Your managed rule set already covers this class; this keeps it on when that set runs permissively. |
 | W-AGT-013 | `isCliRequest` request header | Header | Amazon, November 2026: authentication bypass in the ARTEX playbook against One API family LLM gateways | Log only. Relevant only in front of such a gateway. |
 
+W-AGT-004 matches the metadata address only as written (169.254.169.254 and
+the Google name). Other spellings of the same address, the decimal form among
+them (`http://2852039166/`), are generic SSRF and are left to the Core Rule
+Set and to the application.
+
 The user-agent and probe-string rules deny on values the IOC file marks
-alert, not block: the judgement is that no legitimate visitor sends them, and
-it is this pack's, not a source's. Addresses are different. An address is
+alert, not block, and never on one it marks low confidence or hunt only: the
+judgement is that no legitimate visitor sends them, and it is this pack's,
+not a source's. Addresses are different. An address is
 denied only where the IOC file marks it block, and 21 of the 44 are also on
 the FBI's list, which asks for vetting first; nine of those the FBI labels
 proxy addresses. Treat W-AGT-010 as the rule most likely to age badly.
@@ -279,6 +294,9 @@ note. Three things about where those counters live:
   1800 after that include if you want the penalties as written. On nginx the
   directive made no difference.
 
+Tier 3 needs libmodsecurity 3.0.11 or later for `expirevar`; it was run on
+3.0.12.
+
 On Akamai the table's low thresholds cannot be written. A rate policy counts
 hits per second and the lowest value is 1, about 120 requests in two
 minutes, so the W-AGT-031 and W-AGT-032 policies in the JSON catch only the
@@ -386,7 +404,6 @@ come from the F5 company blog post of 2026-11-13, which is a product post.
 
 Not read, and so not relied on for any rule: Akamai's blog posts (the site
 refuses automated clients, so only search summaries were seen, and each use
-above says so), Unit 42's
-CL-STA-1238 Cairn report, Sophos, CERT-EU and the Cloud Security Alliance
-notes. Two addresses that secondary coverage attributes to CL-STA-1238 were
-left out of `iocs.csv` for that reason.
+above says so), Sophos, CERT-EU and the Cloud Security Alliance notes.
+Unit 42's CL-STA-1238 report was read on 2026-11-27; its two addresses are in
+`iocs.csv` as alert, not block, so no WAF rule denies them.

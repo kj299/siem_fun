@@ -596,7 +596,8 @@ name: R-D-AGT-011 Agentic intrusion - agent framework user-agent inbound
 description: 'A request carrying a user-agent compiled into ARTEX (artex-enrich/1.0, Mozilla/5.0 (spa-api-recon[ spider])), the Norma agent engine (norma/0.4), Hexstrike-AI, CyberStrikeAI or PentAGI. Read
   from the frameworks'' source; confirmed in the wild by AhnLab and Wiz. Operators can change these. Unit 42 (2026-10-30) adds two self-describing agent strings; WorkOS (2026-11-06) published three more
   ARTEX defaults (ArtEx/1.0, infra-hunt/1.0, verify-911-probe/1.0). F5 Labs (2026-11-23) lists 46 user-agents it tied to ARTEX, made up by the agent per task; 44 carry
-  the name, so the name at the start of a word is matched too. Status: needs_validation.'
+  the name, so the name at the start of a word is matched too. Wiz''s Black October list (Bitrise, Barracuda) adds a family that declares itself authorized or read-only (pentest-probe,
+  authorized-pentest, authorized-security-research, research-readonly, read-only-audit); a real tester may send such a string, so this alerts and never blocks. Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -614,6 +615,8 @@ query: |
   _Im_WebSession(starttime=ago(15m))
   | where HttpUserAgent matches regex @"(?i)(^|[^a-z])artex($|[^a-z]|probe|bot)" or HttpUserAgent startswith "artex-enrich/" or HttpUserAgent contains "spa-api-recon" or HttpUserAgent startswith "norma/"
        or HttpUserAgent startswith "HexStrike-HTTP-Framework" or HttpUserAgent startswith "HexStrike-BrowserAgent" or HttpUserAgent contains "CyberStrikeAI" or HttpUserAgent startswith "PentAGI/" or HttpUserAgent contains "security-testing; authorized" or HttpUserAgent contains "recon-audit" or HttpUserAgent contains "compatible; ArtEx/" or HttpUserAgent contains "infra-hunt/" or HttpUserAgent startswith "verify-911-probe/"
+       or HttpUserAgent contains "pentest-probe" or HttpUserAgent contains "authorized-pentest" or HttpUserAgent contains "authorized-security-research" or HttpUserAgent contains "research-readonly"
+       or HttpUserAgent contains "research; read-only" or HttpUserAgent contains "read-only-audit"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10)
             by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr), HttpUserAgent
 entityMappings:
@@ -720,8 +723,9 @@ kind: Scheduled
 ---
 id: 182b0afa-3488-5799-b509-a8459b42595b
 name: R-D-AGT-013 Agentic intrusion - webshell written by the database server
-description: 'mysqld writing a .jsp/.jspx/.php/.aspx file: the end state of MySQL general-log poisoning (SET GLOBAL general_log_file to a web path, then logging a script body) that GTIG observed ARTEX agents
-  use (GTIG 2026-10-30). Status: needs_validation.'
+description: 'A database server process (MySQL, MariaDB, PostgreSQL or SQL Server) creating, modifying or renaming a script file (.jsp/.jspx/.php/.phtml/.asp/.aspx/.ashx/.asmx): the end state of MySQL
+  general-log poisoning (SET GLOBAL general_log_file to a web path, then logging a script body) that GTIG observed ARTEX agents use (GTIG 2026-10-30). Microsoft (2026-11-25) hunts the same write from any
+  database server process; the extension list is Microsoft''s, and the process list is Microsoft''s, extended with the Windows image names of each server. Deletions are not counted. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -741,8 +745,9 @@ relevantTechniques:
 query: |
   DeviceFileEvents
   | where TimeGenerated > ago(10m)
-  | where InitiatingProcessFileName in~ ("mysqld.exe", "mysqld", "mariadbd", "mariadbd.exe")
-  | where FileName matches regex @"(?i)\.(jsp|jspx|php|asp|aspx)$"
+  | where ActionType in ("FileCreated", "FileModified", "FileRenamed")
+  | where InitiatingProcessFileName in~ ("mysqld.exe", "mysqld", "mariadbd", "mariadbd.exe", "postgres", "postgres.exe", "sqlservr", "sqlservr.exe")
+  | where FileName matches regex @"(?i)\.(jsp|jspx|php|phtml|asp|aspx|ashx|asmx)$"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Files = make_set(strcat(FolderPath), 20), SHA256 = make_set(SHA256, 20) by DeviceName
 entityMappings:
 - entityType: Host
@@ -766,7 +771,8 @@ name: R-D-AGT-014 Agentic intrusion - ARTEX or CAIRN running on one of your host
 description: 'Process or file evidence of an agent framework on a host you own: the artex binary, ARTEX_* configuration, the artx5v directory and artex-probe-* files (CrowdStrike, GTIG), Cairn''s worker
   token variable or worker image (oritera/Cairn; NorForge), or a pull or run of a trojanized or unofficial ARTEX Docker image such as tomicdd/artex (Badbyte via The Hacker News 2026-11-05; the backdoored
   build exposes an unauthenticated root shell). Also covers the /opt/artex/data/task/ working folder S-RM found on compromised hosts (2026-11-04) and the ScopeWeaver derivative (renamed binary, SCOPEWEAVER_LLM_*
-  variables). Status: needs_validation.'
+  variables), the artx- file and systemd unit names Chainstack found (artx-ngx, artx-guard; Wiz''s Black October list, one victim, so anything of yours named artx- will match too), and the
+  exp<N>-worker-i<N> session name Wiz (2026-11-25) gives for the agent. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -790,10 +796,12 @@ query: |
   union
     (DeviceProcessEvents | where TimeGenerated > ago(15m)
        | where FileName in~ ("artex", "artex.exe", "scopeweaver", "scopeweaver.exe") or ProcessCommandLine has_any (marks) or ProcessCommandLine has_any (images)
+            or ProcessCommandLine matches regex @"(?i)(^|[^a-z0-9])artx-[a-z0-9]" or ProcessCommandLine matches regex @"exp\d+-worker-i\d{2,7}"
        | project TimeGenerated, DeviceName, Evidence = ProcessCommandLine),
     (DeviceFileEvents | where TimeGenerated > ago(15m)
        | where FileName startswith "artex-probe-" or FolderPath contains "/opt/artex/data/task" or FileName startswith "scopeweaver" or FolderPath has @"\artx5v\" or FileName matches regex @"^artex-[0-9.]+-[a-z]+-[a-z0-9]+\.zip$"
             or (FileName =~ "mitmproxy-ca-cert.pem" and FolderPath has "_ca")
+            or FileName matches regex @"(?i)^artx-[a-z0-9]" or FolderPath matches regex @"(?i)/artx-[a-z0-9]"
        | project TimeGenerated, DeviceName, Evidence = FolderPath)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Evidence = make_set(Evidence, 10) by DeviceName
 entityMappings:
@@ -816,7 +824,8 @@ kind: Scheduled
 id: ceb6dd51-95b8-540f-b350-29696d1d2f90
 name: R-D-AGT-015 Agentic intrusion - agent probe requests (unsigned JWT, junk OAuth, baseline 404)
 description: 'Requests Wiz recorded ARTEX agents sending to SSO/OAuth endpoints: a JWT with header {"alg":"none"} (base64 eyJhbGciOiJub25l), code=AAAA&state=notvalidb64, and the probe /zzz-nonexistent-xyz123
-  (Wiz 2026-10-22). Status: needs_validation.'
+  (Wiz 2026-10-22), matched by its shape rather than the literal: zzz-nonexistent or zzz_nonexistent (Datadog 2026-11-09 saw zzz_nonexistent_abc.txt), zzzrandom (Unit 42 2026-10-30), and the SSRF
+  canary path /_i<counter>_probe_missing in Wiz''s Black October list (Bitrise). Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -833,7 +842,7 @@ relevantTechniques:
 - T1606
 query: |
   _Im_WebSession(starttime=ago(15m))
-  | where Url contains "eyJhbGciOiJub25l" or Url has "state=notvalidb64" or Url has "zzz-nonexistent-xyz123"
+  | where Url contains "eyJhbGciOiJub25l" or Url has "state=notvalidb64" or Url contains "zzz-nonexistent" or Url contains "zzz_nonexistent" or Url contains "_probe_missing" or Url contains "zzzrandom"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Requests = count(), Urls = make_set(Url, 10), Agents = make_set(HttpUserAgent, 5)
             by SrcIpAddr, Dst = coalesce(DstHostname, DstIpAddr)
 entityMappings:
@@ -856,7 +865,9 @@ kind: Scheduled
 id: ea089344-be25-57b8-be85-32fae7e361cd
 name: R-D-AGT-016 Agentic intrusion - server calling an out-of-band callback service
 description: 'A server reaching webhook.site or dnslog.cn: GTIG saw ARTEX agents post command output to 491 rotating webhook.site URLs; Hunt.io found a dnslog.cn callback on actor infrastructure; FBI FLASH-20261113-001
-  reports agents querying api.db-ip.com to geolocate a victim. Legitimate services: alert from servers only. Status: needs_validation.'
+  reports agents querying api.db-ip.com to geolocate a victim. Unit 42 (2026-11-24) saw a web shell fetched from a paste site, and Wiz''s Black October list has collection
+  scripts on paste.rs, a Cloudflare quick tunnel and an sslip.io name used as attacker endpoints. Legitimate services: alert from servers only, never a blocklist. Build and test servers use all of these,
+  and some platform tooling gives cluster ingress sslip.io names: exclude those devices. Status: needs_validation.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -878,7 +889,8 @@ query: |
   let servers = DeviceInfo | where TimeGenerated > ago(1d) | summarize arg_max(TimeGenerated, DeviceType) by DeviceId | where DeviceType in ("Server", "DomainController") | project DeviceId;
   DeviceNetworkEvents
   | where TimeGenerated > ago(15m)
-  | where RemoteUrl has "webhook.site" or RemoteUrl has "dnslog.cn" or RemoteUrl has "api.db-ip.com"
+  | where RemoteUrl has "webhook.site" or RemoteUrl has "dnslog.cn" or RemoteUrl has "api.db-ip.com" or RemoteUrl has "pastebin.com" or RemoteUrl has "paste.rs" or RemoteUrl has "trycloudflare.com"
+       or RemoteUrl has "sslip.io"
   | join kind=inner servers on DeviceId
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Connections = count(), Urls = make_set(RemoteUrl, 10),
               Processes = make_set(InitiatingProcessCommandLine, 5) by DeviceName
@@ -1138,7 +1150,7 @@ kind: Scheduled
 ---
 id: b412e20c-2177-55d1-b340-5d19986bacd9
 name: R-D-AGT-027 Agentic intrusion - account takeover burst or agent-named account
-description: 'One actor resetting the passwords of five or more users in fifteen minutes, or a user created with the agent''s own marker in its name. GTIG (2026-10-30): the operators gained persistence through account takeover (resetting passwords for identified users) and by creating accounts that included ArtexProbe in the naming convention. Entra audit activities Reset password (by admin) and Add user. This reads the Entra directory; the Splunk rule of the same number reads on-premises domain controllers. A help desk resets passwords all day, and a tenant with self-service reset may record those under a service identity: look at who the actor is in your own AuditLogs and add those to the approved list. Status: needs_validation.'
+description: 'One actor resetting the passwords of five or more users in fifteen minutes, or a user created with the agent''s own marker in its name. GTIG (2026-10-30): the operators gained persistence through account takeover (resetting passwords for identified users) and by creating accounts that included ArtexProbe in the naming convention. The probe and canary account shapes i<counter>probe, i<counter>canary and pentest-probe that Wiz''s Black October list records from the Bitrise incident are matched as markers too. Entra audit activities Reset password (by admin) and Add user. This reads the Entra directory; the Splunk rule of the same number reads on-premises domain controllers. A help desk resets passwords all day, and a tenant with self-service reset may record those under a service identity: look at who the actor is in your own AuditLogs and add those to the approved list. Status: needs_validation.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -1163,7 +1175,7 @@ query: |
   | where OperationName in ("Reset password (by admin)", "Add user")
   | extend Actor = tolower(coalesce(tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))),
            Target = tolower(coalesce(tostring(TargetResources[0].userPrincipalName), tostring(TargetResources[0].displayName)))
-  | extend Marked = OperationName == "Add user" and Target contains "artexprobe"
+  | extend Marked = OperationName == "Add user" and (Target contains "artexprobe" or Target matches regex @"^(i[0-9]{2,7}[-_]?(probe|canary)|pentest[-_]?prob)")
   | summarize AccountsReset = dcountif(Target, OperationName == "Reset password (by admin)"), MarkedAccounts = make_set_if(Target, Marked, 10),
               StartTime = min(TimeGenerated) by Actor
   | where array_length(MarkedAccounts) > 0 or (AccountsReset >= 5 and Actor !in (approved))

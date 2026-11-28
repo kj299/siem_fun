@@ -19,8 +19,9 @@
   ],
 
   "_kql_tables_comment": [
-    "Every table a kql block references: the leading source, plus union and join",
-    "operands and any table bound by let. The two implementations split at",
+    "Every table a kql block references: the source of each statement, plus union",
+    "and join operands and any table bound by let, with comments and string",
+    "contents not read. The two implementations split at",
     "different seams, so each reader normalises before comparing:",
     "  - the grader's kql_tables() filters the placeholder names itself, because",
     "    it has no registry to check them against",
@@ -128,6 +129,57 @@
       "name": "documented placeholders make no claim",
       "query": "TableName | getschema;\nTableName | take 5",
       "tables": []
+    }
+,
+    {
+      "name": "union alone on its line, parenthesized operands below",
+      "why": "The layout nine of the pack's own hunts use. A pattern that wanted the first operand on the keyword's line read no table from it.",
+      "query": "union\n    (SigninLogs | where TimeGenerated > ago(1d)),\n    (AuditLogs | where TimeGenerated > ago(1d))",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "union with an option, bare operands below",
+      "query": "union isfuzzy=true\nSigninLogs,\nAuditLogs\n| where TimeGenerated > ago(1d)",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a function argument inside a union operand is not an operand",
+      "why": "Every opening parenthesis in the statement was read as an operand, so a column passed to a function was reported as a table.",
+      "query": "union (SigninLogs | where isnotempty(IPAddress)), (AuditLogs | extend A = tostring(InitiatedBy.user.id))",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "the source is read past a multi-line let",
+      "why": "The first line not starting with let is the let's own body. Recorded answers to fixtures 13 and 18 are written this way.",
+      "query": "let seen =\n    SigninLogs\n    | where TimeGenerated > ago(30d)\n    | distinct IPAddress;\nAuditLogs\n| where TimeGenerated > ago(1d)",
+      "tables": ["SigninLogs", "AuditLogs"]
+    },
+    {
+      "name": "a let bound to a parenthesized query",
+      "query": "let recent = (DeviceProcessEvents | where TimeGenerated > ago(1d));\nrecent | take 5",
+      "tables": ["DeviceProcessEvents"]
+    },
+    {
+      "name": "a let bound to a literal names no table",
+      "query": "let strict = true;\nSigninLogs\n| where TimeGenerated > ago(1d)",
+      "tables": ["SigninLogs"]
+    },
+    {
+      "name": "union in a comment names no table",
+      "why": "Prose is not a query: this reported a table called of.",
+      "query": "// union of both sign-in tables\nSigninLogs\n| take 5",
+      "tables": ["SigninLogs"]
+    },
+    {
+      "name": "join in a trailing comment and union in a string name no table",
+      "query": "SigninLogs // join (the two) later\n| where Note has \"union everything\"\n| take 5",
+      "tables": ["SigninLogs"]
+    },
+    {
+      "name": "a leading table in the wrong case is read, so the allowlist can reject it",
+      "why": "KQL table names are case-sensitive. The grader read a leading table only if it began with a capital, so an answer whose main query was on auditlogs passed a fixture allowing AuditLogs.",
+      "query": "auditlogs\n| where TimeGenerated > ago(1d)",
+      "tables": ["auditlogs"]
     }
   ],
 

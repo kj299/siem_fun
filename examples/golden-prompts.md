@@ -111,8 +111,9 @@ Grader spec:
   "sections": ["Objective", "Query", "What changed", "Why efficient", "Assumptions"],
   "forbid_sections": ["Tuning"],
   "tables": ["SigninLogs"],
+  "tables_required": ["SigninLogs"],
   "query_lang": "kql",
-  "query_matches": ["^SigninLogs", "where\\s+TimeGenerated\\s*>\\s*ago\\(7d\\)", "ResultType\\s*!=\\s*\"0\""],
+  "query_matches": ["where\\s+TimeGenerated\\s*>\\s*ago\\(7d\\)", "ResultType\\s*!=\\s*\"0\""],
   "query_not_matches": ["(?s)\\|\\s*extend.*\\|\\s*where\\s+TimeGenerated"]
 }
 ```
@@ -199,8 +200,9 @@ Grader spec:
 {
   "sections": ["Objective", "Query", "Why efficient", "Assumptions", "Data dictionary notes", "Tuning", "Validate"],
   "tables": ["SigninLogs"],
+  "tables_required": ["SigninLogs"],
   "query_lang": "kql",
-  "query_matches": ["^SigninLogs", "UserPrincipalName", "IPAddress", "ago\\(24h\\)", "count\\(\\)", "ResultType"],
+  "query_matches": ["UserPrincipalName", "IPAddress", "\\b(?:24h|1d)\\b", "count\\(\\)", "ResultType"],
   "query_not_matches": ["\\bsrc_ip\\b", "\\buser\\b", "windows_auth"],
   "matches": ["ResultType"]
 }
@@ -242,7 +244,7 @@ Grader spec:
 {
   "sections": ["Objective", "Query", "Assumptions"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "query_matches": ["^\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "\\bby\\b[^\\n]*\\b(sourcetype|vendor_product)\\b"],
+  "query_matches": ["^\\s*\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "\\bby\\b[^\\n]*\\b(sourcetype|vendor_product)\\b"],
   "indexes": [],
   "sourcetypes": ["zscalernss-web", "cloudflare:json", "pan:threat"]
 }
@@ -403,12 +405,12 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Loads agentic-ai-attacks.md, because the request names two of the frameworks it covers
-- Uses one `tstats` query against `datamodel=Web.Web`, with `summariesonly=true` because the prompt confirms acceleration
-- Filters on `http_user_agent` using ARTEX user-agents the reference names (`artex-enrich/1.0`, `Mozilla/5.0 (compatible; ArtEx/1.0)` and the like)
+- Uses a `tstats` query against `datamodel=Web.Web`, with `summariesonly=true` because the prompt confirms acceleration
+- Filters on `http_user_agent` with an ARTEX user-agent pattern
 - Invents no user-agent for CAIRN: the reference gives none, so the answer says so instead of writing one into the query
 - Says what the reference says about these strings: they catch default or careless deployments, any operator can change them, and their absence proves nothing
 - Does not invent index names
-- Not machine-checked, reviewer's job: generic clients (`python-requests`, `curl`) are context in the reference, never a standalone match, and the answer should not present the user-agents as a blocklist
+- Not machine-checked, reviewer's job: one `tstats` query rather than several; the ARTEX strings are ones the reference names (`artex-enrich/1.0`, `Mozilla/5.0 (compatible; ArtEx/1.0)` and the like), since the spec only asks for the word ARTEX in the query and an invented string would pass it; generic clients (`python-requests`, `curl`) are context in the reference, never a standalone match, and the answer should not present the user-agents as a blocklist
 
 Grader spec:
 
@@ -416,7 +418,7 @@ Grader spec:
 {
   "sections": ["Objective", "Query", "Assumptions"],
   "forbid_sections": ["Why efficient", "Tuning", "Validate"],
-  "query_matches": ["^\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "http_user_agent", "(?i)artex"],
+  "query_matches": ["^\\s*\\|\\s*tstats\\b", "summariesonly=true", "datamodel=Web\\.Web", "http_user_agent", "(?i)artex"],
   "query_not_matches": ["(?i)\"[^\"\\n]*cairn[^\"\\n]*\""],
   "matches": ["(?i)cairn", "(?i)default|careless|absence|absent|chang|strip|spoof"],
   "indexes": [],
@@ -443,11 +445,10 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Loads agentic-ai-attacks.md and builds the hunt it describes in prose (the reference names H-AGT-022 but does not carry its KQL)
-- Queries `AADServicePrincipalSignInLogs` and no other table, bounded to `ago(30d)`
+- Queries `AADServicePrincipalSignInLogs` and no other table, bounded to 30 days (`ago(30d)` or a `let` bound to `30d`: the spec reads the window, not how it is typed)
 - Counts distinct service principals per `IPAddress` and keeps three or more, the threshold the reference gives
 - Uses both error codes the reference gives for an invalid and an expired client secret, 7000215 and 7000222
-- Hunts the shape: the addresses Microsoft published are context, not the filter
-- Not machine-checked, reviewer's job: `ResultType` holds the bare number, so a comparison against the `AADSTS`-prefixed form matches nothing; and a failure followed by a success from one source is the urgent case
+- Not machine-checked, reviewer's job: the hunt is for the shape, so the addresses Microsoft published are context, not the filter (a second stage that pulls the rows of the sources the shape found, `| where IPAddress in (spray_sources)`, is fine, which is why no pattern checks this); `ResultType` holds the bare number, so a comparison against the `AADSTS`-prefixed form matches nothing; and a failure followed by a success from one source is the urgent case
 
 Grader spec:
 
@@ -464,15 +465,17 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "(?m)^AADServicePrincipalSignInLogs",
-    "ago\\(30d\\)",
+    "\\b30d\\b",
     "dcount\\(",
     "IPAddress",
     "7000215",
     "7000222",
-    ">=\\s*3|>\\s*2"
+    ">=\\s*3\\b|>\\s*2\\b|\\blet\\s+\\w+\\s*=\\s*3\\s*;"
   ],
   "tables": [
+    "AADServicePrincipalSignInLogs"
+  ],
+  "tables_required": [
     "AADServicePrincipalSignInLogs"
   ]
 }
@@ -549,6 +552,7 @@ Expected output:
 - Starts from `Usage` or `getschema`, as sentinel-table-catalog.md says to
 - Names no Okta table in query position: none is catalogued, and the user said the name is unknown
 - Does not substitute an Entra query (`AuditLogs`, `SigninLogs`) for the Okta one the user asked for, even though the reference's own hunt for this pattern is written against Entra
+- Tells the user to run the discovery query and re-invoke the skill with the confirmed table name
 
 Grader spec:
 
@@ -596,9 +600,9 @@ Expected output:
 - `Assumptions`
 - Resolves the technique ID through the map in agentic-ai-attacks.md: Python Startup Hooks, one row, CAIRN only, from one report
 - Hunts the artifact that row evidences, a write of `sitecustomize.py`, with `tstats` against the Endpoint data model the prompt supplies
-- Attributes it to CAIRN and not to the frameworks the row does not list
+- Attributes it to CAIRN
 - Does not invent index names
-- Not machine-checked, reviewer's job: widening to other startup-hook files is a choice the answer should label as beyond the evidence, and package installs write this file legitimately
+- Not machine-checked, reviewer's job: the answer attributes the technique to no framework the row does not list (the spec checks only that CAIRN is named); widening to other startup-hook files is a choice the answer should label as beyond the evidence, and package installs write this file legitimately
 
 Grader spec:
 
@@ -615,7 +619,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^\\|\\s*tstats\\b",
+    "^\\s*\\|\\s*tstats\\b",
     "datamodel=Endpoint\\.",
     "(?i)sitecustomize"
   ],
@@ -665,7 +669,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^\\|\\s*tstats\\b",
+    "^\\s*\\|\\s*tstats\\b",
     "datamodel=Endpoint\\."
   ],
   "query_not_matches": [
@@ -719,7 +723,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^\\|\\s*tstats\\b",
+    "^\\s*\\|\\s*tstats\\b",
     "summariesonly=true",
     "datamodel=Authentication",
     "(?i)\\b(dc|distinct_count|estdc)\\(",
@@ -771,7 +775,6 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "MicrosoftGraphActivityLogs",
     "UserAgent",
     "\\bby\\b[^\\n]*\\bAppId\\b",
     "\\b3[01]d\\b"
@@ -780,6 +783,9 @@ Grader spec:
     "(?i)kiota"
   ],
   "tables": [
+    "MicrosoftGraphActivityLogs"
+  ],
+  "tables_required": [
     "MicrosoftGraphActivityLogs"
   ]
 }
@@ -807,7 +813,7 @@ Expected output:
 - Keys the canary on the shape the reference gives (a username that starts with zz, or contains nonexistent or not-a-user), then an attempt as admin, administrator or root from the same source shortly after
 - Does not fall back to a guessed definition of a canary: the reference lists the verified values
 - Does not invent index names
-- Not machine-checked, reviewer's job: matching only the two literal usernames is weaker than the shape, the admin name list is a placeholder for the deployment's own, and a shared egress address breaks the pairing
+- Not machine-checked, reviewer's job: matching only the two literal usernames is weaker than the shape, the admin name list is a placeholder for the deployment's own, a shared egress address breaks the pairing, and the admin attempt must be kept whatever its result: a query filtered to failures misses the login that succeeded
 
 Grader spec:
 
@@ -824,7 +830,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^\\|\\s*tstats\\b",
+    "^\\s*\\|\\s*tstats\\b",
     "datamodel=Authentication",
     "(?i)zz",
     "(?i)admin",
@@ -854,11 +860,10 @@ Expected output:
 - `Query`
 - `Assumptions`
 - Builds the fourth behavior the reference ranks: credentials added to OAuth applications or service principals
-- Queries `AuditLogs` only, bounded to `ago(30d)`, filtering on `OperationName`
+- Queries `AuditLogs` only, bounded to 30 days (`ago(30d)` or a `let` bound to `30d`), filtering on `OperationName`
 - Matches both operations that add a credential: "Add service principal credentials", and the application one whose name ends "Certificates and secrets management". These are the two the pack's own Sentinel rule matches
 - Matches the application operation by that ending, not by its full name typed with a plain hyphen: the real name carries a different dash character, so the plain-hyphen form matches nothing
-- Says this is behavior, not an indicator match, so legitimate secret rotation is returned too
-- Not machine-checked, reviewer's job: the second operation also records removals, so the answer should say how to keep additions only, and an application adding a credential to itself is the row to read first
+- Not machine-checked, reviewer's job: the answer says this is behavior, not an indicator match, so legitimate secret rotation is returned too (no pattern checks it, because one word for the idea is the kind of spec that failed a correct answer in run 15); the second operation also records removals, so the answer should say how to keep additions only, and an application adding a credential to itself is the row to read first
 
 Grader spec:
 
@@ -875,8 +880,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^AuditLogs",
-    "ago\\(30d\\)",
+    "\\b30d\\b",
     "OperationName",
     "(?i)Add service principal credentials",
     "(?i)Certificates and secrets management"
@@ -885,6 +889,9 @@ Grader spec:
     "(?i)Update application\\s*-\\s*Certificates"
   ],
   "tables": [
+    "AuditLogs"
+  ],
+  "tables_required": [
     "AuditLogs"
   ]
 }
@@ -910,10 +917,9 @@ Expected output:
 - `Assumptions`
 - Builds the detection with `tstats` against `datamodel=Network_Resolution` for the hosts the reference names
 - Answers the blocklist question with none: the reference carries LLM API hosts and webhook.site as legitimate services, behavioral signals only, never on a block action
-- Adds no LLM host the reference does not name
 - Does not invent index names
 - Does not single out the reseller or webhook.site as the ones to block. The spec's `never_block` reads the answer clause by clause, because an answer can refuse the LLM hosts and recommend blocking these two in the same sentence, and a required phrase such as "do not block" would pass it
-- Not machine-checked, reviewer's job: the answer should say servers with a sanctioned integration will match, should leave server scoping to the reader instead of inventing a subnet, and should not recommend a block by pronoun ("block it") or as a condition ("block it if nobody uses it"), which the clause check cannot see
+- Not machine-checked, reviewer's job: the answer adds no LLM host the reference does not name (the grader has no host allowlist), should say servers with a sanctioned integration will match, should leave server scoping to the reader instead of inventing a subnet, and should not recommend a block by pronoun ("block it") or as a condition ("block it if nobody uses it"), which the clause check cannot see
 
 Grader spec:
 
@@ -930,7 +936,7 @@ Grader spec:
     "Validate"
   ],
   "query_matches": [
-    "^\\|\\s*tstats\\b",
+    "^\\s*\\|\\s*tstats\\b",
     "datamodel=Network_Resolution",
     "(?i)webhook\\.site"
   ],

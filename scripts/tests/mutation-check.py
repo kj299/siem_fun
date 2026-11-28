@@ -432,8 +432,22 @@ PS_MUTS = [
      # one INSIDE a parenthesized subquery operand, so
      # 'union (A | take 5), (B | take 5)' loses B. The grader has the mirror
      # mutation; shared-rule-cases.json holds the case both are checked against.
-     '        } elseif ($depth -eq 0 -and ($ch -eq \'|\' -or $ch -eq "`n")) {',
-     '        } elseif ($ch -eq \'|\' -or $ch -eq "`n") {'),
+     "        } elseif ($depth -eq 0 -and $ch -ceq [char]'|') {",
+     "        } elseif ($ch -ceq [char]'|') {"),
+    # The statement-by-statement reader of 2026-11-28, mirrored from GRADER_MUTS: each puts
+    # back one way the line-oriented reader missed a table or invented one.
+    ("validator: the KQL source is read statement by statement, past any let",
+     "    foreach ($raw in (Get-KqlStatements $Body)) {",
+     "    foreach ($raw in @($Body)) {"),
+    ("validator: a union operand on the line after the keyword is a table reference",
+     "$script:kqlOperandRegex   = [regex]'\\G[ \\t\\r\\n]*(\\()?[ \\t\\r\\n]*",
+     "$script:kqlOperandRegex   = [regex]'\\G[ \\t]*(\\()?[ \\t]*"),
+    ("validator: comments are not read for tables",
+     "        } elseif ($ch -ceq [char]'/' -and $i + 1 -lt $n -and $Body[$i + 1] -ceq [char]'/') {",
+     "        } elseif ($false) {"),
+    ("validator: a let bound to a literal names no table",
+     '    "true", "false", "null"\n',
+     '    "zzz-none"\n'),
     ("conflict-marker regex CRLF anchor",
      r"""$script:conflictMarkerRegex = '(?m)^(<{7}( |\r?$)|={7}\r?$|>{7}( |\r?$))'""",
      r"""$script:conflictMarkerRegex = '(?m)^(<{7}( |$)|={7}$|>{7}( |$))'"""),
@@ -501,20 +515,50 @@ GRADER_MUTS = [
      '    r"|(?:>=|<=|<|>)[ \\t]*_time)"',
      '    r"|(?:>=|<=|<|>)[ \\t]*_time|\\b_time\\b)"'),
     ("grader: a KQL table bound by let is a table reference",
-     "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE, _KQL_LET_VALUE_RE):",
-     "    for pattern in (_KQL_UNION_REF_RE, _KQL_JOIN_REF_RE):"),
+     "            source = _KQL_LET_SOURCE_RE.match(statement, let.end())",
+     "            source = None"),
     ("grader: a parenthesized union operand is a table reference",
-     '    r"\\bunion\\b(?:[ \\t]+\\w+[ \\t]*=[ \\t]*\\S+)*[ \\t]+\\(?[ \\t]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*=)"',
-     '    r"\\bunion\\b(?:[ \\t]+\\w+[ \\t]*=[ \\t]*\\S+)*[ \\t]+([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*=)"'),
+     '_KQL_OPERAND_RE = re.compile(r"[ \\t\\r\\n]*(\\()?[ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*[=(])")',
+     '_KQL_OPERAND_RE = re.compile(r"[ \\t\\r\\n]*(ZZZ)?[ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*[=(])")'),
     ("grader: a union statement is not ended by a pipe inside its parentheses",
-     '        elif depth == 0 and ch in "|\\n":',
-     '        elif ch in "|\\n":'),
+     '        elif depth == 0 and ch == "|":',
+     '        elif ch == "|":'),
     ("grader: a KQL join operand on the next line is a table reference",
      '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)", re.S)',
      '_KQL_JOIN_REF_RE = re.compile(r"\\bjoin\\b[^(\\r\\n]*\\([ \\t]*([A-Za-z_][A-Za-z0-9_]*)")'),
-    ("grader: the KQL source is read past a let preamble",
-     '    lead = next((ln.strip() for ln in lines if not re.match(r"^let\\b", ln.strip())), None)',
-     "    lead = lines[0].strip() if lines else None"),
+    # The reader of TST-1 (second retrospective, 2026-11-28): the shipped one read no table from
+    # a union whose operands start on the next line, and took a multi-line let's own body for
+    # the query's source, so a fixture's allowlist passed answers reading an unlisted table.
+    ("grader: the KQL source is read statement by statement, past any let",
+     "    for statement in _kql_statements(body):",
+     "    for statement in [body]:"),
+    ("grader: a union operand on the line after the keyword is a table reference",
+     '_KQL_OPERAND_RE = re.compile(r"[ \\t\\r\\n]*(\\()?[ \\t\\r\\n]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*[=(])")',
+     '_KQL_OPERAND_RE = re.compile(r"[ \\t]*(\\()?[ \\t]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*[=(])")'),
+    ("grader: a let whose value starts on the next line binds a table",
+     '_KQL_LET_SOURCE_RE = re.compile(r"""[ \\t\\r\\n(]*',
+     '_KQL_LET_SOURCE_RE = re.compile(r"""[ \\t(]*'),
+    ("grader: a let bound to a parenthesized query binds a table",
+     '_KQL_LET_SOURCE_RE = re.compile(r"""[ \\t\\r\\n(]*',
+     '_KQL_LET_SOURCE_RE = re.compile(r"""[ \\t\\r\\n]*'),
+    ("grader: comments are not read for tables",
+     '        elif body.startswith("//", i):',
+     "        elif False:"),
+    ("grader: string contents are not read for tables",
+     "            cur.append('\"\"')",
+     "            cur.append(body[i:j + 1])"),
+    ("grader: a let bound to a literal names no table",
+     '    "true", "false", "null",\n',
+     ""),
+    ("grader: a leading table in the wrong case is read",
+     '_KQL_LEAD_RE = re.compile(r"[ \\t\\r\\n(]*([A-Za-z_][A-Za-z0-9_]*)\\b(?![ \\t]*\\()")',
+     '_KQL_LEAD_RE = re.compile(r"[ \\t\\r\\n(]*([A-Z][A-Za-z0-9_]*)\\b(?![ \\t]*\\()")'),
+    ("grader: tables_required is applied when a spec names it",
+     '        unread = sorted(set(spec["tables_required"]) - read)',
+     "        unread = []"),
+    ("grader: a block fenced kusto is read as kql",
+     '_LANG_ALIASES = {"kusto": "kql"}',
+     "_LANG_ALIASES = {}"),
     ("grader: placeholders and wildcards are not identifier claims",
      '    return value.startswith(("YOUR_", "<")) or value == "..." or "*" in value',
      "    return False"),
@@ -683,6 +727,195 @@ SWEEP_MUTS = [
 ]
 for label, path, old, new in SWEEP_MUTS:
     unit_mutation(label, path, old, new, grader_suite)
+
+# The unscheduled Splunk hunts, the other query files, the reference and the Navigator layer
+# (second retrospective, 2026-11-28). Before these, the tests added for the hunts had no mutation,
+# and the REGRESSION dollar-sign test had been extended to a file no mutation touched: reverting
+# it to read the saved searches only left the harness green. Each mutation is one defect the
+# suite let through, or one way a check could stop firing.
+SPLUNK_HUNTS = "examples/agentic-ai-attacks/splunk-hunting.conf"
+MORPHEUS = "examples/agentic-ai-attacks/splunk-morpheus-native.conf"
+AGENTIC_DOC = "splunk-sentinel-query-builder/references/agentic-ai-attacks.md"
+AGENTIC_LAYER = "examples/agentic-ai-attacks/attack-navigator-layer.json"
+H033 = " ATT&CK T1552, T1530.\nenableSched            = 0\n"
+H033_END = "| sort 0 -secret_searches -calls\n"
+
+ASSET_MUTS = [
+    ("hunts: a Splunk hunt whose number has no Sentinel hunt",
+     SPLUNK_HUNTS, "[H-AGT-044 - Certificate requests", "[H-AGT-046 - Certificate requests"),
+    ("hunts: one hunt number on two stanzas",
+     SPLUNK_HUNTS, "[H-AGT-033 - CloudWatch Logs", "[H-AGT-032 - CloudWatch Logs"),
+    ("hunts: a stanza wearing another hunt's title",
+     SPLUNK_HUNTS, "[H-AGT-033 - CloudWatch Logs searched for secrets]", "[H-AGT-033 - Self-registration traded for AWS credentials]"),
+    ("hunts: a hunt left scheduled",
+     SPLUNK_HUNTS, H033, H033.replace("= 0", "= 1")),
+    ("hunts: a second enableSched after the first, which wins",
+     SPLUNK_HUNTS, H033, H033 + "enableSched            = 1\n"),
+    ("hunts: an alert action on a hunt",
+     SPLUNK_HUNTS, H033, H033 + "action.email = 1\n"),
+    ("hunts: a hunt with no time range, which searches all time",
+     SPLUNK_HUNTS, H033 + "dispatch.earliest_time = -14d@d\n", H033),
+    ("hunts: a hunt that writes what it finds to an index",
+     SPLUNK_HUNTS, H033_END, H033_END.rstrip("\n") + " \\\n| collect index=agt_hunts\n"),
+    ("hunts: a hunt that writes a CSV",
+     SPLUNK_HUNTS, H033_END, H033_END.rstrip("\n") + " \\\n| outputcsv agt_hunt_033\n"),
+    ("hunts: a description that names no ATT&CK technique",
+     SPLUNK_HUNTS, " ATT&CK T1552, T1530.", ""),
+    ("hunts: a description citing an ID that ATT&CK v20 revoked",
+     SPLUNK_HUNTS, "ATT&CK T1518.001, T1685.", "ATT&CK T1518.001, T1562.001."),
+    ("hunts: a search line that lost its continuation backslash",
+     SPLUNK_HUNTS, "| bin _time span=1h \\\n| stats count AS calls", "| bin _time span=1h\n| stats count AS calls"),
+    ("hunts: a backslash after the last line of a search",
+     SPLUNK_HUNTS, H033_END, H033_END.rstrip("\n") + " \\\n"),
+    ("hunts: two dollar signs on one line of a hunt",
+     SPLUNK_HUNTS, "| where secret_searches > 0 OR", '| where match(actor, "\\$$") OR secret_searches > 0 OR'),
+    ("hunts: a placeholder the header does not declare",
+     SPLUNK_HUNTS, "search = index=<AWS_INDEX> sourcetype=aws:cloudtrail eventName=FilterLogEvents",
+     "search = index=<CLOUD_INDEX> sourcetype=aws:cloudtrail eventName=FilterLogEvents"),
+    ("hunts: a novelty hunt whose 30 days are set only by the stanza",
+     SPLUNK_HUNTS, 'source="XmlWinEventLog:Security" earliest=-30d@d EventCode', 'source="XmlWinEventLog:Security" EventCode'),
+    ("hunts: a process name dropped from the Splunk side of H-AGT-036",
+     SPLUNK_HUNTS, '"jspawnhelper","node",', '"node",'),
+    ("hunts: a threshold changed on the Splunk side of H-AGT-035",
+     SPLUNK_HUNTS, "| where services >= 10 AND regions >= 4", "| where services >= 10 AND regions >= 3"),
+    ("hunts: a stats BY actor that can be null",
+     SPLUNK_HUNTS, "'initiatedBy.app.displayName', \"(unknown)\"), src = ", "'initiatedBy.app.displayName'), src = "),
+    ("hunts: the H-AGT-044 template pattern differs from the KQL one",
+     SPLUNK_HUNTS, "(?<template>[^\\s<&]+)", "(?<template>[^\\s]+)"),
+    ("hunts: a sort on a time already turned into text",
+     SPLUNK_HUNTS, "| sort 0 +first_seen \\\n| convert ctime(first_seen) ctime(last_seen)",
+     "| convert ctime(first_seen) ctime(last_seen) \\\n| sort 0 +first_seen"),
+    ("hunts (KQL): one union leg reads all retention",
+     HUNTS, '  (DeviceRegistryEvents | where TimeGenerated > ago(30d)\n', '  (DeviceRegistryEvents\n'),
+    ("hunts (KQL): a table on the union's own line is not catalogued",
+     HUNTS, 'AWSCloudTrail\n| where TimeGenerated > ago(14d) and EventName == "FilterLogEvents"',
+     'union AWSCloudtrail, AWSCloudTrail\n| where TimeGenerated > ago(14d) and EventName == "FilterLogEvents"'),
+    ("hunts (KQL): file events read whatever their action",
+     HUNTS, '     | where ActionType in ("FileCreated", "FileModified", "FileRenamed")\n     | where FolderPath has "ld.so.preload"',
+     '     | where FolderPath has "ld.so.preload"'),
+    ("hunts (KQL): the workspace ID counted as a tenant",
+     HUNTS, "Regions = dcount(AWSRegion), Sources = make_set(SourceIpAddress, 5), UserAgents",
+     "Regions = dcount(TenantId), Sources = make_set(SourceIpAddress, 5), UserAgents"),
+    ("hunts (KQL): a comparison cast to a number",
+     HUNTS, 'iff(ProcessCommandLine contains "nmap", 1, 0)', 'toint(ProcessCommandLine contains "nmap")'),
+    ("detections: two dollar signs on an indented subsearch line",
+     SAVED_SEARCHES, "  [| tstats summariesonly=true count min(_time) AS first_time from datamodel=Network_Resolution.DNS ",
+     '  [| tstats summariesonly=true count min(_time) AS first_time from datamodel=Network_Resolution.DNS where NOT match(ioc, "\\$$") '),
+    ("detections: a scheduled search with no time range",
+     SAVED_SEARCHES, "dispatch.earliest_time = -25m@m\ndispatch.latest_time   = -10m@m\nalert.suppress         = 1\nalert.suppress.fields  = dest,process_name\n",
+     "dispatch.latest_time   = -10m@m\nalert.suppress         = 1\nalert.suppress.fields  = dest,process_name\n"),
+    ("detections: a saved search that lost a continuation backslash",
+     SAVED_SEARCHES, "| lookup agt_host_roles.csv host_key AS dest OUTPUT role \\\n", "| lookup agt_host_roles.csv host_key AS dest OUTPUT role\n"),
+    ("morpheus: two dollar signs on a search line",
+     MORPHEUS, '| where match(lower(parent_image_path), "(w3wp|', '| where match(dst_ip, "\\$$") AND match(lower(parent_image_path), "(w3wp|'),
+    ("morpheus: one stanza name used twice",
+     MORPHEUS, "[R-C-AGT-003-M - New TLS client then regular calls to an LLM API]", "[R-B-AGT-005-M - Novel child of a web server process]"),
+    ("morpheus: a per-event rule reads further back than it runs",
+     MORPHEUS, "dispatch.earliest_time = -20m@m\ndispatch.latest_time   = -10m@m", "dispatch.earliest_time = -25m@m\ndispatch.latest_time   = -10m@m"),
+    ("reference: the Splunk hunts file is not named",
+     AGENTIC_DOC, "[splunk-hunting.conf](../../examples/agentic-ai-attacks/splunk-hunting.conf)", "the Splunk hunts file"),
+    ("reference: a technique row dropped from the table while the layer keeps it",
+     AGENTIC_DOC, "| T1611 | ", "| T1611x | "),
+    ("reference: a technique under a tactic ATT&CK does not give it",
+     AGENTIC_DOC, "| T1611 | Escape to Host | Privilege Escalation |", "| T1611 | Escape to Host | Execution |"),
+    ("reference: a technique name that is not the catalogue's",
+     AGENTIC_DOC, "| T1611 | Escape to Host |", "| T1611 | Container Escape |"),
+    ("layer: a technique the reference table does not carry",
+     AGENTIC_LAYER, '"techniqueID": "T1611"', '"techniqueID": "T1612"'),
+    ("layer: built against an ATT&CK version that has the old IDs",
+     AGENTIC_LAYER, '"attack": "20"', '"attack": "17"'),
+    # Caught by test_layer_matches_the_doc_table as well as test_v20_renames_are_used: any
+    # layer-only change breaks the first, so a one-file mutation proves the pair, not the second.
+    ("layer: an ID that ATT&CK v20 no longer has",
+     AGENTIC_LAYER, '"techniqueID": "T1574.001"', '"techniqueID": "T1574.002"'),
+]
+for label, path, old, new in ASSET_MUTS:
+    unit_mutation(label, path, old, new, grader_suite)
+
+
+def function_mutation(label: str, breaker, suite) -> None:
+    """unit_mutation for a defect one text replacement cannot express: two files changed together
+    so that only the check under test sees a difference, or a JSON edit that must not depend on the
+    numbers the file happens to hold today."""
+    fresh()
+    if not breaker():
+        print(f"  SETUP-FAIL     {label}")
+        fails.append(f"setup: {label}")
+        return
+    res = suite()
+    caught = res == "FAILED"
+    print(f"  {'CAUGHT ' if caught else '*** MISSED ***'} {label}")
+    if not caught:
+        fails.append(label)
+
+
+def _edit_layer(change) -> bool:
+    import json as _json
+    path = os.path.join(WORK, AGENTIC_LAYER)
+    layer = _json.load(open(path))
+    change(layer)
+    _json.dump(layer, open(path, "w"), indent=1)
+    return True
+
+
+def _bump_meta(layer, name, by):
+    for m in layer["metadata"]:
+        if m["name"] == name:
+            m["value"] = str(int(m["value"]) + by)
+
+
+def _context_drift() -> bool:
+    # Both lookups changed alike, so only the comparison with iocs.csv can see it.
+    import csv as _csv
+    import io as _io
+    for rel in (SWEEP_LOOKUP, SWEEP_WATCHLIST):
+        p = os.path.join(WORK, rel)
+        raw = open(p, newline="").read()
+        rows = list(_csv.reader(_io.StringIO(raw)))
+        if len(rows) < 2:
+            return False
+        rows[1][3] += " (stale)"
+        buf = _io.StringIO()
+        _csv.writer(buf, lineterminator="\r\n" if "\r\n" in raw else "\n").writerows(rows)
+        open(p, "w", newline="").write(buf.getvalue())
+    return True
+
+
+def _duplicate_table_row() -> bool:
+    p = os.path.join(WORK, AGENTIC_DOC)
+    text = open(p).read()
+    m = re.search(r"^\| T1611 \|.*\n", text, re.M)
+    if not m:
+        return False
+    open(p, "w").write(text[:m.end()] + m.group(0) + text[m.end():])
+    return True
+
+
+def _score_above_its_sources(layer) -> None:
+    # The score and the total move together, so only the per-row check sees it.
+    t = layer["techniques"][0]
+    extra = len(t["comment"].split("Sources: ", 1)[1].split("; ")) + 1 - t["score"]
+    t["score"] += extra
+    _bump_meta(layer, "evidence_rows", extra)
+    layer["gradient"]["maxValue"] = max(x["score"] for x in layer["techniques"])
+
+
+FUNCTION_MUTS = [
+    ("lookups: a context that drifted from iocs.csv in both lookups", _context_drift),
+    ("reference: one technique row written twice", _duplicate_table_row),
+    ("layer: evidence_rows is no longer the sum of the scores",
+     lambda: _edit_layer(lambda l: _bump_meta(l, "evidence_rows", 1))),
+    ("layer: the gradient's top is not the highest score",
+     lambda: _edit_layer(lambda l: l["gradient"].update(maxValue=l["gradient"]["maxValue"] + 1))),
+    ("layer: one technique listed twice",
+     lambda: _edit_layer(lambda l: l["techniques"].append(dict(l["techniques"][0])))),
+    ("layer: a comment that is not its table row",
+     lambda: _edit_layer(lambda l: l["techniques"][0].update(comment=l["techniques"][0]["comment"] + " x"))),
+    ("layer: a score above the sources its row names",
+     lambda: _edit_layer(_score_above_its_sources)),
+]
+for label, breaker in FUNCTION_MUTS:
+    function_mutation(label, breaker, grader_suite)
 
 # The shared rule corpus, and the two readers that consume it. Kept separate
 # from the lists above because these mutations target the TEST files and the
@@ -1373,7 +1606,8 @@ if fails:
     sys.exit(1)
 print(f"RESULT: all mutations caught ({len(PY_MUTS)} python + {len(PS_MUTS)} powershell + "
       f"{len(GRADER_MUTS)} grader unit + {len(RECORDER_MUTS)} recorder + "
-      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + {len(DETECTION_MUTS)} detection + {len(SWEEP_MUTS)} indicator sweep and schedule + 2 shared corpus, "
+      f"{len(RUNNER_MUTS)} runner + {len(WAF_MUTS)} waf rule file + {len(DETECTION_MUTS)} detection + {len(SWEEP_MUTS)} indicator sweep and schedule + "
+      f"{len(ASSET_MUTS) + len(FUNCTION_MUTS)} hunt, query file, reference and layer + 2 shared corpus, "
       f"{run_counts['validator']} validator checks, {run_counts['notice']} freshness notices, "
       f"{run_counts['environment']} environment)")
 sys.exit(0)

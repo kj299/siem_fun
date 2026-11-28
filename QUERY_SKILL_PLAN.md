@@ -198,6 +198,7 @@ siem_fun/
 |-- README.md
 |-- scripts/
 |   |-- tests/
+|   |   |-- attack-enterprise-20.1.tsv
 |   |   |-- mutation-check.py
 |   |   |-- shared-rule-cases.json
 |   |   |-- test_agentic_ai_attacks.py
@@ -580,7 +581,9 @@ under [examples/agentic-ai-attacks/](examples/agentic-ai-attacks/): an IOC
 list with a source and confidence on every row, an ATT&CK Navigator layer,
 Splunk saved searches with Morpheus-native variants, Sentinel scheduled rules,
 hunting KQL, and the lookups those read. The Sentinel tables the new content
-uses were added to the table catalogue with Microsoft citations.
+uses were added to the table catalogue with Microsoft citations. Since
+2026-11-27 the same folder also holds `splunk-hunting.conf`, unscheduled Splunk
+hunts that are the Splunk side of `hunting.kql` from H-AGT-032 on.
 
 What checks it: [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py)
 keeps `iocs.csv`, the layer and the reference doc's technique table
@@ -588,12 +591,19 @@ consistent. The validator's content checks read markdown only, so the queries
 in the asset files are neither linted nor provenance-checked; CLAUDE.md records
 that boundary. Checked once by hand on 2026-11-21, by running the validator's
 own functions against them: every KQL table is catalogued and every hunt
-bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`;
+bounds time; every Splunk saved search is bounded by `dispatch.earliest_time`
+in its stanza, or, for the five baselines and R-P-AGT-010, by an `earliest=` in
+the search string;
 the only uncatalogued sourcetypes are the Morpheus pipeline's three per-layer
 score sourcetypes (layers 3, 6 and 7), which that pipeline's own TA defines. `lookups/agt_iocs.csv` and
 `lookups/sentinel_watchlist.csv` carried the same 206 indicators, each present
 in `iocs.csv` with the same type, confidence and source, and no test pinned
-that until the retrospective of 2026-11-28, below.
+that until the retrospective of 2026-11-28, below. That retrospective also
+turned the hand checks into tests: every table a query reads, through the
+golden-prompt grader's own reader; a time bound on every table a hunt reads;
+a time range on every scheduled search; and every technique ID a query file
+or the layer cites, against the ATT&CK 20.1 list vendored as
+`scripts/tests/attack-enterprise-20.1.tsv`.
 
 A later change added [examples/agentic-ai-attacks/waf/](examples/agentic-ai-attacks/waf/README.md):
 the edge-visible indicators as WAF rules for F5 BIG-IP, Akamai and
@@ -659,7 +669,8 @@ statements in the reference that went further than their sources. The
 canary-then-admin rule filtered to failures and so missed the successful
 admin login, which is the case that matters.
 
-No golden-prompt fixture exercises the new reference yet. Because the section
+No golden-prompt fixture exercises the new reference yet (true on 2026-11-21;
+fixtures 11 to 21 came later). Because the section
 changed the query builder's `SKILL.md` and two reference files, the golden-run
 marker went stale; the seventh model run, below, recorded it again.
 
@@ -1017,6 +1028,26 @@ leaves `EventData` empty, a self-grant test that could not be true, a
 secret-file count that scored the densest command lowest, and a Splunk term
 filter that dropped the labels its own pattern was written for.
 
+The two commits that made these corrections say only "after review", so the
+list is kept here. Sentinel: the label pattern stopped after one character
+(032); the log group was read under one of its two names (033); calls made by
+AWS services were counted (035); process names lacked their .exe forms (036);
+one command naming three kinds of secret file counted once (037); a
+comparison was cast to a number, and exclusions were counted by one literal
+(038); a target of 10 counted as a target of 1, and file events were read
+whatever their action (039); files were counted as folders (040); hour bins
+split a pair and the self-grant test compared a name with a list of other
+names (041); a changed diagnostic setting was not read (043); only EventData
+was read (044); a 90-day union was joined to the list, and non-interactive
+sign-ins were not read (045). Splunk: the same where the hunt is shared, and
+seven of its own: a sort on a time already turned into text (032, 039, 043);
+a statistics command grouping by an actor, requester or template that can be
+empty, which drops the event (032, 033, 043, 044); a search-term filter
+narrower than the pattern after it (032); any error code read as a refusal
+(034); a flag summed after a count, which counts rows and not events (036);
+any nsenter counted (039); every caller listed where the Sentinel hunt lists
+new ones (043).
+
 Seventeenth run, 2026-11-27, because the ATT&CK table was re-derived for the
 reports read that day (73 evidence rows, 17 new techniques): fixtures 1 to 7
 and 11 to 21 re-run, 20 of 21 before correction. Fixture 12 failed a correct
@@ -1028,6 +1059,23 @@ allowlist still keeps every other table out. No prompt or skill moved after
 the run, so the answers were re-graded: 21 of 21, and the marker records it.
 The same anchored form is still in other fixtures' specs and will fail the
 same way on an answer that opens with a binding.
+
+Both of those last claims were wrong or are now settled, and neither was found
+by a model run. The second retrospective (2026-11-28) found that the
+allowlist did not keep every other table out: its reader took no table from a
+union whose operands start on the line after the keyword (how nine of the
+pack's own hunts are written), took a multi-line let's own body for the
+query's source, and read `of` from a comment saying "union of both tables".
+Recorded answers to fixtures 12, 13 and 18 still passed with an invented table
+put in. The grader and the validator now read KQL statement by statement, and
+a `kusto` fence is read as `kql`. Fixtures 3, 5, 12, 18 and 20 no longer
+anchor their table to the start of a block or a line; they name it with
+`tables_required`, which the same reader checks, so a comment, a binding or an
+indent before it changes nothing. Fixtures 5, 12 and 20 no longer demand a
+window or a threshold typed as a literal (the run-13 defect, still in three
+specs), and seven tstats specs accept a leading blank. Bullets in fixtures 11
+to 21 that no spec checks are marked as the reviewer's job. Every recorded
+answer under `out/` keeps its verdict under the new grader and specs.
 
 Nine fixture defects and two skill-content gaps across seventeen runs. Both gaps
 were a hunt the reference named while leaving its key values in a file the

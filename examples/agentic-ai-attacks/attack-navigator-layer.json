@@ -6,7 +6,7 @@
   "layer": "4.5"
  },
  "domain": "enterprise-attack",
- "description": "Techniques observed in public reporting of operators using open-source agentic offensive frameworks. Score = number of independent evidence rows in examples/agentic-ai-attacks and the reference doc splunk-sentinel-query-builder/references/agentic-ai-attacks.md. Built against ATT&CK v20; T1574.001 (DLL) covers what earlier versions called T1574.002 DLL Side-Loading. Refreshed 2026-11-24: each report published after 2026-11-07 adds one to the score of every technique it evidences; the FBI FLASH consolidates vendor reporting, so it adds rows only for techniques not already present. Refreshed 2026-11-27 for six reports (Microsoft 2026-11-25, Wiz 2026-11-23, Unit 42 2026-11-24 and 2026-11-12, Datadog 2026-11-09, GTIG 2026-11-16) by the same rule. Unit 42 2026-11-24 names no framework for the campaigns it describes; its rows are marked unattributed.",
+ "description": "Techniques observed in public reporting of operators using open-source agentic offensive frameworks. Score = number of independent evidence rows in examples/agentic-ai-attacks and the reference doc splunk-sentinel-query-builder/references/agentic-ai-attacks.md. Built against ATT&CK v20; T1574.001 (DLL) covers what earlier versions called T1574.002 DLL Side-Loading. Refreshed 2026-11-24: each report published after 2026-11-07 adds one to the score of every technique it evidences; the FBI FLASH consolidates vendor reporting, so it adds rows only for techniques not already present. Refreshed 2026-11-27 for six reports (Microsoft 2026-11-25, Wiz 2026-11-23, Unit 42 2026-11-24 and 2026-11-12, Datadog 2026-11-09, GTIG 2026-11-16) by the same rule. Unit 42 2026-11-24 found no behavioral marker tying its campaigns to a framework and ties one of them to CyberStrikeAI by infrastructure only; its rows are marked unattributed. Corrected 2026-11-28: pairs the sources did not support were removed or moved to a better-fitting technique, evidenced ones that had been left out were added, an entry that only restates a report the row already cites is not counted, tactics use the ATT&CK 20.1 names, and each comment names the Frameworks and Sources of its row in the reference table, which now carries every source earlier comments named.",
  "sorting": 3,
  "layout": {
   "layout": "side",
@@ -80,8 +80,8 @@
   },
   {
    "techniqueID": "T1021.004",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, unattributed. Sources: Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -89,6 +89,13 @@
    "techniqueID": "T1021.006",
    "score": 2,
    "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Kaspersky Securelist 2026-11-02; Microsoft Threat Intelligence 2026-11-25.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1021.008",
+   "score": 1,
+   "comment": "Frameworks: CyberStrikeAI. Sources: Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -130,7 +137,7 @@
   {
    "techniqueID": "T1046",
    "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN, unattributed. Sources: CrowdStrike; Amazon Threat Intelligence 2026-11-20; Unit 42 2026-11-24.",
+   "comment": "Frameworks: ARTEX, CAIRN, unattributed. Sources: CrowdStrike; GTIG; Amazon Threat Intelligence 2026-11-20; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -185,15 +192,15 @@
   },
   {
    "techniqueID": "T1059.004",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Microsoft Threat Intelligence 2026-11-25; Wiz 2026-11-23.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CyberStrikeAI, unattributed. Sources: Microsoft Threat Intelligence 2026-11-25; Wiz 2026-11-23; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1059.006",
-   "score": 1,
-   "comment": "Frameworks: CAIRN. Sources: Amazon Threat Intelligence 2026-11-20.",
+   "score": 2,
+   "comment": "Frameworks: CAIRN, unattributed. Sources: Amazon Threat Intelligence 2026-11-20; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -221,7 +228,7 @@
   {
    "techniqueID": "T1071.001",
    "score": 2,
-   "comment": "Frameworks: CyberStrikeAI. Sources: CyberStrikeAI source; Kaspersky Securelist 2026-11-02.",
+   "comment": "Frameworks: CyberStrikeAI. Sources: CyberStrikeAI source (internal/c2); Kaspersky Securelist 2026-11-02.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -248,8 +255,8 @@
   },
   {
    "techniqueID": "T1078",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Amazon Threat Intelligence 2026-02-20; CERT-In CIAD-2026-0058 via The Hacker News.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Amazon Threat Intelligence 2026-02-20; CERT-In CIAD-2026-0058 via The Hacker News; Unit 42 2026-11-12 (CL-STA-1238).",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -263,7 +270,7 @@
   {
    "techniqueID": "T1078.004",
    "score": 5,
-   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Microsoft; Microsoft Threat Intelligence 2026-11-25; Datadog Security Labs 2026-11-09; Wiz 2026-11-23.",
+   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Microsoft Threat Intelligence 2026-11-05; Microsoft; CrowdStrike via Cybersecurity Dive; Microsoft Threat Intelligence 2026-11-25; Datadog Security Labs 2026-11-09; Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -276,8 +283,8 @@
   },
   {
    "techniqueID": "T1087.002",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: GTIG 2026-10-30; Kaspersky Securelist 2026-11-02.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: GTIG 2026-10-30; Kaspersky Securelist 2026-11-02; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -290,36 +297,36 @@
   },
   {
    "techniqueID": "T1090",
-   "score": 6,
-   "comment": "Frameworks: ARTEX, CAIRN, PentAGI, STRIX. Sources: GTIG 2026-10-30; Gambit Security 2026-09-22; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Amazon Threat Intelligence 2026-11 (MadPot); Wiz 2026-11-23.",
+   "score": 7,
+   "comment": "Frameworks: ARTEX, CAIRN, PentAGI, STRIX. Sources: GTIG 2026-10-30; Gambit Security 2026-09-22; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Amazon Threat Intelligence 2026-11 (MadPot); Wiz 2026-11-23; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1090.002",
    "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05.",
+   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05; Okta Threat Intelligence 2026-11-06.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1090.003",
    "score": 3,
-   "comment": "Frameworks: ARTEX. Sources: CrowdStrike; F5 Labs 2026-11-23.",
+   "comment": "Frameworks: ARTEX. Sources: CrowdStrike; Zscaler; CERT-In; S-RM Cyber Incident Response 2026-11-04; F5 Labs 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1098.001",
-   "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Microsoft Threat Intelligence 2026-11-25.",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1098.003",
-   "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Microsoft Threat Intelligence 2026-11-25.",
+   "score": 1,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -333,7 +340,7 @@
   {
    "techniqueID": "T1102",
    "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN, unattributed. Sources: Zscaler ThreatLabz 2026-10-14; Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
+   "comment": "Frameworks: ARTEX, CAIRN, unattributed. Sources: Zscaler ThreatLabz 2026-10-14; CrowdStrike 2026-10-07; Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -346,29 +353,29 @@
   },
   {
    "techniqueID": "T1110",
-   "score": 1,
-   "comment": "Frameworks: CyberStrikeAI. Sources: Amazon Threat Intelligence 2026-02-20.",
+   "score": 2,
+   "comment": "Frameworks: CyberStrikeAI, unattributed. Sources: Amazon Threat Intelligence 2026-02-20; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1110.001",
-   "score": 2,
-   "comment": "Frameworks: CAIRN. Sources: Amazon Threat Intelligence 2026-11-20; Unit 42 2026-11-12 (CL-STA-1238).",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN. Sources: Amazon Threat Intelligence 2026-11-20; Unit 42 2026-11-12 (CL-STA-1238); Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1110.003",
    "score": 8,
-   "comment": "Frameworks: ARTEX, CAIRN, unattributed. Sources: Microsoft 2026-10-21; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Wiz 2026-11-23; Unit 42 2026-11-24; Unit 42 2026-11-12 (CL-STA-1238).",
+   "comment": "Frameworks: ARTEX, CAIRN, unattributed. Sources: Expel 2026-10-21; Microsoft 2026-10-21; Wiz; CrowdStrike; Unit 42 timely threat intel 2026-10-30; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Wiz 2026-11-23; Unit 42 2026-11-24; Unit 42 2026-11-12 (CL-STA-1238).",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1110.004",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: Okta Threat Intelligence 2026-11-06.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX, unattributed. Sources: Okta Threat Intelligence 2026-11-06; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -402,15 +409,15 @@
   },
   {
    "techniqueID": "T1136",
-   "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN. Sources: Unit 42 timely threat intel 2026-10-30; Wiz 2026-11-23; Unit 42 2026-11-12 (CL-STA-1238).",
+   "score": 4,
+   "comment": "Frameworks: ARTEX, CAIRN. Sources: Unit 42 timely threat intel 2026-10-30; Wiz 2026-11-23; Unit 42 2026-11-12 (CL-STA-1238); GTIG 2026-10-30.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1136.003",
-   "score": 3,
-   "comment": "Frameworks: ARTEX. Sources: GTIG 2026-10-30; Datadog Security Labs 2026-11-09.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: Okta Threat Intelligence 2026-11-06; Expel 2026-10-21; Datadog Security Labs 2026-11-09.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -430,22 +437,29 @@
   },
   {
    "techniqueID": "T1190",
-   "score": 9,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI. Sources: GTIG 2026-10-30; TrendAI via The Hacker News 2026-10-27; Zscaler; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Amazon Threat Intelligence 2026-11 (MadPot); Wiz 2026-11-23; Unit 42 2026-11-12 (CL-STA-1238).",
+   "score": 10,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI, unattributed. Sources: GTIG 2026-10-30; Check Point Research 2025-09-02; S-RM Cyber Incident Response 2026-11-04; TrendAI via The Hacker News 2026-10-27; Zscaler; DIVD-2026-00014; NorForge; CERT-In; Microsoft Threat Intelligence 2026-11-06; Amazon Threat Intelligence 2026-11-20; Amazon Threat Intelligence 2026-11 (MadPot); Unit 42 2026-11-12 (CL-STA-1238); Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1195.002",
    "score": 4,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Badbyte via The Hacker News 2026-11-05; CERT-In CIAD-2026-0058 via The Hacker News; Microsoft 2026-10-21.",
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: Badbyte via The Hacker News 2026-11-05; CERT-In CIAD-2026-0058 via The Hacker News; Check Point Research 2026-11-05; S-RM 2026-11-04; Microsoft 2026-10-21.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1199",
+   "score": 2,
+   "comment": "Frameworks: ARTEX. Sources: S-RM Cyber Incident Response 2026-11-04; Microsoft Threat Intelligence 2026-11-25.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1210",
    "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: S-RM Cyber Incident Response 2026-11-04.",
+   "comment": "Frameworks: CyberStrikeAI. Sources: Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -458,8 +472,8 @@
   },
   {
    "techniqueID": "T1213.006",
-   "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-06; Microsoft Threat Intelligence 2026-11-25.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN. Sources: Microsoft Threat Intelligence 2026-11-06; Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-12 (CL-STA-1238).",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -487,7 +501,7 @@
   {
    "techniqueID": "T1505.003",
    "score": 6,
-   "comment": "Frameworks: ARTEX, CAIRN, HexStrike-AI, unattributed. Sources: Check Point Research 2025-09-02; CrowdStrike; Microsoft Threat Intelligence 2026-11-06; Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
+   "comment": "Frameworks: ARTEX, CAIRN, HexStrike-AI, unattributed. Sources: Check Point Research 2025-09-02; CrowdStrike; NorForge; GTIG; S-RM Cyber Incident Response 2026-11-04; Microsoft Threat Intelligence 2026-11-06; Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -500,29 +514,22 @@
   },
   {
    "techniqueID": "T1526",
-   "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05; Amazon Threat Intelligence 2026-11 (MadPot).",
+   "score": 3,
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05; Amazon Threat Intelligence 2026-11 (MadPot); Datadog Security Labs 2026-11-09.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1528",
    "score": 4,
-   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Wiz 2026-11-23.",
+   "comment": "Frameworks: ARTEX. Sources: Microsoft 2026-10-21; Okta Threat Intelligence 2026-11-06; Unit 42 timely threat intel 2026-10-30; Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1530",
    "score": 4,
-   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05; Microsoft Threat Intelligence 2026-11-25; Datadog Security Labs 2026-11-09.",
-   "enabled": true,
-   "showSubtechniques": true
-  },
-  {
-   "techniqueID": "T1534",
-   "score": 1,
-   "comment": "Frameworks: ARTEX. Sources: GTIG 2026-10-30.",
+   "comment": "Frameworks: ARTEX. Sources: Microsoft Threat Intelligence 2026-11-05; Unit 42 timely threat intel 2026-10-30; Check Point Research 2026-11-05; Microsoft Threat Intelligence 2026-11-25; Datadog Security Labs 2026-11-09.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -571,7 +578,7 @@
   {
    "techniqueID": "T1552.001",
    "score": 6,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI, unattributed. Sources: Kaspersky Securelist 2026-11-02; Amazon Threat Intelligence 2026-11 (MadPot); Microsoft Threat Intelligence 2026-11-25; Wiz 2026-11-23; Unit 42 2026-11-24.",
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI, unattributed. Sources: Check Point Research 2026-11-05; Kaspersky Securelist 2026-11-02; CERT-In CIAD-2026-0058 via The Hacker News; Amazon Threat Intelligence 2026-11 (MadPot); Microsoft Threat Intelligence 2026-11-25; Wiz 2026-11-23; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -584,8 +591,8 @@
   },
   {
    "techniqueID": "T1552.005",
-   "score": 4,
-   "comment": "Frameworks: ARTEX, unattributed. Sources: CrowdStrike 2026-10-29; Amazon Threat Intelligence 2026-11 (MadPot); Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24.",
+   "score": 5,
+   "comment": "Frameworks: ARTEX, unattributed. Sources: CrowdStrike 2026-10-29; Amazon Threat Intelligence 2026-11 (MadPot); Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-24; Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -606,7 +613,7 @@
   {
    "techniqueID": "T1555.006",
    "score": 4,
-   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Microsoft 2026-10-21; Amazon Threat Intelligence 2026-11 (MadPot); Wiz 2026-11-23.",
+   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Microsoft 2026-10-21; Microsoft Threat Intelligence 2026-11-05; Amazon Threat Intelligence 2026-11 (MadPot); Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -675,8 +682,8 @@
   },
   {
    "techniqueID": "T1570",
-   "score": 1,
-   "comment": "Frameworks: unattributed. Sources: Unit 42 2026-11-24.",
+   "score": 2,
+   "comment": "Frameworks: CyberStrikeAI, unattributed. Sources: Unit 42 2026-11-24; Wiz 2026-11-23.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -703,36 +710,43 @@
   },
   {
    "techniqueID": "T1580",
-   "score": 3,
-   "comment": "Frameworks: ARTEX, unattributed. Sources: GTIG 2026-10-30; Datadog Security Labs 2026-11-09; Unit 42 2026-11-24.",
+   "score": 4,
+   "comment": "Frameworks: ARTEX, unattributed. Sources: GTIG 2026-10-30; Datadog Security Labs 2026-11-09; Unit 42 2026-11-24; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1583.003",
    "score": 2,
-   "comment": "Frameworks: ARTEX. Sources: Check Point Research 2026-11-05; S-RM 2026-11-04.",
+   "comment": "Frameworks: ARTEX. Sources: Censys ARC 2026-11-05; Check Point Research 2026-11-05; S-RM 2026-11-04.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1583.004",
    "score": 2,
-   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: CrowdStrike 2026-10-07; Team Cymru 2026-03-02.",
+   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: CrowdStrike 2026-10-07; Zscaler ThreatLabz 2026-10-21; Team Cymru 2026-03-02; CERT-In CIAD-2026-0058.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1583.006",
    "score": 2,
-   "comment": "Frameworks: ARTEX, CAIRN, STRIX. Sources: NorForge 2026-10-19; Strix source.",
+   "comment": "Frameworks: ARTEX, CAIRN, STRIX. Sources: NorForge 2026-10-19; GTIG 2026-10-30; Strix source (telemetry).",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1588.002",
-   "score": 3,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: CERT-In CIAD-2026-0058; Microsoft Threat Intelligence 2026-10-29; Microsoft Threat Intelligence 2026-11-25.",
+   "score": 4,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, HexStrike-AI, PentAGI. Sources: CERT-In CIAD-2026-0058 (2026-11-04); Microsoft Threat Intelligence 2026-10-29; Microsoft Threat Intelligence 2026-11-25; GTIG 2026-11-16.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1588.005",
+   "score": 1,
+   "comment": "Frameworks: unattributed. Sources: Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -740,6 +754,13 @@
    "techniqueID": "T1588.006",
    "score": 1,
    "comment": "Frameworks: HexStrike-AI. Sources: Check Point Research 2025-09-02.",
+   "enabled": true,
+   "showSubtechniques": true
+  },
+  {
+   "techniqueID": "T1588.007",
+   "score": 2,
+   "comment": "Frameworks: ARTEX, CAIRN. Sources: Microsoft Threat Intelligence 2026-11-25; Unit 42 2026-11-12 (CL-STA-1238).",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -753,7 +774,7 @@
   {
    "techniqueID": "T1590",
    "score": 1,
-   "comment": "Frameworks: PentAGI, STRIX. Sources: Gambit Security 2026-09-22.",
+   "comment": "Frameworks: PentAGI, STRIX. Sources: Gambit Security 2026-09-22; GTIG 2026-10-30.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -766,36 +787,36 @@
   },
   {
    "techniqueID": "T1594",
-   "score": 2,
-   "comment": "Frameworks: ARTEX, CAIRN. Sources: Unit 42 timely threat intel 2026-10-30; Amazon Threat Intelligence 2026-11-20.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN. Sources: Unit 42 timely threat intel 2026-10-30; Amazon Threat Intelligence 2026-11-20; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1595.001",
-   "score": 1,
-   "comment": "Frameworks: CyberStrikeAI. Sources: Amazon Threat Intelligence 2026-02-20.",
+   "score": 2,
+   "comment": "Frameworks: ARTEX, CyberStrikeAI. Sources: Amazon Threat Intelligence 2026-02-20; Team Cymru 2026-03-02; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1595.002",
-   "score": 6,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX. Sources: GTIG 2026-10-30; Gambit Security 2026-09-22; TrendAI via The Hacker News 2026-10-27; Zscaler ThreatLabz 2026-10-14; Microsoft Threat Intelligence 2026-11-06; GTIG 2026-11-16.",
+   "score": 7,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI, STRIX. Sources: GTIG 2026-10-30; Gambit Security 2026-09-22; TrendAI via The Hacker News 2026-10-27; Zscaler ThreatLabz 2026-10-14; NorForge 2026-10-19; Microsoft Threat Intelligence 2026-11-06; GTIG 2026-11-16; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1595.003",
-   "score": 4,
-   "comment": "Frameworks: ARTEX. Sources: Wiz 2026-10-22; F5 Labs 2026-11-23; Microsoft Threat Intelligence 2026-11-25.",
+   "score": 5,
+   "comment": "Frameworks: ARTEX. Sources: Unit 42 timely threat intel 2026-10-30; Wiz 2026-10-22; F5 Labs 2026-11-23; Microsoft Threat Intelligence 2026-11-25; Datadog Security Labs 2026-11-09.",
    "enabled": true,
    "showSubtechniques": true
   },
   {
    "techniqueID": "T1596.002",
-   "score": 1,
-   "comment": "Frameworks: PentAGI. Sources: GTIG 2026-10-30.",
+   "score": 2,
+   "comment": "Frameworks: PentAGI, unattributed. Sources: GTIG 2026-10-30; Unit 42 2026-11-24.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -871,8 +892,8 @@
   },
   {
    "techniqueID": "T1651",
-   "score": 4,
-   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: CERT-In CIAD-2026-0058; Microsoft Threat Intelligence 2026-11-25; Wiz 2026-11-23.",
+   "score": 3,
+   "comment": "Frameworks: ARTEX, CAIRN, CyberStrikeAI, PentAGI. Sources: CERT-In CIAD-2026-0058; Microsoft Threat Intelligence 2026-11-05; Microsoft Threat Intelligence 2026-11-25.",
    "enabled": true,
    "showSubtechniques": true
   },
@@ -904,7 +925,7 @@
    "#1f5f8b"
   ],
   "minValue": 1,
-  "maxValue": 9
+  "maxValue": 10
  },
  "legendItems": [
   {
@@ -919,15 +940,15 @@
  "metadata": [
   {
    "name": "generated",
-   "value": "2026-11-27"
+   "value": "2026-11-28"
   },
   {
    "name": "evidence_rows",
-   "value": "242"
+   "value": "263"
   },
   {
    "name": "attack_catalogue_checked",
-   "value": "enterprise-attack 20.1 (mitre-attack/attack-stix-data), 2026-11-24; IDs added 2026-11-27 checked against the same copy"
+   "value": "enterprise-attack 20.1 (mitre-attack/attack-stix-data), 2026-11-24; IDs added 2026-11-27 checked against the same copy; every ID, name and tactic re-checked against it 2026-11-28"
   }
  ]
 }

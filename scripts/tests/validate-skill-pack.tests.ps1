@@ -770,9 +770,9 @@ try {
     }
 
     Test-Case "a union operand list may wrap or carry a subquery pipe" {
-        # The statement ends at the first '|' or newline whose parentheses are
-        # balanced: a subquery's inner pipe does not end it, a trailing comma
-        # carries the list on, and a downstream summarize is still excluded.
+        # Operands are read at parenthesis depth 0 up to the first '|' there: a
+        # subquery's inner pipe does not end the list, a comma carries it on
+        # across a line break, and a downstream summarize is still excluded.
         $refs = [string[]](Get-KqlTableReferences "union (SigninLogs | take 5),`n      (AuditLogs | take 5)")
         Assert-True ($refs -ccontains "SigninLogs" -and $refs -ccontains "AuditLogs") "both wrapped operands must be read"
         $refs = [string[]](Get-KqlTableReferences "SigninLogs`n| union AuditLogs`n| summarize count() by Alpha, Beta")
